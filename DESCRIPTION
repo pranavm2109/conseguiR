@@ -1,0 +1,38 @@
+Package: conseguiR
+Type: Package
+Title: Convergence of Somatic, Epigenomic, and Germline signals under Interpretive Robustness
+Version: 0.0.1
+Authors@R: c(
+    person(given = "Pranav", family = "Mishra", role = c("aut", "cre"), email = "pranav.mishra@yale.edu"),
+    person(given = "Mark", family = "Robinson", role = "aut", email = "mark.robinson@yale.edu")
+)
+Description: Tools for scoring somatic, germline, and epigenomic evidence at genes and regulatory elements,
+    projecting scores onto biological graphs, running diffusion, calling subnetworks, and exporting results for
+    downstream visualization and app development.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    data.table,
+    dplyr,
+    jsonlite,
+    igraph,
+    stats,
+    methods,
+    utils,
+    grDevices,
+    ggplot2,
+    GenomicRanges,
+    IRanges,
+    GenomeInfoDb,
+    AnnotationDbi,
+    S4Vectors
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    org.Hs.eg.db
+Config/testthat/edition: 3
+VignetteBuilder: knitr
