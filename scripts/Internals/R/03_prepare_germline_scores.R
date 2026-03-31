@@ -1,0 +1,482 @@
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(data.table)
+})
+
+source("scripts/Internals/R/00_harmonise_and_validate_inputs.R")
+
+run_magma_step1_annotation <- function(
+  gwas_sumstats,
+  gene_loc_path,
+  output_prefix,
+  magma_path = "tools/magma_v1/magma",
+  snp_loc_path = paste0(output_prefix, ".snp_loc.tsv"),
+  pval_path = paste0(output_prefix, ".pval.tsv"),
+  annotation_window = NULL,
+  filter_path = NULL,
+  ignore_strand = FALSE,
+  nonhuman = FALSE,
+  extra_args = character()
+) {
+  if (!file.exists(magma_path)) {
+    stop("MAGMA executable does not exist: ", magma_path)
+  }
+  if (file.info(magma_path)$isdir) {
+    stop("MAGMA path points to a directory, not an executable: ", magma_path)
+  }
+
+  if (!file.exists(gene_loc_path)) {
+    stop("Gene/regulatory location file does not exist: ", gene_loc_path)
+  }
+
+  dir.create(dirname(output_prefix), recursive = TRUE, showWarnings = FALSE)
+  dir.create(dirname(snp_loc_path), recursive = TRUE, showWarnings = FALSE)
+  dir.create(dirname(pval_path), recursive = TRUE, showWarnings = FALSE)
+
+  gwas_validated <- validate_gwas_sumstats(gwas_sumstats)
+  magma_inputs <- prepare_magma_input(gwas_validated)
+
+  if (nrow(magma_inputs$snp_loc) == 0L) {
+    stop("Prepared MAGMA snp-loc table is empty.")
+  }
+  if (nrow(magma_inputs$pval) == 0L) {
+    stop("Prepared MAGMA pval table is empty.")
+  }
+  if (any(is.na(magma_inputs$snp_loc$SNP) | magma_inputs$snp_loc$SNP == "")) {
+    stop("Prepared MAGMA snp-loc table contains missing SNP identifiers.")
+  }
+  if (any(is.na(magma_inputs$snp_loc$CHR) | magma_inputs$snp_loc$CHR == "")) {
+    stop("Prepared MAGMA snp-loc table contains missing chromosomes.")
+  }
+  if (any(is.na(magma_inputs$snp_loc$POS))) {
+    stop("Prepared MAGMA snp-loc table contains missing positions.")
+  }
+  if (any(is.na(magma_inputs$pval$SNP) | magma_inputs$pval$SNP == "")) {
+    stop("Prepared MAGMA pval table contains missing SNP identifiers.")
+  }
+  if (any(is.na(magma_inputs$pval$P))) {
+    stop("Prepared MAGMA pval table contains missing p-values.")
+  }
+
+  fwrite(magma_inputs$snp_loc, snp_loc_path, sep = "\t", col.names = FALSE)
+  fwrite(magma_inputs$pval, pval_path, sep = "\t", col.names = TRUE)
+
+  if (!file.exists(snp_loc_path) || file.info(snp_loc_path)$size <= 0) {
+    stop("Failed to write a usable MAGMA snp-loc file: ", snp_loc_path)
+  }
+  if (!file.exists(pval_path) || file.info(pval_path)$size <= 0) {
+    stop("Failed to write a usable MAGMA pval file: ", pval_path)
+  }
+
+  annotate_flag <- "--annotate"
+  annotate_modifiers <- character()
+
+  if (!is.null(annotation_window)) {
+    if (length(annotation_window) == 1L) {
+      annotate_modifiers <- c(annotate_modifiers, paste0("window=", annotation_window))
+    } else if (length(annotation_window) == 2L) {
+      annotate_modifiers <- c(annotate_modifiers, paste0("window=", annotation_window[[1]], ",", annotation_window[[2]]))
+    } else {
+      stop("annotation_window must be NULL, length 1, or length 2.")
+    }
+  }
+
+  if (!is.null(filter_path)) {
+    if (!file.exists(filter_path)) {
+      stop("filter_path does not exist: ", filter_path)
+    }
+    annotate_modifiers <- c(annotate_modifiers, paste0("filter=", filter_path))
+  }
+
+  if (isTRUE(ignore_strand)) {
+    annotate_modifiers <- c(annotate_modifiers, "ignore-strand")
+  }
+
+  if (isTRUE(nonhuman)) {
+    annotate_modifiers <- c(annotate_modifiers, "nonhuman")
+  }
+
+  if (length(annotate_modifiers) > 0) {
+    annotate_flag <- paste0("--annotate ", paste(annotate_modifiers, collapse = " "))
+  }
+
+  args <- c(
+    strsplit(annotate_flag, " ", fixed = TRUE)[[1]],
+    "--snp-loc", snp_loc_path,
+    "--gene-loc", gene_loc_path,
+    "--out", output_prefix,
+    extra_args
+  )
+
+  command_string <- paste(c(shQuote(magma_path), shQuote(args)), collapse = " ")
+  message("Running MAGMA command:")
+  message(command_string)
+
+  status <- system2(
+    command = magma_path,
+    args = args,
+    stdout = TRUE,
+    stderr = TRUE
+  )
+
+  annot_path <- paste0(output_prefix, ".genes.annot")
+  exit_status <- attr(status, "status")
+  if (is.null(exit_status)) {
+    exit_status <- 0L
+  }
+
+  if (!identical(exit_status, 0L)) {
+    stop(
+      "MAGMA step 1 annotation failed with status ", exit_status, ".\n",
+      paste(status, collapse = "\n")
+    )
+  }
+
+  list(
+    status = exit_status,
+    stdout_stderr = status,
+    command = command_string,
+    output_prefix = output_prefix,
+    snp_loc_path = snp_loc_path,
+    pval_path = pval_path,
+    gene_loc_path = gene_loc_path,
+    annot_path = annot_path,
+    magma_path = magma_path,
+    args = args
+  )
+}
+
+run_magma_step2_gene_analysis <- function(
+  gene_annot_path,
+  pval_path,
+  reference_bfile,
+  output_prefix,
+  sample_size = NULL,
+  sample_size_col = NULL,
+  magma_path = "tools/magma_v1/magma",
+  gene_model = NULL,
+  genes_only = TRUE,
+  pval_use = c("SNP", "P"),
+  pval_duplicate = NULL,
+  bfile_synonyms = NULL,
+  bfile_synonym_dup = NULL,
+  extra_args = character()
+) {
+  if (!file.exists(magma_path)) {
+    stop("MAGMA executable does not exist: ", magma_path)
+  }
+  if (!file.exists(gene_annot_path)) {
+    stop("MAGMA gene annotation file does not exist: ", gene_annot_path)
+  }
+  if (!file.exists(pval_path)) {
+    stop("MAGMA p-value file does not exist: ", pval_path)
+  }
+  if (!file.exists(paste0(reference_bfile, ".bed"))) {
+    stop("Reference bfile is missing .bed: ", paste0(reference_bfile, ".bed"))
+  }
+  if (!file.exists(paste0(reference_bfile, ".bim"))) {
+    stop("Reference bfile is missing .bim: ", paste0(reference_bfile, ".bim"))
+  }
+  if (!file.exists(paste0(reference_bfile, ".fam"))) {
+    stop("Reference bfile is missing .fam: ", paste0(reference_bfile, ".fam"))
+  }
+
+  if (is.null(sample_size) && is.null(sample_size_col)) {
+    stop("Provide either `sample_size` or `sample_size_col` for MAGMA step 2.")
+  }
+  if (!is.null(sample_size) && !is.null(sample_size_col)) {
+    stop("Provide only one of `sample_size` or `sample_size_col`, not both.")
+  }
+
+  dir.create(dirname(output_prefix), recursive = TRUE, showWarnings = FALSE)
+
+  pval_modifier <- character()
+  if (!is.null(pval_use)) {
+    if (length(pval_use) != 2L) {
+      stop("`pval_use` must have length 2: SNP column and p-value column.")
+    }
+    pval_modifier <- c(pval_modifier, paste0("use=", paste(pval_use, collapse = ",")))
+  }
+  if (!is.null(sample_size)) {
+    pval_modifier <- c(pval_modifier, paste0("N=", sample_size))
+  }
+  if (!is.null(sample_size_col)) {
+    pval_modifier <- c(pval_modifier, paste0("ncol=", sample_size_col))
+  }
+  if (!is.null(pval_duplicate)) {
+    pval_modifier <- c(pval_modifier, paste0("duplicate=", pval_duplicate))
+  }
+
+  bfile_modifier <- character()
+  if (!is.null(bfile_synonyms)) {
+    bfile_modifier <- c(bfile_modifier, paste0("synonyms=", bfile_synonyms))
+  }
+  if (!is.null(bfile_synonym_dup)) {
+    bfile_modifier <- c(bfile_modifier, paste0("synonym-dup=", bfile_synonym_dup))
+  }
+
+  args <- c(
+    "--bfile", reference_bfile, bfile_modifier,
+    "--gene-annot", gene_annot_path,
+    "--pval", pval_path,
+    pval_modifier,
+    "--out", output_prefix
+  )
+
+  if (!is.null(gene_model)) {
+    args <- c(args, "--gene-model", gene_model)
+  }
+
+  if (isTRUE(genes_only)) {
+    args <- c(args, "--genes-only")
+  }
+
+  args <- c(args, extra_args)
+
+  command_string <- paste(c(shQuote(magma_path), shQuote(args)), collapse = " ")
+  message("Running MAGMA command:")
+  message(command_string)
+
+  status <- system2(
+    command = magma_path,
+    args = args,
+    stdout = TRUE,
+    stderr = TRUE
+  )
+
+  exit_status <- attr(status, "status")
+  if (is.null(exit_status)) {
+    exit_status <- 0L
+  }
+
+  genes_out_path <- paste0(output_prefix, ".genes.out")
+  genes_raw_path <- paste0(output_prefix, ".genes.raw")
+
+  if (!identical(exit_status, 0L)) {
+    stop(
+      "MAGMA step 2 gene analysis failed with status ", exit_status, ".\n",
+      paste(status, collapse = "\n")
+    )
+  }
+
+  if (!file.exists(genes_out_path) || file.info(genes_out_path)$size <= 0) {
+    stop("MAGMA step 2 did not produce a usable .genes.out file: ", genes_out_path)
+  }
+
+  list(
+    status = exit_status,
+    stdout_stderr = status,
+    command = command_string,
+    output_prefix = output_prefix,
+    gene_annot_path = gene_annot_path,
+    pval_path = pval_path,
+    reference_bfile = reference_bfile,
+    genes_out_path = genes_out_path,
+    genes_raw_path = genes_raw_path,
+    magma_path = magma_path,
+    args = args
+  )
+}
+
+extract_magma_feature_zstat <- function(
+  genes_out_path,
+  feature_type = c("gene", "regulatory_element"),
+  output_path = NULL,
+  cleanup_paths = NULL
+) {
+  feature_type <- match.arg(feature_type)
+
+  if (!file.exists(genes_out_path)) {
+    stop("MAGMA gene output file does not exist: ", genes_out_path)
+  }
+
+  genes_dt <- fread(genes_out_path)
+
+  required_cols <- c("GENE", "ZSTAT")
+  missing_cols <- setdiff(required_cols, names(genes_dt))
+  if (length(missing_cols) > 0) {
+    stop(
+      "MAGMA gene output is missing required columns: ",
+      paste(missing_cols, collapse = ", ")
+    )
+  }
+
+  id_col <- if ("GENE_NAME" %in% names(genes_dt)) "GENE_NAME" else "GENE"
+  out <- genes_dt[, .(
+    feature_id = as.character(get(id_col)),
+    zstat = as.numeric(ZSTAT)
+  )]
+
+  if (!is.null(output_path)) {
+    dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+    fwrite(out, output_path, sep = "\t")
+  }
+
+  if (!is.null(cleanup_paths) && length(cleanup_paths) > 0L) {
+    cleanup_paths <- unique(cleanup_paths[file.exists(cleanup_paths)])
+    if (length(cleanup_paths) > 0L) {
+      unlink(cleanup_paths, force = TRUE)
+    }
+  }
+
+  out
+}
+
+extract_magma_zstat <- function(
+  genes_out_path,
+  output_path = NULL,
+  cleanup_paths = NULL
+) {
+  out <- extract_magma_feature_zstat(
+    genes_out_path = genes_out_path,
+    feature_type = "gene",
+    output_path = output_path,
+    cleanup_paths = cleanup_paths
+  )
+
+  setnames(out, "feature_id", "gene_id")
+
+  if (!is.null(output_path)) {
+    fwrite(out, output_path, sep = "\t")
+  }
+
+  out
+}
+
+run_magma_feature_scoring_pipeline <- function(
+  gwas_sumstats,
+  feature_loc_path,
+  reference_bfile,
+  output_prefix,
+  feature_type = c("gene", "regulatory_element"),
+  sample_size = NULL,
+  sample_size_col = NULL,
+  magma_path = "tools/magma_v1/magma",
+  annotation_window = NULL,
+  filter_path = NULL,
+  ignore_strand = FALSE,
+  nonhuman = FALSE,
+  gene_model = NULL,
+  genes_only = TRUE,
+  pval_use = NULL,
+  pval_duplicate = NULL,
+  bfile_synonyms = NULL,
+  bfile_synonym_dup = NULL,
+  step1_extra_args = character(),
+  step2_extra_args = character(),
+  keep_intermediates = FALSE,
+  zstat_output_path = paste0(output_prefix, ".zstat.tsv")
+) {
+  feature_type <- match.arg(feature_type)
+  step1_prefix <- paste0(output_prefix, ".step1")
+  step2_prefix <- paste0(output_prefix, ".step2")
+
+  step1 <- run_magma_step1_annotation(
+    gwas_sumstats = gwas_sumstats,
+    gene_loc_path = feature_loc_path,
+    output_prefix = step1_prefix,
+    magma_path = magma_path,
+    annotation_window = annotation_window,
+    filter_path = filter_path,
+    ignore_strand = ignore_strand,
+    nonhuman = nonhuman,
+    extra_args = step1_extra_args
+  )
+
+  step2 <- run_magma_step2_gene_analysis(
+    gene_annot_path = step1$annot_path,
+    pval_path = step1$pval_path,
+    reference_bfile = reference_bfile,
+    output_prefix = step2_prefix,
+    sample_size = sample_size,
+    sample_size_col = sample_size_col,
+    magma_path = magma_path,
+    gene_model = gene_model,
+    genes_only = genes_only,
+    pval_use = pval_use,
+    pval_duplicate = pval_duplicate,
+    bfile_synonyms = bfile_synonyms,
+    bfile_synonym_dup = bfile_synonym_dup,
+    extra_args = step2_extra_args
+  )
+
+  cleanup_paths <- NULL
+  if (!isTRUE(keep_intermediates)) {
+    cleanup_paths <- c(
+      step1$snp_loc_path,
+      step1$pval_path,
+      step1$annot_path,
+      paste0(step1$output_prefix, ".log"),
+      paste0(step1$output_prefix, ".log.tmp"),
+      step2$genes_out_path,
+      step2$genes_raw_path,
+      paste0(step2$output_prefix, ".log"),
+      paste0(step2$output_prefix, ".log.tmp")
+    )
+  }
+
+  zstat <- extract_magma_feature_zstat(
+    genes_out_path = step2$genes_out_path,
+    feature_type = feature_type,
+    output_path = zstat_output_path,
+    cleanup_paths = cleanup_paths
+  )
+
+  list(
+    step1 = step1,
+    step2 = step2,
+    zstat = zstat,
+    zstat_output_path = zstat_output_path,
+    feature_type = feature_type
+  )
+}
+
+run_magma_gene_scoring_pipeline <- function(
+  gwas_sumstats,
+  gene_loc_path,
+  reference_bfile,
+  output_prefix,
+  sample_size = NULL,
+  sample_size_col = NULL,
+  magma_path = "tools/magma_v1/magma",
+  annotation_window = NULL,
+  filter_path = NULL,
+  ignore_strand = FALSE,
+  nonhuman = FALSE,
+  gene_model = NULL,
+  genes_only = TRUE,
+  pval_use = NULL,
+  pval_duplicate = NULL,
+  bfile_synonyms = NULL,
+  bfile_synonym_dup = NULL,
+  step1_extra_args = character(),
+  step2_extra_args = character(),
+  keep_intermediates = FALSE,
+  zstat_output_path = paste0(output_prefix, ".zstat.tsv")
+) {
+  run_magma_feature_scoring_pipeline(
+    gwas_sumstats = gwas_sumstats,
+    feature_loc_path = gene_loc_path,
+    reference_bfile = reference_bfile,
+    output_prefix = output_prefix,
+    feature_type = "gene",
+    sample_size = sample_size,
+    sample_size_col = sample_size_col,
+    magma_path = magma_path,
+    annotation_window = annotation_window,
+    filter_path = filter_path,
+    ignore_strand = ignore_strand,
+    nonhuman = nonhuman,
+    gene_model = gene_model,
+    genes_only = genes_only,
+    pval_use = pval_use,
+    pval_duplicate = pval_duplicate,
+    bfile_synonyms = bfile_synonyms,
+    bfile_synonym_dup = bfile_synonym_dup,
+    step1_extra_args = step1_extra_args,
+    step2_extra_args = step2_extra_args,
+    keep_intermediates = keep_intermediates,
+    zstat_output_path = zstat_output_path
+  )
+}
