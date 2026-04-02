@@ -10,6 +10,15 @@ source("scripts/Internals/R/02_prepare_gene_gene_graph.R")
 
 string_links_path <- "data/raw/STRING/9606.protein.links.v12.0.txt"
 string_info_path <- "data/raw/STRING/9606.protein.info.v12.0.txt"
+default_gene_gene_test_output_dir <- "data/processed/test_outputs/gene_gene_graph"
+
+make_gene_gene_test_path <- function(stem, ext = "") {
+  dir.create(default_gene_gene_test_output_dir, recursive = TRUE, showWarnings = FALSE)
+  file.path(
+    default_gene_gene_test_output_dir,
+    paste0(stem, "_", format(Sys.time(), "%Y%m%d%H%M%S"), "_", sprintf("%06d", sample.int(999999L, 1L)), ext)
+  )
+}
 
 make_gene_gene_test_inputs <- function() {
   links <- fread(string_links_path, nrows = 5000)
@@ -17,8 +26,8 @@ make_gene_gene_test_inputs <- function() {
   protein_info <- fread(string_info_path)
   protein_info <- protein_info[`#string_protein_id` %in% protein_ids]
 
-  links_file <- tempfile(fileext = ".tsv")
-  info_file <- tempfile(fileext = ".tsv")
+  links_file <- make_gene_gene_test_path("links", ".tsv")
+  info_file <- make_gene_gene_test_path("info", ".tsv")
 
   fwrite(links, links_file, sep = "\t")
   fwrite(protein_info, info_file, sep = "\t")
@@ -31,7 +40,7 @@ make_gene_gene_test_inputs <- function() {
 
 test_prepare_gene_gene_graph <- function() {
   inputs <- make_gene_gene_test_inputs()
-  output_prefix <- tempfile(pattern = "gene_gene_graph_test_")
+  output_prefix <- make_gene_gene_test_path("gene_gene_graph_test")
 
   result <- prepare_gene_gene_graph(config = list(
     protein_links_path = inputs$links_path,

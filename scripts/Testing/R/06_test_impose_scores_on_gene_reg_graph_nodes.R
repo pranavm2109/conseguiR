@@ -9,6 +9,15 @@ suppressPackageStartupMessages({
 source("scripts/Internals/R/06_impose_scores_on_gene_reg_graph_nodes.R")
 
 default_graph_rds_path <- "data/processed/gene_reg_graph_no_scores.rds"
+default_gene_reg_scored_test_output_dir <- "data/processed/test_outputs/gene_reg_scored"
+
+make_gene_reg_scored_test_path <- function(stem, ext = "") {
+  dir.create(default_gene_reg_scored_test_output_dir, recursive = TRUE, showWarnings = FALSE)
+  file.path(
+    default_gene_reg_scored_test_output_dir,
+    paste0(stem, "_", format(Sys.time(), "%Y%m%d%H%M%S"), "_", sprintf("%06d", sample.int(999999L, 1L)), ext)
+  )
+}
 
 make_live_gene_reg_score_fixture <- function() {
   graph <- read_gene_reg_graph_no_scores(default_graph_rds_path)
@@ -89,7 +98,7 @@ test_impose_scores_on_gene_reg_graph_live_fixture <- function() {
 
 test_prepare_scored_gene_reg_graph_saves_outputs <- function(print_scores = TRUE) {
   fixture <- make_live_gene_reg_score_fixture()
-  output_prefix <- tempfile(pattern = "gene_reg_graph_scored_test_")
+  output_prefix <- make_gene_reg_scored_test_path("gene_reg_graph_scored_test")
 
   result <- prepare_scored_gene_reg_graph(
     graph = fixture$graph,

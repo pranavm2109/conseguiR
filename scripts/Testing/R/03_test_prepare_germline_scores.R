@@ -12,6 +12,26 @@ default_gene_loc_path <- "data/raw/NCBI38/NCBI38.gene.loc"
 default_reg_loc_path <- "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
 default_reference_bfile <- "data/raw/g1000_eur/g1000_eur"
 default_sample_size <- 456348L
+default_germline_test_output_dir <- "data/processed/test_outputs/germline"
+default_run_full_magma_tests <- identical(Sys.getenv("CONSEGUIR_RUN_FULL_MAGMA_TESTS", unset = "0"), "1")
+
+make_germline_test_path <- function(stem, ext = "") {
+  dir.create(default_germline_test_output_dir, recursive = TRUE, showWarnings = FALSE)
+  file.path(
+    default_germline_test_output_dir,
+    paste0(stem, "_", format(Sys.time(), "%Y%m%d%H%M%S"), "_", sprintf("%06d", sample.int(999999L, 1L)), ext)
+  )
+}
+
+make_tiny_gwas_fixture <- function() {
+  data.table(
+    hm_rsid = c("rs1", "rs2", "rs3"),
+    hm_variant_id = c("1_100_A_G", "1_200_C_T", "2_300_G_A"),
+    hm_chrom = c("1", "1", "2"),
+    hm_pos = c(100L, 200L, 300L),
+    p_value = c(0.01, 0.2, 0.05)
+  )
+}
 
 find_reference_bfile <- function() {
   candidates <- c(
@@ -40,9 +60,9 @@ find_reference_bfile <- function() {
 }
 
 test_prepare_magma_gwas_cache_reuses_cached_outputs <- function(
-  gwas_path = default_gwas_path
+  gwas_path = make_tiny_gwas_fixture()
 ) {
-  output_prefix <- tempfile(pattern = "magma_cached_inputs_")
+  output_prefix <- make_germline_test_path("magma_cached_inputs")
 
   first <- prepare_magma_gwas_cache(
     gwas_sumstats = gwas_path,
@@ -73,7 +93,7 @@ test_prepare_magma_gwas_cache_reuses_cached_outputs <- function(
 }
 
 test_run_magma_step1_annotation_reuses_existing_annotation <- function() {
-  output_prefix <- tempfile(pattern = "magma_step1_reuse_")
+  output_prefix <- make_germline_test_path("magma_step1_reuse")
   snp_loc_path <- paste0(output_prefix, ".snp_loc.tsv")
   pval_path <- paste0(output_prefix, ".pval.tsv")
   annot_path <- paste0(output_prefix, ".genes.annot")
@@ -111,9 +131,9 @@ test_run_magma_step2_gene_analysis_reuses_existing_output <- function(
     skip("No PLINK reference bfile found in the repository.")
   }
 
-  output_prefix <- tempfile(pattern = "magma_step2_reuse_")
-  gene_annot_path <- tempfile(pattern = "magma_gene_annot_", fileext = ".genes.annot")
-  pval_path <- tempfile(pattern = "magma_pval_", fileext = ".tsv")
+  output_prefix <- make_germline_test_path("magma_step2_reuse")
+  gene_annot_path <- make_germline_test_path("magma_gene_annot", ".genes.annot")
+  pval_path <- make_germline_test_path("magma_pval", ".tsv")
   genes_out_path <- paste0(output_prefix, ".genes.out")
 
   writeLines(c("GENE\tCHR\tSTART\tSTOP\tNSNPS\tSNPs", "TEST\t1\t1\t1000\t2\trs1,rs2"), gene_annot_path)
@@ -140,7 +160,7 @@ test_run_magma_step1_annotation <- function(
   gene_loc_path = default_gene_loc_path,
   nrows = 50000L
 ) {
-  output_prefix <- tempfile(pattern = "magma_step1_test_")
+  output_prefix <- make_germline_test_path("magma_step1_test")
 
   result <- run_magma_step1_annotation(
     gwas_sumstats = gwas_path,
@@ -208,8 +228,8 @@ test_run_magma_step1_annotation <- function(
 }
 
 test_extract_magma_zstat <- function() {
-  genes_out_path <- tempfile(pattern = "magma_genes_out_", fileext = ".genes.out")
-  zstat_out_path <- tempfile(pattern = "magma_zstat_", fileext = ".tsv")
+  genes_out_path <- make_germline_test_path("magma_genes_out", ".genes.out")
+  zstat_out_path <- make_germline_test_path("magma_zstat", ".tsv")
 
   genes_out_dt <- data.table(
     GENE = c("1", "2"),
@@ -245,7 +265,7 @@ test_extract_magma_zstat <- function() {
 }
 
 test_extract_magma_feature_zstat_regulatory <- function() {
-  genes_out_path <- tempfile(pattern = "magma_reg_out_", fileext = ".genes.out")
+  genes_out_path <- make_germline_test_path("magma_reg_out", ".genes.out")
 
   genes_out_dt <- data.table(
     GENE = c("GH01J000013", "GH01J000021"),
@@ -284,14 +304,14 @@ test_run_magma_step2_gene_analysis <- function(
     return(invisible(NULL))
   }
 
-  step1_prefix <- tempfile(pattern = "magma_step2_prereq_")
+  step1_prefix <- make_germline_test_path("magma_step2_prereq")
   step1_result <- run_magma_step1_annotation(
     gwas_sumstats = gwas_path,
     gene_loc_path = feature_loc_path,
     output_prefix = step1_prefix
   )
 
-  output_prefix <- tempfile(pattern = "magma_step2_test_")
+  output_prefix <- make_germline_test_path("magma_step2_test")
 
   result <- run_magma_step2_gene_analysis(
     gene_annot_path = step1_result$annot_path,
@@ -325,7 +345,7 @@ test_run_magma_feature_scoring_pipeline <- function(
     return(invisible(NULL))
   }
 
-  output_prefix <- tempfile(pattern = "magma_pipeline_test_")
+  output_prefix <- make_germline_test_path("magma_pipeline_test")
 
   result <- run_magma_feature_scoring_pipeline(
     gwas_sumstats = default_gwas_path,
@@ -359,9 +379,12 @@ run_all_germline_tests <- function(print_scores = TRUE) {
   test_prepare_magma_gwas_cache_reuses_cached_outputs()
   test_run_magma_step1_annotation_reuses_existing_annotation()
   test_run_magma_step2_gene_analysis_reuses_existing_output()
-  test_run_magma_step1_annotation()
   test_extract_magma_zstat()
   test_extract_magma_feature_zstat_regulatory()
+}
+
+run_full_germline_integration_tests <- function(print_scores = TRUE) {
+  test_run_magma_step1_annotation()
   test_run_magma_step2_gene_analysis(
     feature_loc_path = default_gene_loc_path,
     feature_type = "gene"
@@ -389,16 +412,26 @@ run_all_germline_tests <- function(print_scores = TRUE) {
 }
 
 main <- function() {
-  test_that("MAGMA germline scoring works for genes and regulatory elements", {
-    results <- run_all_germline_tests(print_scores = TRUE)
-
-    expect_true(is.data.frame(results$gene$zstat))
-    expect_true(is.data.frame(results$regulatory_element$zstat))
-    expect_gt(nrow(results$gene$zstat), 0L)
-    expect_gt(nrow(results$regulatory_element$zstat), 0L)
-    expect_identical(names(results$gene$zstat), c("feature_id", "zstat"))
-    expect_identical(names(results$regulatory_element$zstat), c("feature_id", "zstat"))
+  test_that("MAGMA germline smoke tests pass", {
+    expect_no_error(run_all_germline_tests(print_scores = FALSE))
   })
+
+  if (isTRUE(default_run_full_magma_tests)) {
+    test_that("MAGMA germline scoring works for genes and regulatory elements", {
+      results <- run_full_germline_integration_tests(print_scores = TRUE)
+
+      expect_true(is.data.frame(results$gene$zstat))
+      expect_true(is.data.frame(results$regulatory_element$zstat))
+      expect_gt(nrow(results$gene$zstat), 0L)
+      expect_gt(nrow(results$regulatory_element$zstat), 0L)
+      expect_identical(names(results$gene$zstat), c("feature_id", "zstat"))
+      expect_identical(names(results$regulatory_element$zstat), c("feature_id", "zstat"))
+    })
+  } else {
+    message(
+      "Skipping full live MAGMA integration tests. Set CONSEGUIR_RUN_FULL_MAGMA_TESTS=1 to enable them."
+    )
+  }
 }
 
 if (sys.nframe() == 0) {

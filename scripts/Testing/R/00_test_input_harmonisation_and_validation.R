@@ -29,6 +29,7 @@ negative_test_cases <- list(
     expected_text = "p-value"
   )
 )
+
 default_somatic_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcga_order_hg38.maf"
 negative_somatic_test_cases <- list(
   list(
@@ -62,12 +63,15 @@ negative_somatic_test_cases <- list(
     expected_text = "alternate allele"
   )
 )
+
 default_reg_ref_path <- "data/raw/Testing/reg_elements_valid.loc"
 default_bw_files <- c(
   "data/raw/Testing/SRR1020514_DLBCL_P265_H3K27ac_ChIPseq.bw",
   "data/raw/Testing/SRR1020516_DLBCL_P286_H3K27ac_ChIPseq.bw",
   "data/raw/Testing/SRR1020518_DLBCL_P397_H3K27ac_ChIPseq.bw"
 )
+default_test_output_dir <- "data/processed/test_outputs"
+
 negative_epigenomic_test_cases <- list(
   list(
     mode = "reg_ref",
@@ -109,8 +113,9 @@ test_validate_gwas_sumstats <- function(path = default_gwas_path) {
   message("Running validate_gwas_sumstats()")
   gwas_validated <- validate_gwas_sumstats(gwas_raw)
   magma_ready <- prepare_magma_input(gwas_raw)
-  snp_loc_outfile <- tempfile(fileext = ".tsv")
-  pval_outfile <- tempfile(fileext = ".tsv")
+  dir.create(default_test_output_dir, recursive = TRUE, showWarnings = FALSE)
+  snp_loc_outfile <- file.path(default_test_output_dir, "validation_test_snp_loc.tsv")
+  pval_outfile <- file.path(default_test_output_dir, "validation_test_pval.tsv")
   write_magma_input_files(gwas_raw, snp_loc_path = snp_loc_outfile, pval_path = pval_outfile)
   snp_loc_written <- fread(snp_loc_outfile, header = FALSE)
   pval_written <- fread(pval_outfile, header = TRUE)

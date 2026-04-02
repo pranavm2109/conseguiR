@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-import tempfile
+import uuid
 from pathlib import Path
 
 import pandas as pd
@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DIFFUSION_SCRIPT = REPO_ROOT / "scripts" / "Internals" / "Python" / "07_run_diffusion_on_gene_reg_graph.py"
 NO_SCORE_NODES = REPO_ROOT / "data" / "processed" / "gene_reg_graph_no_scores_nodes.tsv.gz"
 NO_SCORE_EDGES = REPO_ROOT / "data" / "processed" / "gene_reg_graph_no_scores_edges.tsv.gz"
+TEST_OUTPUT_ROOT = REPO_ROOT / "data" / "processed" / "test_outputs" / "python_step7"
 
 
 def load_diffusion_module():
@@ -23,6 +24,13 @@ def load_diffusion_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def make_repo_test_dir(prefix: str) -> Path:
+    TEST_OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    path = TEST_OUTPUT_ROOT / f"{prefix}_{uuid.uuid4().hex}"
+    path.mkdir(parents=True, exist_ok=False)
+    return path
 
 
 def make_scored_graph_fixture(tmpdir: Path) -> tuple[Path, Path]:
@@ -58,53 +66,52 @@ def make_scored_graph_fixture(tmpdir: Path) -> tuple[Path, Path]:
 def test_run_gene_reg_diffusion():
     module = load_diffusion_module()
 
-    with tempfile.TemporaryDirectory(prefix="conseguiR_step7_test_") as tmp:
-        tmpdir = Path(tmp)
-        nodes_path, edges_path = make_scored_graph_fixture(tmpdir)
+    tmpdir = make_repo_test_dir("conseguiR_step7_test")
+    nodes_path, edges_path = make_scored_graph_fixture(tmpdir)
 
-        config = module.DiffusionConfig(
-            nodes_path=str(nodes_path),
-            edges_path=str(edges_path),
-            output_dir=str(tmpdir),
-            output_stem="gene_reg_graph_diffusion_test",
-            top_k=3,
-            top_n_to_save=10,
-        )
+    config = module.DiffusionConfig(
+        nodes_path=str(nodes_path),
+        edges_path=str(edges_path),
+        output_dir=str(tmpdir),
+        output_stem="gene_reg_graph_diffusion_test",
+        top_k=3,
+        top_n_to_save=10,
+    )
 
-        result = module.run_gene_reg_diffusion(config=config)
-        diffusion = result["diffusion"]
+    result = module.run_gene_reg_diffusion(config=config)
+    diffusion = result["diffusion"]
 
-        required_cols = {
-            "node_id",
-            "gene_name",
-            "prediff_germline",
-            "prediff_somatic",
-            "prediff_epigenomic",
-            "incoming_germline",
-            "incoming_somatic",
-            "incoming_epigenomic",
-            "post_germline",
-            "post_somatic",
-            "post_epigenomic",
-            "post_norm",
-            "rank_shift",
-        }
+    required_cols = {
+        "node_id",
+        "gene_name",
+        "prediff_germline",
+        "prediff_somatic",
+        "prediff_epigenomic",
+        "incoming_germline",
+        "incoming_somatic",
+        "incoming_epigenomic",
+        "post_germline",
+        "post_somatic",
+        "post_epigenomic",
+        "post_norm",
+        "rank_shift",
+    }
 
-        assert required_cols.issubset(diffusion.columns), "Diffusion output is missing expected columns."
-        assert len(diffusion) > 0, "Diffusion output is empty."
-        assert diffusion["post_norm"].notna().all(), "post_norm contains missing values."
+    assert required_cols.issubset(diffusion.columns), "Diffusion output is missing expected columns."
+    assert len(diffusion) > 0, "Diffusion output is empty."
+    assert diffusion["post_norm"].notna().all(), "post_norm contains missing values."
 
-        all_genes_path = Path(result["output_paths"]["all_genes_path"])
-        top_genes_path = Path(result["output_paths"]["top_genes_path"])
-        assert all_genes_path.exists(), "All-genes diffusion output was not written."
-        assert top_genes_path.exists(), "Top-genes diffusion output was not written."
+    all_genes_path = Path(result["output_paths"]["all_genes_path"])
+    top_genes_path = Path(result["output_paths"]["top_genes_path"])
+    assert all_genes_path.exists(), "All-genes diffusion output was not written."
+    assert top_genes_path.exists(), "Top-genes diffusion output was not written."
 
-        print("Top diffused genes from scored graph fixture:")
-        print(
-            diffusion.loc[:, ["node_id", "gene_name", "prediff_norm", "post_norm", "rank_shift"]]
-            .head(10)
-            .to_string(index=False)
-        )
+    print("Top diffused genes from scored graph fixture:")
+    print(
+        diffusion.loc[:, ["node_id", "gene_name", "prediff_norm", "post_norm", "rank_shift"]]
+        .head(10)
+        .to_string(index=False)
+    )
 
 
 def main():

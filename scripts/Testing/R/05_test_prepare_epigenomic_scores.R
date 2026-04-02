@@ -11,6 +11,15 @@ default_epigenomic_track_dir <- "data/raw/Testing"
 default_reg_ref_path <- "data/raw/Testing/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
 default_exclude_patterns <- c("_BL_", "_FL_", "broken_signal_track")
 default_broken_bigwig_path <- "data/raw/Testing/broken_signal_track.bw"
+default_epigenomic_test_output_dir <- "data/processed/test_outputs/epigenomic"
+
+make_epigenomic_test_path <- function(stem, ext = "") {
+  dir.create(default_epigenomic_test_output_dir, recursive = TRUE, showWarnings = FALSE)
+  file.path(
+    default_epigenomic_test_output_dir,
+    paste0(stem, "_", format(Sys.time(), "%Y%m%d%H%M%S"), "_", sprintf("%06d", sample.int(999999L, 1L)), ext)
+  )
+}
 
 make_epigenomic_live_fixture <- function(n_tracks = 3L, n_reg_elements = 500L) {
   bw_files <- list_epigenomic_track_files(
@@ -22,7 +31,7 @@ make_epigenomic_live_fixture <- function(n_tracks = 3L, n_reg_elements = 500L) {
 
   reg_dt <- fread(default_reg_ref_path, header = FALSE)
   reg_subset <- reg_dt[seq_len(min(n_reg_elements, nrow(reg_dt)))]
-  reg_subset_path <- tempfile(pattern = "epigenomic_reg_subset_", fileext = ".loc")
+  reg_subset_path <- make_epigenomic_test_path("epigenomic_reg_subset", ".loc")
   fwrite(reg_subset, reg_subset_path, sep = "\t", col.names = FALSE)
 
   list(

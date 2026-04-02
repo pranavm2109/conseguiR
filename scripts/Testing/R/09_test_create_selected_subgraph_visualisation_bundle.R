@@ -12,6 +12,15 @@ default_selected_nodes_path <- "data/processed/gene_gene_selected_subgraph_nodes
 default_selected_edges_path <- "data/processed/gene_gene_selected_subgraph_edges.tsv"
 default_selected_summary_path <- "data/processed/gene_gene_selected_subgraph_summary.tsv"
 default_selected_plot_path <- "data/processed/gene_gene_selected_subgraph_plot.pdf"
+default_selected_bundle_test_output_dir <- "data/processed/test_outputs/selected_subgraph_bundle"
+
+make_selected_bundle_test_path <- function(stem, ext = "") {
+  dir.create(default_selected_bundle_test_output_dir, recursive = TRUE, showWarnings = FALSE)
+  file.path(
+    default_selected_bundle_test_output_dir,
+    paste0(stem, "_", format(Sys.time(), "%Y%m%d%H%M%S"), "_", sprintf("%06d", sample.int(999999L, 1L)), ext)
+  )
+}
 
 make_live_selected_subgraph_fixture <- function() {
   list(
@@ -54,7 +63,7 @@ test_save_selected_subgraph_visualisation_bundle_outputs <- function() {
     edges_path = default_selected_edges_path,
     summary_path = default_selected_summary_path
   )
-  output_prefix <- tempfile(pattern = "selected_subgraph_plot_bundle_")
+  output_prefix <- make_selected_bundle_test_path("selected_subgraph_plot_bundle")
 
   save_selected_subgraph_visualisation_bundle(
     bundle = bundle,

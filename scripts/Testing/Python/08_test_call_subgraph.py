@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-import tempfile
+import uuid
 from pathlib import Path
 
 import pandas as pd
@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SUBGRAPH_SCRIPT = REPO_ROOT / "scripts" / "Internals" / "Python" / "08_call_subgraph.py"
 GG_NODES = REPO_ROOT / "data" / "processed" / "gene_gene_graph_nodes.tsv.gz"
 GG_EDGES = REPO_ROOT / "data" / "processed" / "gene_gene_graph_edges.tsv.gz"
+TEST_OUTPUT_ROOT = REPO_ROOT / "data" / "processed" / "test_outputs" / "python_step8"
 
 
 def load_subgraph_module():
@@ -23,6 +24,13 @@ def load_subgraph_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def make_repo_test_dir(prefix: str) -> Path:
+    TEST_OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+    path = TEST_OUTPUT_ROOT / f"{prefix}_{uuid.uuid4().hex}"
+    path.mkdir(parents=True, exist_ok=False)
+    return path
 
 
 def ortools_available(module) -> bool:
@@ -71,37 +79,36 @@ def test_run_cardinality_subgraph_calling_live():
         )
         return
 
-    with tempfile.TemporaryDirectory(prefix="conseguiR_step8_test_") as tmp:
-        tmpdir = Path(tmp)
-        diffusion_path = make_diffusion_fixture(tmpdir, n_genes=80)
+    tmpdir = make_repo_test_dir("conseguiR_step8_test")
+    diffusion_path = make_diffusion_fixture(tmpdir, n_genes=80)
 
-        config = module.SubgraphConfig(
-            diffusion_path=str(diffusion_path),
-            gg_nodes_path=str(GG_NODES),
-            gg_edges_path=str(GG_EDGES),
-            output_dir=str(tmpdir),
-            output_stem="gene_gene_selected_subgraph_test",
-            target_genes=12,
-            candidate_pool_size=40,
-            max_edges_in_model=500,
-            max_time_seconds=30,
-            num_workers=4,
-        )
+    config = module.SubgraphConfig(
+        diffusion_path=str(diffusion_path),
+        gg_nodes_path=str(GG_NODES),
+        gg_edges_path=str(GG_EDGES),
+        output_dir=str(tmpdir),
+        output_stem="gene_gene_selected_subgraph_test",
+        target_genes=12,
+        candidate_pool_size=40,
+        max_edges_in_model=500,
+        max_time_seconds=30,
+        num_workers=4,
+    )
 
-        result = module.run_cardinality_subgraph_calling(config=config)
-        selected_nodes = result["selected_nodes"]
-        selected_edges = result["selected_edges"]
+    result = module.run_cardinality_subgraph_calling(config=config)
+    selected_nodes = result["selected_nodes"]
+    selected_edges = result["selected_edges"]
 
-        assert selected_nodes.shape[0] == 12, "Selected node cardinality does not match the request."
-        assert {"node_id", "gene_name", "prize"}.issubset(selected_nodes.columns)
-        assert {"gene_u", "gene_v"}.issubset(selected_edges.columns)
-        assert Path(result["output_paths"]["nodes_path"]).exists()
-        assert Path(result["output_paths"]["edges_path"]).exists()
-        assert Path(result["output_paths"]["summary_path"]).exists()
-        assert Path(result["output_paths"]["graphml_path"]).exists()
+    assert selected_nodes.shape[0] == 12, "Selected node cardinality does not match the request."
+    assert {"node_id", "gene_name", "prize"}.issubset(selected_nodes.columns)
+    assert {"gene_u", "gene_v"}.issubset(selected_edges.columns)
+    assert Path(result["output_paths"]["nodes_path"]).exists()
+    assert Path(result["output_paths"]["edges_path"]).exists()
+    assert Path(result["output_paths"]["summary_path"]).exists()
+    assert Path(result["output_paths"]["graphml_path"]).exists()
 
-        print("Selected genes from step 8 test fixture:")
-        print(selected_nodes.head(20).to_string(index=False))
+    print("Selected genes from step 8 test fixture:")
+    print(selected_nodes.head(20).to_string(index=False))
 
 
 def test_validate_diffusion_results_negative_missing_columns():
@@ -121,109 +128,105 @@ def test_run_cardinality_subgraph_calling_negative_missing_ortools():
     if ortools_available(module):
         return
 
-    with tempfile.TemporaryDirectory(prefix="conseguiR_step8_no_ortools_") as tmp:
-        tmpdir = Path(tmp)
-        diffusion_path = make_diffusion_fixture(tmpdir, n_genes=40)
+    tmpdir = make_repo_test_dir("conseguiR_step8_no_ortools")
+    diffusion_path = make_diffusion_fixture(tmpdir, n_genes=40)
 
-        config = module.SubgraphConfig(
-            diffusion_path=str(diffusion_path),
-            gg_nodes_path=str(GG_NODES),
-            gg_edges_path=str(GG_EDGES),
-            output_dir=str(tmpdir),
-            target_genes=10,
-            candidate_pool_size=20,
-        )
+    config = module.SubgraphConfig(
+        diffusion_path=str(diffusion_path),
+        gg_nodes_path=str(GG_NODES),
+        gg_edges_path=str(GG_EDGES),
+        output_dir=str(tmpdir),
+        target_genes=10,
+        candidate_pool_size=20,
+    )
 
-        try:
-            module.run_cardinality_subgraph_calling(config=config)
-        except ImportError as exc:
-            assert "OR-Tools is required" in str(exc)
-        else:
-            raise AssertionError("Expected step 8 to fail clearly when OR-Tools is unavailable.")
+    try:
+        module.run_cardinality_subgraph_calling(config=config)
+    except ImportError as exc:
+        assert "OR-Tools is required" in str(exc)
+    else:
+        raise AssertionError("Expected step 8 to fail clearly when OR-Tools is unavailable.")
 
 
 def test_run_cardinality_subgraph_calling_negative_no_overlap():
     module = load_subgraph_module()
 
-    with tempfile.TemporaryDirectory(prefix="conseguiR_step8_bad_overlap_") as tmp:
-        tmpdir = Path(tmp)
-        diffusion = pd.DataFrame(
-            {
-                "node_id": [f"NOT_A_REAL_GENE_{i}" for i in range(20)],
-                "gene_name": [f"NOT_A_REAL_GENE_{i}" for i in range(20)],
-                "post_norm": [1.0 + i for i in range(20)],
-            }
-        )
-        diffusion_path = tmpdir / "bad_diffusion.tsv"
-        diffusion.to_csv(diffusion_path, sep="\t", index=False)
+    tmpdir = make_repo_test_dir("conseguiR_step8_bad_overlap")
+    diffusion = pd.DataFrame(
+        {
+            "node_id": [f"NOT_A_REAL_GENE_{i}" for i in range(20)],
+            "gene_name": [f"NOT_A_REAL_GENE_{i}" for i in range(20)],
+            "post_norm": [1.0 + i for i in range(20)],
+        }
+    )
+    diffusion_path = tmpdir / "bad_diffusion.tsv"
+    diffusion.to_csv(diffusion_path, sep="\t", index=False)
 
-        config = module.SubgraphConfig(
-            diffusion_path=str(diffusion_path),
-            gg_nodes_path=str(GG_NODES),
-            gg_edges_path=str(GG_EDGES),
-            output_dir=str(tmpdir),
-            target_genes=10,
-            candidate_pool_size=20,
-        )
+    config = module.SubgraphConfig(
+        diffusion_path=str(diffusion_path),
+        gg_nodes_path=str(GG_NODES),
+        gg_edges_path=str(GG_EDGES),
+        output_dir=str(tmpdir),
+        target_genes=10,
+        candidate_pool_size=20,
+    )
 
-        try:
-            module.run_cardinality_subgraph_calling(config=config)
-        except ValueError as exc:
-            assert "could be matched" in str(exc)
-        else:
-            raise AssertionError("Expected step 8 to fail when diffusion genes do not overlap the graph.")
+    try:
+        module.run_cardinality_subgraph_calling(config=config)
+    except ValueError as exc:
+        assert "could be matched" in str(exc)
+    else:
+        raise AssertionError("Expected step 8 to fail when diffusion genes do not overlap the graph.")
 
 
 def test_run_cardinality_subgraph_calling_negative_bad_edges():
     module = load_subgraph_module()
 
-    with tempfile.TemporaryDirectory(prefix="conseguiR_step8_bad_edges_") as tmp:
-        tmpdir = Path(tmp)
-        diffusion_path = make_diffusion_fixture(tmpdir, n_genes=40)
+    tmpdir = make_repo_test_dir("conseguiR_step8_bad_edges")
+    diffusion_path = make_diffusion_fixture(tmpdir, n_genes=40)
 
-        bad_edges = pd.read_csv(GG_EDGES, sep="\t", low_memory=False).drop(columns=["confidence"])
-        bad_edges_path = tmpdir / "bad_edges.tsv"
-        bad_edges.to_csv(bad_edges_path, sep="\t", index=False)
+    bad_edges = pd.read_csv(GG_EDGES, sep="\t", low_memory=False).drop(columns=["confidence"])
+    bad_edges_path = tmpdir / "bad_edges.tsv"
+    bad_edges.to_csv(bad_edges_path, sep="\t", index=False)
 
-        config = module.SubgraphConfig(
-            diffusion_path=str(diffusion_path),
-            gg_nodes_path=str(GG_NODES),
-            gg_edges_path=str(bad_edges_path),
-            output_dir=str(tmpdir),
-            target_genes=10,
-            candidate_pool_size=20,
-        )
+    config = module.SubgraphConfig(
+        diffusion_path=str(diffusion_path),
+        gg_nodes_path=str(GG_NODES),
+        gg_edges_path=str(bad_edges_path),
+        output_dir=str(tmpdir),
+        target_genes=10,
+        candidate_pool_size=20,
+    )
 
-        try:
-            module.run_cardinality_subgraph_calling(config=config)
-        except ValueError as exc:
-            assert "missing columns" in str(exc)
-        else:
-            raise AssertionError("Expected step 8 to fail for malformed gene-gene edges.")
+    try:
+        module.run_cardinality_subgraph_calling(config=config)
+    except ValueError as exc:
+        assert "missing columns" in str(exc)
+    else:
+        raise AssertionError("Expected step 8 to fail for malformed gene-gene edges.")
 
 
 def test_run_cardinality_subgraph_calling_negative_small_candidate_pool():
     module = load_subgraph_module()
 
-    with tempfile.TemporaryDirectory(prefix="conseguiR_step8_bad_pool_") as tmp:
-        tmpdir = Path(tmp)
-        diffusion_path = make_diffusion_fixture(tmpdir, n_genes=30)
+    tmpdir = make_repo_test_dir("conseguiR_step8_bad_pool")
+    diffusion_path = make_diffusion_fixture(tmpdir, n_genes=30)
 
-        config = module.SubgraphConfig(
-            diffusion_path=str(diffusion_path),
-            gg_nodes_path=str(GG_NODES),
-            gg_edges_path=str(GG_EDGES),
-            output_dir=str(tmpdir),
-            target_genes=15,
-            candidate_pool_size=10,
-        )
+    config = module.SubgraphConfig(
+        diffusion_path=str(diffusion_path),
+        gg_nodes_path=str(GG_NODES),
+        gg_edges_path=str(GG_EDGES),
+        output_dir=str(tmpdir),
+        target_genes=15,
+        candidate_pool_size=10,
+    )
 
-        try:
-            module.run_cardinality_subgraph_calling(config=config)
-        except ValueError as exc:
-            assert "at least as large" in str(exc)
-        else:
-            raise AssertionError("Expected step 8 to fail when candidate_pool_size < target_genes.")
+    try:
+        module.run_cardinality_subgraph_calling(config=config)
+    except ValueError as exc:
+        assert "at least as large" in str(exc)
+    else:
+        raise AssertionError("Expected step 8 to fail when candidate_pool_size < target_genes.")
 
 
 def main():

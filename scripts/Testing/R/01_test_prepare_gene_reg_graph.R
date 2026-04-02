@@ -10,6 +10,15 @@ source("scripts/Internals/R/01_prepare_gene_reg_graph.R")
 
 genehancer_interactions_path <- "data/raw/GeneHancer/gh_interactions_hg38_primary_assembly"
 genehancer_reg_elements_path <- "data/raw/GeneHancer/gh_reg_elements_hg38_primary_assembly"
+default_gene_reg_test_output_dir <- "data/processed/test_outputs/gene_reg_graph"
+
+make_gene_reg_test_path <- function(stem, ext = "") {
+  dir.create(default_gene_reg_test_output_dir, recursive = TRUE, showWarnings = FALSE)
+  file.path(
+    default_gene_reg_test_output_dir,
+    paste0(stem, "_", format(Sys.time(), "%Y%m%d%H%M%S"), "_", sprintf("%06d", sample.int(999999L, 1L)), ext)
+  )
+}
 
 make_gene_reg_test_inputs <- function() {
   interactions <- fread(genehancer_interactions_path, nrows = 3000)
@@ -17,8 +26,8 @@ make_gene_reg_test_inputs <- function() {
   reg_elements <- fread(genehancer_reg_elements_path)
   reg_elements <- reg_elements[name %in% reg_ids]
 
-  interactions_file <- tempfile(fileext = ".tsv")
-  reg_elements_file <- tempfile(fileext = ".tsv")
+  interactions_file <- make_gene_reg_test_path("interactions", ".tsv")
+  reg_elements_file <- make_gene_reg_test_path("reg_elements", ".tsv")
 
   fwrite(interactions, interactions_file, sep = "\t")
   fwrite(reg_elements, reg_elements_file, sep = "\t")
@@ -31,7 +40,7 @@ make_gene_reg_test_inputs <- function() {
 
 test_prepare_gene_reg_graph <- function() {
   inputs <- make_gene_reg_test_inputs()
-  output_prefix <- tempfile(pattern = "gene_reg_graph_test_")
+  output_prefix <- make_gene_reg_test_path("gene_reg_graph_test")
 
   result <- prepare_gene_reg_graph(config = list(
     interactions_path = inputs$interactions_path,
