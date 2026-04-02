@@ -2,3 +2,9 @@
 data/raw/**
 !data/raw/
 !data/raw/.gitkeep
+
+# Processed data outputs
+# These are generated and should not be committed.
+data/processed/**
+!data/processed/
+!data/processed/.gitkeep
