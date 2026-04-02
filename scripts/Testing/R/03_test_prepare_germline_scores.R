@@ -39,18 +39,111 @@ find_reference_bfile <- function() {
   NULL
 }
 
+test_prepare_magma_gwas_cache_reuses_cached_outputs <- function(
+  gwas_path = default_gwas_path
+) {
+  output_prefix <- tempfile(pattern = "magma_cached_inputs_")
+
+  first <- prepare_magma_gwas_cache(
+    gwas_sumstats = gwas_path,
+    cache_prefix = output_prefix,
+    reuse_existing = FALSE
+  )
+
+  expect_true(file.exists(first$snp_loc_path))
+  expect_true(file.exists(first$pval_path))
+  expect_false(first$reused_existing)
+
+  first_snp_mtime <- file.info(first$snp_loc_path)$mtime
+  first_pval_mtime <- file.info(first$pval_path)$mtime
+
+  Sys.sleep(1)
+
+  second <- prepare_magma_gwas_cache(
+    gwas_sumstats = gwas_path,
+    cache_prefix = output_prefix,
+    reuse_existing = TRUE
+  )
+
+  expect_true(second$reused_existing)
+  expect_equal(file.info(second$snp_loc_path)$mtime, first_snp_mtime)
+  expect_equal(file.info(second$pval_path)$mtime, first_pval_mtime)
+
+  invisible(second)
+}
+
+test_run_magma_step1_annotation_reuses_existing_annotation <- function() {
+  output_prefix <- tempfile(pattern = "magma_step1_reuse_")
+  snp_loc_path <- paste0(output_prefix, ".snp_loc.tsv")
+  pval_path <- paste0(output_prefix, ".pval.tsv")
+  annot_path <- paste0(output_prefix, ".genes.annot")
+
+  tiny_gwas <- data.table(
+    hm_rsid = c("rs1", "rs2"),
+    hm_variant_id = c("1_100_A_G", "1_200_C_T"),
+    hm_chrom = c("1", "1"),
+    hm_pos = c(100L, 200L),
+    p_value = c(0.01, 0.2)
+  )
+
+  fwrite(data.table(V1 = c("rs1", "rs2"), V2 = c("1", "1"), V3 = c(100L, 200L)), snp_loc_path, sep = "\t", col.names = FALSE)
+  fwrite(data.table(SNP = c("rs1", "rs2"), P = c(0.01, 0.2)), pval_path, sep = "\t")
+  writeLines(c("GENE\tCHR\tSTART\tSTOP\tNSNPS\tSNPs", "TEST\t1\t1\t1000\t2\trs1,rs2"), annot_path)
+
+  result <- run_magma_step1_annotation(
+    gwas_sumstats = tiny_gwas,
+    gene_loc_path = default_gene_loc_path,
+    output_prefix = output_prefix,
+    reuse_prepared_inputs = TRUE,
+    reuse_existing_annotation = TRUE
+  )
+
+  expect_true(isTRUE(result$reused_existing_annotation))
+  expect_true(file.exists(result$annot_path))
+  expect_null(result$command)
+  invisible(result)
+}
+
+test_run_magma_step2_gene_analysis_reuses_existing_output <- function(
+  reference_bfile = find_reference_bfile()
+) {
+  if (is.null(reference_bfile)) {
+    skip("No PLINK reference bfile found in the repository.")
+  }
+
+  output_prefix <- tempfile(pattern = "magma_step2_reuse_")
+  gene_annot_path <- tempfile(pattern = "magma_gene_annot_", fileext = ".genes.annot")
+  pval_path <- tempfile(pattern = "magma_pval_", fileext = ".tsv")
+  genes_out_path <- paste0(output_prefix, ".genes.out")
+
+  writeLines(c("GENE\tCHR\tSTART\tSTOP\tNSNPS\tSNPs", "TEST\t1\t1\t1000\t2\trs1,rs2"), gene_annot_path)
+  fwrite(data.table(SNP = c("rs1", "rs2"), P = c(0.01, 0.2)), pval_path, sep = "\t")
+  fwrite(data.table(GENE = "TEST", GENE_NAME = "TEST", ZSTAT = 2.1, P = 0.03), genes_out_path, sep = "\t")
+
+  result <- run_magma_step2_gene_analysis(
+    gene_annot_path = gene_annot_path,
+    pval_path = pval_path,
+    reference_bfile = reference_bfile,
+    output_prefix = output_prefix,
+    sample_size = default_sample_size,
+    reuse_existing_analysis = TRUE
+  )
+
+  expect_true(isTRUE(result$reused_existing_analysis))
+  expect_true(file.exists(result$genes_out_path))
+  expect_null(result$command)
+  invisible(result)
+}
+
 test_run_magma_step1_annotation <- function(
   gwas_path = default_gwas_path,
   gene_loc_path = default_gene_loc_path,
   nrows = 50000L
 ) {
-  message("Reading GWAS file for MAGMA step 1 test: ", gwas_path)
-  gwas_raw <- fread(gwas_path, nrows = nrows)
-
   output_prefix <- tempfile(pattern = "magma_step1_test_")
 
   result <- run_magma_step1_annotation(
-    gwas_sumstats = gwas_raw,
+    gwas_sumstats = gwas_path,
     gene_loc_path = gene_loc_path,
     output_prefix = output_prefix
   )
@@ -191,12 +284,9 @@ test_run_magma_step2_gene_analysis <- function(
     return(invisible(NULL))
   }
 
-  message("Reading GWAS file for MAGMA step 2 test: ", gwas_path)
-  gwas_raw <- fread(gwas_path, nrows = nrows)
-
   step1_prefix <- tempfile(pattern = "magma_step2_prereq_")
   step1_result <- run_magma_step1_annotation(
-    gwas_sumstats = gwas_raw,
+    gwas_sumstats = gwas_path,
     gene_loc_path = feature_loc_path,
     output_prefix = step1_prefix
   )
@@ -235,11 +325,10 @@ test_run_magma_feature_scoring_pipeline <- function(
     return(invisible(NULL))
   }
 
-  gwas_raw <- fread(default_gwas_path, nrows = 50000L)
   output_prefix <- tempfile(pattern = "magma_pipeline_test_")
 
   result <- run_magma_feature_scoring_pipeline(
-    gwas_sumstats = gwas_raw,
+    gwas_sumstats = default_gwas_path,
     feature_loc_path = feature_loc_path,
     reference_bfile = reference_bfile,
     output_prefix = output_prefix,
@@ -267,6 +356,9 @@ test_run_magma_feature_scoring_pipeline <- function(
 }
 
 run_all_germline_tests <- function(print_scores = TRUE) {
+  test_prepare_magma_gwas_cache_reuses_cached_outputs()
+  test_run_magma_step1_annotation_reuses_existing_annotation()
+  test_run_magma_step2_gene_analysis_reuses_existing_output()
   test_run_magma_step1_annotation()
   test_extract_magma_zstat()
   test_extract_magma_feature_zstat_regulatory()

@@ -267,6 +267,37 @@ validate_regulatory_element_reference <- function(reg_ref_path) {
   reg_gr
 }
 
+validate_epigenomic_tracks <- function(track_paths) {
+  if (length(track_paths) == 0L) {
+    stop("No epigenomic track paths were provided.")
+  }
+
+  missing_tracks <- track_paths[!file.exists(track_paths)]
+  if (length(missing_tracks) > 0L) {
+    stop("Epigenomic track file does not exist: ", missing_tracks[[1]])
+  }
+
+  valid_tracks <- vapply(
+    track_paths,
+    FUN.VALUE = logical(1),
+    FUN = function(track_path) {
+      tryCatch(
+        {
+          seqinfo(BigWigFile(track_path))
+          TRUE
+        },
+        error = function(e) {
+          stop("Failed to validate bigWig file `", track_path, "`: ", conditionMessage(e))
+        }
+      )
+    }
+  )
+
+  out <- unname(track_paths[valid_tracks])
+  attr(out, "conseguiR_input_type") <- "epigenomic_bigwig_tracks"
+  out
+}
+
 validate_epigenomic_bigwigs <- function(bw_files, reg_gr, exclude_patterns = c("_BL_", "_FL_")) {
   if (length(bw_files) == 1L && dir.exists(bw_files)) {
     bw_files <- list.files(bw_files, pattern = "\\.(bw|bigWig|bigwig)$", full.names = TRUE)
