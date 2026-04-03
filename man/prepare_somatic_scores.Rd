@@ -64,4 +64,18 @@ This wrapper orchestrates two distinct somatic scoring branches:
 
 The dndscv and fishHook settings are kept separate so users can tune each
 modeling framework independently.
+
+\code{prepare_somatic_scores()} combines two independent somatic branches:
+\itemize{
+\item gene-level dndscv controls: \code{gene_cv},
+\code{gene_max_muts_per_gene_per_sample},
+\code{gene_max_coding_muts_per_sample}, \code{dndscv_args}
+\item regulatory-level fishHook controls: \code{eligible_gr},
+\code{fishhook_covariates}, \code{fishhook_covariate_data}, \code{fishhook_idcol},
+\code{fishhook_args}
+}
+
+Example:
+
+\verb{prepare_somatic_scores( maf = maf_path, refdb = dndscv_refdb, reg_ref_path = reg_ref_path, dndscv_args = list(sm = \\"192r_3w\\"), fishhook_args = list() )}
 }

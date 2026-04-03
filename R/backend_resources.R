@@ -57,6 +57,39 @@
 }
 
 #' @keywords internal
+.conseguiR_backend_resource_path <- function(filename) {
+  seed_dir <- .conseguiR_backend_seed_dir()
+  if (is.null(seed_dir)) {
+    return(NULL)
+  }
+
+  candidate <- file.path(seed_dir, filename)
+  if (!file.exists(candidate)) {
+    return(NULL)
+  }
+
+  normalizePath(candidate, winslash = "/", mustWork = TRUE)
+}
+
+#' @keywords internal
+.conseguiR_default_gene_loc_path <- function() {
+  path <- .conseguiR_backend_resource_path("NCBI38.gene.loc")
+  if (!is.null(path)) {
+    return(path)
+  }
+  .conseguiR_find_data_path("data/raw/NCBI38/NCBI38.gene.loc")
+}
+
+#' @keywords internal
+.conseguiR_default_reg_loc_path <- function() {
+  path <- .conseguiR_backend_resource_path("2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
+  if (!is.null(path)) {
+    return(path)
+  }
+  .conseguiR_find_data_path("data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
+}
+
+#' @keywords internal
 .conseguiR_seed_backend_graph <- function(kind = c("gene_reg", "gene_gene"), backend_dir) {
   kind <- match.arg(kind)
   seed_dir <- .conseguiR_backend_seed_dir()

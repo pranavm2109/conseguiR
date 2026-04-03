@@ -66,3 +66,16 @@ A plot bundle containing the ggplot object and visualization bundle.
 This wrapper exposes the main input-resolution, saving, layout, labelling,
 and rendering controls used by the current plotting implementation.
 }
+\details{
+Exact formatting:
+\itemize{
+\item \code{selected_subgraph}: the bundle returned by \code{call_selected_subgraph()}
+\item \code{nodes}, \code{edges}, \code{summary}: data frames/data.tables containing the
+selected subgraph outputs
+\item \code{nodes_path}, \code{edges_path}, \code{summary_path}: file paths to those tables if
+the in-memory objects are not supplied
+\item \code{plot_file_path}: a single file path ending in \code{.pdf}, \code{.png}, or another
+graphics device extension supported by the plotting helper
+\item \code{layout}: a single layout keyword such as \verb{\\"fr\\"}
+}
+}

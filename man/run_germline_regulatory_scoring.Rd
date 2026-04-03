@@ -6,7 +6,7 @@
 \usage{
 run_germline_regulatory_scoring(
   gwas_sumstats,
-  reg_loc_path,
+  reg_loc_path = NULL,
   reference_bfile,
   output_prefix = "data/processed/germline_reg_scores",
   sample_size = NULL,
@@ -24,7 +24,10 @@ run_germline_regulatory_scoring(
 \arguments{
 \item{gwas_sumstats}{GWAS summary statistics path or table.}
 
-\item{reg_loc_path}{Regulatory-element location file for MAGMA step 1.}
+\item{reg_loc_path}{Optional regulatory-element location file for MAGMA step
+\enumerate{
+\item When \code{NULL}, \code{conseguiR} uses its backend regulatory location resource.
+}}
 
 \item{reference_bfile}{PLINK reference prefix for MAGMA step 2.}
 
@@ -69,4 +72,11 @@ This wrapper exposes both MAGMA stages for the regulatory-element run:
 }
 
 Pass stage-specific MAGMA arguments through \code{step1_args} and \code{step2_args}.
+If \code{reg_loc_path} is \code{NULL}, the package will try to use the backend-owned
+regulatory location resource shipped with \code{conseguiR}.
+
+\code{reg_loc_path} must point to a MAGMA-compatible regulatory-element location
+file. The stage argument lists use the same format as
+\code{run_germline_gene_scoring()}: \code{step1_args = list(...)} for annotation-stage
+settings and \code{step2_args = list(...)} for gene-analysis-stage settings.
 }

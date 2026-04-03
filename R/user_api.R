@@ -2,6 +2,11 @@
 .conseguiR_runtime_env <- new.env(parent = baseenv())
 
 #' @keywords internal
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
+}
+
+#' @keywords internal
 .conseguiR_runtime_file <- function(relpath) {
   candidates <- c(
     {
@@ -59,6 +64,27 @@
 #' @param epigenomic_exclude_patterns Patterns used to exclude bigWigs when
 #'   discovering tracks from `epigenomic_track_dir`.
 #'
+#' @details
+#' Input formatting rules:
+#'
+#' - `gwas_sumstats` can be either a file path or a data frame/data.table. When
+#'   a table is supplied, it should contain columns that can be mapped to GWAS
+#'   identifiers, chromosome, position, and p-value, for example
+#'   `hm_variant_id`, `hm_chrom`, `hm_pos`, `p_value`, or the canonical columns
+#'   `variant_id`, `chromosome`, `base_pair_location`, `p_value`.
+#' - `somatic_maf` can be either a file path or a data frame/data.table. The
+#'   table should contain sample identifier, chromosome, start, end, reference,
+#'   and alternate allele columns in standard MAF-style names or names that the
+#'   internal validator can harmonize.
+#' - `reg_ref_path` must be a path to a tab-delimited regulatory-element file.
+#'   The current pipeline expects at least four columns corresponding to
+#'   chromosome, start, end, and regulatory-element identifier.
+#' - `epigenomic_tracks` must be a character vector of full file paths to
+#'   `.bw`/`.bigWig` files, for example
+#'   `c(\"sample1.bw\", \"sample2.bw\", \"sample3.bw\")`.
+#' - `epigenomic_track_dir` must be a single directory path containing bigWig
+#'   files. Use either `epigenomic_tracks` or `epigenomic_track_dir`.
+#'
 #' @return A validation bundle containing validated objects and config.
 #' @export
 validate_inputs <- function(
@@ -115,9 +141,12 @@ initialize_backend_graphs <- function(
 #' - step 2: gene analysis
 #'
 #' Pass stage-specific MAGMA arguments through `step1_args` and `step2_args`.
+#' If `gene_loc_path` is `NULL`, the package will try to use the backend-owned
+#' gene location resource shipped with `conseguiR`.
 #'
 #' @inheritParams validate_inputs
-#' @param gene_loc_path Gene location file for MAGMA step 1.
+#' @param gene_loc_path Optional gene location file for MAGMA step 1. When
+#'   `NULL`, `conseguiR` uses its backend gene location resource.
 #' @param reference_bfile PLINK reference prefix for MAGMA step 2.
 #' @param output_prefix Output prefix for saved artifacts.
 #' @param sample_size Fixed sample size for MAGMA.
@@ -137,11 +166,42 @@ initialize_backend_graphs <- function(
 #'   include `gene_model`, `genes_only`, `pval_use`, `pval_duplicate`,
 #'   `bfile_synonyms`, `bfile_synonym_dup`, and `extra_args`.
 #'
+#' @details
+#' Exact formatting:
+#'
+#' - `gwas_sumstats`: either a file path or a data frame/data.table with GWAS
+#'   columns.
+#' - `gene_loc_path`: a single path to a MAGMA-compatible gene location file.
+#' - `reference_bfile`: the shared PLINK reference prefix, typed without file
+#'   suffixes, for example `\"/path/to/g1000_eur/g1000_eur\"`.
+#' - `output_prefix`: a single path prefix, not a directory. For example
+#'   `\"results/germline_gene\"` will yield MAGMA files such as
+#'   `results/germline_gene.genes.out`.
+#' - `step1_args` and `step2_args`: named lists. For example:
+#'
+#' `step1_args = list(
+#'   annotation_window = c(35, 10),
+#'   filter_path = NULL,
+#'   ignore_strand = FALSE,
+#'   nonhuman = FALSE,
+#'   extra_args = character()
+#' )`
+#'
+#' `step2_args = list(
+#'   gene_model = \"snp-wise=mean\",
+#'   genes_only = TRUE,
+#'   pval_use = c(\"SNP\", \"P\"),
+#'   pval_duplicate = \"drop\",
+#'   bfile_synonyms = NULL,
+#'   bfile_synonym_dup = NULL,
+#'   extra_args = character()
+#' )`
+#'
 #' @return A germline gene score bundle.
 #' @export
 run_germline_gene_scoring <- function(
   gwas_sumstats,
-  gene_loc_path,
+  gene_loc_path = NULL,
   reference_bfile,
   output_prefix = "data/processed/germline_gene_scores",
   sample_size = NULL,
@@ -155,6 +215,11 @@ run_germline_gene_scoring <- function(
   step1_args = list(),
   step2_args = list()
 ) {
+  gene_loc_path <- gene_loc_path %||% .conseguiR_default_gene_loc_path()
+  if (is.null(gene_loc_path)) {
+    stop("No gene location resource was provided and no backend gene location resource could be found.")
+  }
+
   .conseguiR_external_fun("run_germline_gene_scoring")(
     gwas_sumstats = gwas_sumstats,
     gene_loc_path = gene_loc_path,
@@ -181,15 +246,24 @@ run_germline_gene_scoring <- function(
 #' - step 2: gene analysis
 #'
 #' Pass stage-specific MAGMA arguments through `step1_args` and `step2_args`.
+#' If `reg_loc_path` is `NULL`, the package will try to use the backend-owned
+#' regulatory location resource shipped with `conseguiR`.
 #'
 #' @inheritParams run_germline_gene_scoring
-#' @param reg_loc_path Regulatory-element location file for MAGMA step 1.
+#' @param reg_loc_path Optional regulatory-element location file for MAGMA step
+#'   1. When `NULL`, `conseguiR` uses its backend regulatory location resource.
+#'
+#' @details
+#' `reg_loc_path` must point to a MAGMA-compatible regulatory-element location
+#' file. The stage argument lists use the same format as
+#' `run_germline_gene_scoring()`: `step1_args = list(...)` for annotation-stage
+#' settings and `step2_args = list(...)` for gene-analysis-stage settings.
 #'
 #' @return A germline regulatory score bundle.
 #' @export
 run_germline_regulatory_scoring <- function(
   gwas_sumstats,
-  reg_loc_path,
+  reg_loc_path = NULL,
   reference_bfile,
   output_prefix = "data/processed/germline_reg_scores",
   sample_size = NULL,
@@ -203,6 +277,11 @@ run_germline_regulatory_scoring <- function(
   step1_args = list(),
   step2_args = list()
 ) {
+  reg_loc_path <- reg_loc_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_loc_path)) {
+    stop("No regulatory location resource was provided and no backend regulatory location resource could be found.")
+  }
+
   .conseguiR_external_fun("run_germline_regulatory_scoring")(
     gwas_sumstats = gwas_sumstats,
     reg_loc_path = reg_loc_path,
@@ -234,7 +313,10 @@ run_germline_regulatory_scoring <- function(
 #' - `reg_step1_args` and `reg_step2_args`
 #'
 #' @inheritParams run_germline_gene_scoring
-#' @param reg_loc_path Regulatory-element location file.
+#' @param gene_loc_path Optional gene location file. When `NULL`, `conseguiR`
+#'   uses its backend gene location resource.
+#' @param reg_loc_path Optional regulatory-element location file. When `NULL`,
+#'   `conseguiR` uses its backend regulatory location resource.
 #' @param gene_output_prefix Output prefix for gene-level germline scores.
 #' @param reg_output_prefix Output prefix for regulatory germline scores.
 #' @param gene_sample_size Fixed sample size for the gene run.
@@ -247,13 +329,42 @@ run_germline_regulatory_scoring <- function(
 #' @param reg_step2_args Named list of regulatory MAGMA step 2 arguments.
 #' @param shared_args Named list of arguments passed to both runs.
 #'
+#' @details
+#' `prepare_germline_scores()` orchestrates two MAGMA runs, one for genes and
+#' one for regulatory elements. The main tuning lists are:
+#'
+#' - `gene_step1_args`: MAGMA annotation-stage settings for the gene run.
+#' - `gene_step2_args`: MAGMA gene-analysis-stage settings for the gene run.
+#' - `reg_step1_args`: MAGMA annotation-stage settings for the regulatory run.
+#' - `reg_step2_args`: MAGMA gene-analysis-stage settings for the regulatory
+#'   run.
+#' - `shared_args`: additional wrapper-level arguments passed to both runs.
+#'
+#' Typical entries for the step-specific lists include:
+#'
+#' - step 1 lists: `annotation_window`, `filter_path`, `ignore_strand`,
+#'   `nonhuman`, `extra_args`
+#' - step 2 lists: `gene_model`, `genes_only`, `pval_use`, `pval_duplicate`,
+#'   `bfile_synonyms`, `bfile_synonym_dup`, `extra_args`
+#'
+#' Example:
+#'
+#' `prepare_germline_scores(
+#'   gwas_sumstats = gwas_path,
+#'   reference_bfile = \"/path/to/g1000_eur/g1000_eur\",
+#'   gene_step1_args = list(annotation_window = c(35, 10)),
+#'   gene_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\")),
+#'   reg_step1_args = list(annotation_window = c(0, 0)),
+#'   reg_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\"))
+#' )`
+#'
 #' @return A germline score bundle with gene and regulatory score tables.
 #' @export
 prepare_germline_scores <- function(
   gwas_sumstats,
   reference_bfile,
-  gene_loc_path = "data/raw/NCBI38/NCBI38.gene.loc",
-  reg_loc_path = "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc",
+  gene_loc_path = NULL,
+  reg_loc_path = NULL,
   gene_output_prefix = "data/processed/germline_gene_scores",
   reg_output_prefix = "data/processed/germline_reg_scores",
   magma_gwas_cache_prefix = "data/processed/magma_shared_gwas_cache",
@@ -267,6 +378,15 @@ prepare_germline_scores <- function(
   reg_step2_args = list(),
   shared_args = list()
 ) {
+  gene_loc_path <- gene_loc_path %||% .conseguiR_default_gene_loc_path()
+  reg_loc_path <- reg_loc_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(gene_loc_path)) {
+    stop("No gene location resource was provided and no backend gene location resource could be found.")
+  }
+  if (is.null(reg_loc_path)) {
+    stop("No regulatory location resource was provided and no backend regulatory location resource could be found.")
+  }
+
   .conseguiR_external_fun("prepare_germline_scores")(
     gwas_sumstats = gwas_sumstats,
     reference_bfile = reference_bfile,
@@ -299,6 +419,15 @@ prepare_germline_scores <- function(
 #' @param max_muts_per_gene_per_sample dndscv gene-level mutation cap.
 #' @param max_coding_muts_per_sample dndscv sample-level coding mutation cap.
 #' @param dndscv_args Named list of additional dndscv arguments.
+#'
+#' @details
+#' Exact formatting:
+#'
+#' - `maf`: either a file path or a data frame/data.table containing somatic
+#'   mutation records.
+#' - `refdb`: a single path to a dndscv reference database `.rda` file.
+#' - `dndscv_args`: a named list of additional dndscv arguments, for example
+#'   `list(sm = \"192r_3w\", kc = \"cgc81\")`.
 #'
 #' @return A somatic gene score bundle.
 #' @export
@@ -335,6 +464,17 @@ run_somatic_gene_scoring <- function(
 #' @param fishhook_covariate_data Optional tabular covariate data.
 #' @param idcol Sample identifier column for fishHook.
 #' @param fishhook_args Named list of additional fishHook scoring arguments.
+#'
+#' @details
+#' Exact formatting:
+#'
+#' - `reg_ref_path`: a path to the regulatory-element reference file.
+#' - `eligible_gr`: a `GRanges` object or `NULL`.
+#' - `fishhook_covariates`: the covariate specification object expected by the
+#'   internal fishHook runner, or `NULL`.
+#' - `fishhook_covariate_data`: a data frame/data.table containing one row per
+#'   regulatory element and the covariate columns needed by fishHook.
+#' - `fishhook_args`: a named list of additional fishHook arguments.
 #'
 #' @return A somatic regulatory score bundle.
 #' @export
@@ -382,6 +522,26 @@ run_somatic_regulatory_scoring <- function(
 #' @param fishhook_covariate_data Optional tabular covariate data.
 #' @param fishhook_idcol Sample identifier column for fishHook.
 #' @param fishhook_args Named list of additional fishHook arguments.
+#'
+#' @details
+#' `prepare_somatic_scores()` combines two independent somatic branches:
+#'
+#' - gene-level dndscv controls: `gene_cv`,
+#'   `gene_max_muts_per_gene_per_sample`,
+#'   `gene_max_coding_muts_per_sample`, `dndscv_args`
+#' - regulatory-level fishHook controls: `eligible_gr`,
+#'   `fishhook_covariates`, `fishhook_covariate_data`, `fishhook_idcol`,
+#'   `fishhook_args`
+#'
+#' Example:
+#'
+#' `prepare_somatic_scores(
+#'   maf = maf_path,
+#'   refdb = dndscv_refdb,
+#'   reg_ref_path = reg_ref_path,
+#'   dndscv_args = list(sm = \"192r_3w\"),
+#'   fishhook_args = list()
+#' )`
 #'
 #' @return A somatic score bundle with gene and regulatory score tables.
 #' @export
@@ -435,6 +595,17 @@ prepare_somatic_scores <- function(
 #' @param summary_fun Summary function applied to each bigWig over each
 #'   regulatory element.
 #'
+#' @details
+#' Exact formatting:
+#'
+#' - `track_dir`: a single directory path containing bigWig files.
+#' - `bw_files`: a character vector of bigWig paths. Supply at least three
+#'   tracks, for example
+#'   `c(\"sample1.bw\", \"sample2.bw\", \"sample3.bw\")`.
+#' - `exclude_patterns`: a character vector of regex fragments used to exclude
+#'   files discovered from `track_dir`.
+#' - `summary_fun`: a function object such as `mean` or `max`.
+#'
 #' @return An epigenomic score bundle.
 #' @export
 prepare_epigenomic_scores <- function(
@@ -478,6 +649,19 @@ prepare_epigenomic_scores <- function(
 #' @param reg_epigenomic_scores Optional explicit regulatory epigenomic score
 #'   table.
 #' @param save_outputs Whether to save the scored graph to disk.
+#'
+#' @details
+#' Score-table formatting:
+#'
+#' - gene-level score tables must contain a gene identifier column and a `zstat`
+#'   column
+#' - regulatory-level score tables must contain a regulatory-element identifier
+#'   column and a `zstat` column
+#'
+#' You can either pass full score bundles from earlier stages or pass explicit
+#' score tables directly through `gene_germline_scores`,
+#' `reg_germline_scores`, `gene_somatic_scores`, `reg_somatic_scores`, and
+#' `reg_epigenomic_scores`.
 #'
 #' @return A scored gene-reg graph bundle containing the graph, nodes, and edges.
 #' @export
@@ -535,6 +719,16 @@ build_scored_gene_reg_graph <- function(
 #' @param reg_signal_clip Regulatory signal clip value.
 #' @param top_n_to_save Number of top genes to save separately.
 #' @param python_path Optional explicit Python interpreter path.
+#'
+#' @details
+#' Exact formatting:
+#'
+#' - `scored_graph`: the bundle returned by `build_scored_gene_reg_graph()`
+#' - `nodes_path` and `edges_path`: paths to the scored node and edge tables if
+#'   you are not passing `scored_graph`
+#' - `top_k`: a positive integer
+#' - `confidence_power`, `beta_germline`, `beta_somatic`,
+#'   `beta_epigenomic`, `reg_signal_clip`: numeric scalars
 #'
 #' @return A diffusion bundle containing full and top-gene diffusion tables.
 #' @export
@@ -599,6 +793,19 @@ run_gene_reg_diffusion <- function(
 #' @param confidence_column Gene-gene confidence column.
 #' @param edge_cost_column Gene-gene edge-cost column.
 #' @param python_path Optional explicit Python interpreter path.
+#'
+#' @details
+#' Exact formatting:
+#'
+#' - `diffusion`: the bundle returned by `run_gene_reg_diffusion()`
+#' - `diffusion_path`: path to the full diffusion results table if `diffusion`
+#'   is not supplied
+#' - `target_genes`, `candidate_pool_size`, `max_edges_in_model`,
+#'   `max_time_seconds`, `num_workers`, `random_seed`: integer scalars
+#' - `node_prize_weight`, `edge_conf_weight`, `edge_cost_weight`: numeric
+#'   scalars
+#' - `prize_column`, `confidence_column`, `edge_cost_column`: single column
+#'   names present in the input tables
 #'
 #' @return A selected subgraph bundle.
 #' @export
@@ -682,6 +889,18 @@ call_selected_subgraph <- function(
 #' @param save_bundle Whether to save the visualization bundle.
 #' @param save_plot Whether to save the figure.
 #'
+#' @details
+#' Exact formatting:
+#'
+#' - `selected_subgraph`: the bundle returned by `call_selected_subgraph()`
+#' - `nodes`, `edges`, `summary`: data frames/data.tables containing the
+#'   selected subgraph outputs
+#' - `nodes_path`, `edges_path`, `summary_path`: file paths to those tables if
+#'   the in-memory objects are not supplied
+#' - `plot_file_path`: a single file path ending in `.pdf`, `.png`, or another
+#'   graphics device extension supported by the plotting helper
+#' - `layout`: a single layout keyword such as `\"fr\"`
+#'
 #' @return A plot bundle containing the ggplot object and visualization bundle.
 #' @export
 plot_selected_subgraph <- function(
@@ -733,19 +952,31 @@ plot_selected_subgraph <- function(
 #' @param dndscv_refdb dndscv reference database path.
 #' @param epigenomic_track_dir Optional directory containing epigenomic tracks.
 #' @param epigenomic_tracks Optional explicit vector of bigWig paths.
-#' @param gene_loc_path Gene location file path.
-#' @param reg_loc_path Regulatory-element location file path.
+#' @param gene_loc_path Optional gene location file path. When `NULL`,
+#'   `conseguiR` uses its backend gene location resource.
+#' @param reg_loc_path Optional regulatory-element location file path. When
+#'   `NULL`, `conseguiR` uses its backend regulatory location resource.
 #' @param graph_rds_path Backend no-score gene-reg graph path.
 #' @param gg_nodes_path Gene-gene node table path.
 #' @param gg_edges_path Gene-gene edge table path.
 #' @param output_dir Output directory for pipeline artifacts.
 #' @param target_genes Requested selected-subgraph size.
 #' @param germline_args Named list of overrides passed to
-#'   `prepare_germline_scores()`.
+#'   `prepare_germline_scores()`. This list may contain both gene- and
+#'   regulatory-run settings, for example `gene_sample_size`,
+#'   `reg_sample_size`, `gene_step1_args`, `gene_step2_args`,
+#'   `reg_step1_args`, `reg_step2_args`, and `shared_args`.
 #' @param somatic_args Named list of overrides passed to
-#'   `prepare_somatic_scores()`.
+#'   `prepare_somatic_scores()`. This list may contain both dndscv and fishHook
+#'   settings, for example `gene_cv`,
+#'   `gene_max_muts_per_gene_per_sample`,
+#'   `gene_max_coding_muts_per_sample`, `dndscv_args`, `eligible_gr`,
+#'   `fishhook_covariates`, `fishhook_covariate_data`, `fishhook_idcol`, and
+#'   `fishhook_args`.
 #' @param epigenomic_args Named list of overrides passed to
-#'   `prepare_epigenomic_scores()`.
+#'   `prepare_epigenomic_scores()`. Typical entries include `track_dir`,
+#'   `bw_files`, `exclude_patterns`, `min_tracks`, `drop_mhc`, `transform`,
+#'   `return_diagnostics`, and `summary_fun`.
 #' @param scored_graph_args Named list of overrides passed to
 #'   `build_scored_gene_reg_graph()`.
 #' @param diffusion_args Named list of overrides passed to
@@ -754,6 +985,48 @@ plot_selected_subgraph <- function(
 #'   `call_selected_subgraph()`.
 #' @param plot_args Named list of overrides passed to
 #'   `plot_selected_subgraph()`.
+#'
+#' @details
+#' `run_conseguiR()` is a thin orchestration wrapper. Most tuning is passed
+#' through stage-specific named lists:
+#'
+#' - `germline_args` controls the two MAGMA branches inside
+#'   `prepare_germline_scores()`
+#' - `somatic_args` controls the dndscv and fishHook branches inside
+#'   `prepare_somatic_scores()`
+#' - `epigenomic_args` controls `prepare_epigenomic_scores()`
+#' - `scored_graph_args`, `diffusion_args`, `subgraph_args`, and `plot_args`
+#'   are forwarded to their corresponding downstream stages
+#'
+#' The gene and regulatory location resources are backend-managed by default.
+#' Users only need to supply `gene_loc_path` or `reg_loc_path` when they
+#' intentionally want to override the shipped backend resources.
+#'
+#' Exact list formatting:
+#'
+#' `germline_args = list(
+#'   gene_sample_size = 456348,
+#'   reg_sample_size = 456348,
+#'   gene_step1_args = list(annotation_window = c(35, 10)),
+#'   gene_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\")),
+#'   reg_step1_args = list(annotation_window = c(0, 0)),
+#'   reg_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\"))
+#' )`
+#'
+#' `somatic_args = list(
+#'   gene_cv = NULL,
+#'   dndscv_args = list(sm = \"192r_3w\"),
+#'   eligible_gr = NULL,
+#'   fishhook_covariate_data = covariate_dt,
+#'   fishhook_args = list()
+#' )`
+#'
+#' `epigenomic_args = list(
+#'   bw_files = c(\"track1.bw\", \"track2.bw\", \"track3.bw\"),
+#'   exclude_patterns = c(\"_BL_\", \"_FL_\"),
+#'   min_tracks = 3L,
+#'   transform = \"log1p\"
+#' )`
 #'
 #' @return A pipeline bundle containing all stage bundles.
 #' @export
@@ -765,8 +1038,8 @@ run_conseguiR <- function(
   dndscv_refdb,
   epigenomic_track_dir = NULL,
   epigenomic_tracks = NULL,
-  gene_loc_path = "data/raw/NCBI38/NCBI38.gene.loc",
-  reg_loc_path = "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc",
+  gene_loc_path = NULL,
+  reg_loc_path = NULL,
   graph_rds_path = NULL,
   gg_nodes_path = NULL,
   gg_edges_path = NULL,
@@ -782,6 +1055,14 @@ run_conseguiR <- function(
 ) {
   initialize_backend_graphs(strict = FALSE, quiet = TRUE)
   backend_paths <- .conseguiR_backend_paths()
+  gene_loc_path <- gene_loc_path %||% .conseguiR_default_gene_loc_path()
+  reg_loc_path <- reg_loc_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(gene_loc_path)) {
+    stop("No gene location resource was provided and no backend gene location resource could be found.")
+  }
+  if (is.null(reg_loc_path)) {
+    stop("No regulatory location resource was provided and no backend regulatory location resource could be found.")
+  }
   graph_rds_path <- graph_rds_path %||% backend_paths$gene_reg_graph_rds
   gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
   gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges

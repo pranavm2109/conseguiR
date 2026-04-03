@@ -40,3 +40,15 @@ This wrapper exposes the main fishHook configuration surface used by the
 package workflow and leaves less common model tuning available through
 \code{fishhook_args}.
 }
+\details{
+Exact formatting:
+\itemize{
+\item \code{reg_ref_path}: a path to the regulatory-element reference file.
+\item \code{eligible_gr}: a \code{GRanges} object or \code{NULL}.
+\item \code{fishhook_covariates}: the covariate specification object expected by the
+internal fishHook runner, or \code{NULL}.
+\item \code{fishhook_covariate_data}: a data frame/data.table containing one row per
+regulatory element and the covariate columns needed by fishHook.
+\item \code{fishhook_args}: a named list of additional fishHook arguments.
+}
+}

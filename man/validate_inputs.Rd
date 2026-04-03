@@ -34,3 +34,25 @@ A validation bundle containing validated objects and config.
 Validates raw GWAS, somatic, regulatory-reference, and epigenomic inputs
 using the package's internal validation layer.
 }
+\details{
+Input formatting rules:
+\itemize{
+\item \code{gwas_sumstats} can be either a file path or a data frame/data.table. When
+a table is supplied, it should contain columns that can be mapped to GWAS
+identifiers, chromosome, position, and p-value, for example
+\code{hm_variant_id}, \code{hm_chrom}, \code{hm_pos}, \code{p_value}, or the canonical columns
+\code{variant_id}, \code{chromosome}, \code{base_pair_location}, \code{p_value}.
+\item \code{somatic_maf} can be either a file path or a data frame/data.table. The
+table should contain sample identifier, chromosome, start, end, reference,
+and alternate allele columns in standard MAF-style names or names that the
+internal validator can harmonize.
+\item \code{reg_ref_path} must be a path to a tab-delimited regulatory-element file.
+The current pipeline expects at least four columns corresponding to
+chromosome, start, end, and regulatory-element identifier.
+\item \code{epigenomic_tracks} must be a character vector of full file paths to
+\code{.bw}/\code{.bigWig} files, for example
+\verb{c(\\"sample1.bw\\", \\"sample2.bw\\", \\"sample3.bw\\")}.
+\item \code{epigenomic_track_dir} must be a single directory path containing bigWig
+files. Use either \code{epigenomic_tracks} or \code{epigenomic_track_dir}.
+}
+}

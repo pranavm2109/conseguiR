@@ -51,3 +51,17 @@ A scored gene-reg graph bundle containing the graph, nodes, and edges.
 \description{
 Build a scored gene-regulatory graph
 }
+\details{
+Score-table formatting:
+\itemize{
+\item gene-level score tables must contain a gene identifier column and a \code{zstat}
+column
+\item regulatory-level score tables must contain a regulatory-element identifier
+column and a \code{zstat} column
+}
+
+You can either pass full score bundles from earlier stages or pass explicit
+score tables directly through \code{gene_germline_scores},
+\code{reg_germline_scores}, \code{gene_somatic_scores}, \code{reg_somatic_scores}, and
+\code{reg_epigenomic_scores}.
+}

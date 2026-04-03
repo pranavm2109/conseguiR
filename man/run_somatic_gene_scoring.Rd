@@ -36,3 +36,13 @@ A somatic gene score bundle.
 This wrapper exposes the core dndscv settings used by the current pipeline
 and leaves less common controls available through \code{dndscv_args}.
 }
+\details{
+Exact formatting:
+\itemize{
+\item \code{maf}: either a file path or a data frame/data.table containing somatic
+mutation records.
+\item \code{refdb}: a single path to a dndscv reference database \code{.rda} file.
+\item \code{dndscv_args}: a named list of additional dndscv arguments, for example
+\verb{list(sm = \\"192r_3w\\", kc = \\"cgc81\\")}.
+}
+}

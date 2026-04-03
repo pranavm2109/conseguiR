@@ -57,3 +57,14 @@ A diffusion bundle containing full and top-gene diffusion tables.
 This wrapper exposes the main hyperparameters used by the current
 regulatory-to-gene diffusion implementation.
 }
+\details{
+Exact formatting:
+\itemize{
+\item \code{scored_graph}: the bundle returned by \code{build_scored_gene_reg_graph()}
+\item \code{nodes_path} and \code{edges_path}: paths to the scored node and edge tables if
+you are not passing \code{scored_graph}
+\item \code{top_k}: a positive integer
+\item \code{confidence_power}, \code{beta_germline}, \code{beta_somatic},
+\code{beta_epigenomic}, \code{reg_signal_clip}: numeric scalars
+}
+}

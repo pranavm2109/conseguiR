@@ -12,8 +12,8 @@ run_conseguiR(
   dndscv_refdb,
   epigenomic_track_dir = NULL,
   epigenomic_tracks = NULL,
-  gene_loc_path = "data/raw/NCBI38/NCBI38.gene.loc",
-  reg_loc_path = "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc",
+  gene_loc_path = NULL,
+  reg_loc_path = NULL,
   graph_rds_path = NULL,
   gg_nodes_path = NULL,
   gg_edges_path = NULL,
@@ -43,9 +43,11 @@ run_conseguiR(
 
 \item{epigenomic_tracks}{Optional explicit vector of bigWig paths.}
 
-\item{gene_loc_path}{Gene location file path.}
+\item{gene_loc_path}{Optional gene location file path. When \code{NULL},
+\code{conseguiR} uses its backend gene location resource.}
 
-\item{reg_loc_path}{Regulatory-element location file path.}
+\item{reg_loc_path}{Optional regulatory-element location file path. When
+\code{NULL}, \code{conseguiR} uses its backend regulatory location resource.}
 
 \item{graph_rds_path}{Backend no-score gene-reg graph path.}
 
@@ -58,13 +60,23 @@ run_conseguiR(
 \item{target_genes}{Requested selected-subgraph size.}
 
 \item{germline_args}{Named list of overrides passed to
-\code{prepare_germline_scores()}.}
+\code{prepare_germline_scores()}. This list may contain both gene- and
+regulatory-run settings, for example \code{gene_sample_size},
+\code{reg_sample_size}, \code{gene_step1_args}, \code{gene_step2_args},
+\code{reg_step1_args}, \code{reg_step2_args}, and \code{shared_args}.}
 
 \item{somatic_args}{Named list of overrides passed to
-\code{prepare_somatic_scores()}.}
+\code{prepare_somatic_scores()}. This list may contain both dndscv and fishHook
+settings, for example \code{gene_cv},
+\code{gene_max_muts_per_gene_per_sample},
+\code{gene_max_coding_muts_per_sample}, \code{dndscv_args}, \code{eligible_gr},
+\code{fishhook_covariates}, \code{fishhook_covariate_data}, \code{fishhook_idcol}, and
+\code{fishhook_args}.}
 
 \item{epigenomic_args}{Named list of overrides passed to
-\code{prepare_epigenomic_scores()}.}
+\code{prepare_epigenomic_scores()}. Typical entries include \code{track_dir},
+\code{bw_files}, \code{exclude_patterns}, \code{min_tracks}, \code{drop_mhc}, \code{transform},
+\code{return_diagnostics}, and \code{summary_fun}.}
 
 \item{scored_graph_args}{Named list of overrides passed to
 \code{build_scored_gene_reg_graph()}.}
@@ -83,4 +95,29 @@ A pipeline bundle containing all stage bundles.
 }
 \description{
 Run the full conseguiR pipeline end to end
+}
+\details{
+\code{run_conseguiR()} is a thin orchestration wrapper. Most tuning is passed
+through stage-specific named lists:
+\itemize{
+\item \code{germline_args} controls the two MAGMA branches inside
+\code{prepare_germline_scores()}
+\item \code{somatic_args} controls the dndscv and fishHook branches inside
+\code{prepare_somatic_scores()}
+\item \code{epigenomic_args} controls \code{prepare_epigenomic_scores()}
+\item \code{scored_graph_args}, \code{diffusion_args}, \code{subgraph_args}, and \code{plot_args}
+are forwarded to their corresponding downstream stages
+}
+
+The gene and regulatory location resources are backend-managed by default.
+Users only need to supply \code{gene_loc_path} or \code{reg_loc_path} when they
+intentionally want to override the shipped backend resources.
+
+Exact list formatting:
+
+\verb{germline_args = list( gene_sample_size = 456348, reg_sample_size = 456348, gene_step1_args = list(annotation_window = c(35, 10)), gene_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")) )}
+
+\verb{somatic_args = list( gene_cv = NULL, dndscv_args = list(sm = \\"192r_3w\\"), eligible_gr = NULL, fishhook_covariate_data = covariate_dt, fishhook_args = list() )}
+
+\verb{epigenomic_args = list( bw_files = c(\\"track1.bw\\", \\"track2.bw\\", \\"track3.bw\\"), exclude_patterns = c(\\"_BL_\\", \\"_FL_\\"), min_tracks = 3L, transform = \\"log1p\\" )}
 }

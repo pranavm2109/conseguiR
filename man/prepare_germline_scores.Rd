@@ -7,8 +7,8 @@
 prepare_germline_scores(
   gwas_sumstats,
   reference_bfile,
-  gene_loc_path = "data/raw/NCBI38/NCBI38.gene.loc",
-  reg_loc_path = "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc",
+  gene_loc_path = NULL,
+  reg_loc_path = NULL,
   gene_output_prefix = "data/processed/germline_gene_scores",
   reg_output_prefix = "data/processed/germline_reg_scores",
   magma_gwas_cache_prefix = "data/processed/magma_shared_gwas_cache",
@@ -28,9 +28,11 @@ prepare_germline_scores(
 
 \item{reference_bfile}{PLINK reference prefix for MAGMA step 2.}
 
-\item{gene_loc_path}{Gene location file for MAGMA step 1.}
+\item{gene_loc_path}{Optional gene location file. When \code{NULL}, \code{conseguiR}
+uses its backend gene location resource.}
 
-\item{reg_loc_path}{Regulatory-element location file.}
+\item{reg_loc_path}{Optional regulatory-element location file. When \code{NULL},
+\code{conseguiR} uses its backend regulatory location resource.}
 
 \item{gene_output_prefix}{Output prefix for gene-level germline scores.}
 
@@ -73,4 +75,27 @@ In other words, MAGMA stage customization is exposed twice:
 \item \code{gene_step1_args} and \code{gene_step2_args}
 \item \code{reg_step1_args} and \code{reg_step2_args}
 }
+
+\code{prepare_germline_scores()} orchestrates two MAGMA runs, one for genes and
+one for regulatory elements. The main tuning lists are:
+\itemize{
+\item \code{gene_step1_args}: MAGMA annotation-stage settings for the gene run.
+\item \code{gene_step2_args}: MAGMA gene-analysis-stage settings for the gene run.
+\item \code{reg_step1_args}: MAGMA annotation-stage settings for the regulatory run.
+\item \code{reg_step2_args}: MAGMA gene-analysis-stage settings for the regulatory
+run.
+\item \code{shared_args}: additional wrapper-level arguments passed to both runs.
+}
+
+Typical entries for the step-specific lists include:
+\itemize{
+\item step 1 lists: \code{annotation_window}, \code{filter_path}, \code{ignore_strand},
+\code{nonhuman}, \code{extra_args}
+\item step 2 lists: \code{gene_model}, \code{genes_only}, \code{pval_use}, \code{pval_duplicate},
+\code{bfile_synonyms}, \code{bfile_synonym_dup}, \code{extra_args}
+}
+
+Example:
+
+\verb{prepare_germline_scores( gwas_sumstats = gwas_path, reference_bfile = \\"/path/to/g1000_eur/g1000_eur\\", gene_step1_args = list(annotation_window = c(35, 10)), gene_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")) )}
 }

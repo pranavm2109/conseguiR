@@ -6,7 +6,7 @@
 \usage{
 run_germline_gene_scoring(
   gwas_sumstats,
-  gene_loc_path,
+  gene_loc_path = NULL,
   reference_bfile,
   output_prefix = "data/processed/germline_gene_scores",
   sample_size = NULL,
@@ -24,7 +24,8 @@ run_germline_gene_scoring(
 \arguments{
 \item{gwas_sumstats}{GWAS summary statistics path or table.}
 
-\item{gene_loc_path}{Gene location file for MAGMA step 1.}
+\item{gene_loc_path}{Optional gene location file for MAGMA step 1. When
+\code{NULL}, \code{conseguiR} uses its backend gene location resource.}
 
 \item{reference_bfile}{PLINK reference prefix for MAGMA step 2.}
 
@@ -69,4 +70,23 @@ This wrapper exposes both MAGMA stages for the gene-level run:
 }
 
 Pass stage-specific MAGMA arguments through \code{step1_args} and \code{step2_args}.
+If \code{gene_loc_path} is \code{NULL}, the package will try to use the backend-owned
+gene location resource shipped with \code{conseguiR}.
+
+Exact formatting:
+\itemize{
+\item \code{gwas_sumstats}: either a file path or a data frame/data.table with GWAS
+columns.
+\item \code{gene_loc_path}: a single path to a MAGMA-compatible gene location file.
+\item \code{reference_bfile}: the shared PLINK reference prefix, typed without file
+suffixes, for example \verb{\\"/path/to/g1000_eur/g1000_eur\\"}.
+\item \code{output_prefix}: a single path prefix, not a directory. For example
+\verb{\\"results/germline_gene\\"} will yield MAGMA files such as
+\code{results/germline_gene.genes.out}.
+\item \code{step1_args} and \code{step2_args}: named lists. For example:
+}
+
+\code{step1_args = list( annotation_window = c(35, 10), filter_path = NULL, ignore_strand = FALSE, nonhuman = FALSE, extra_args = character() )}
+
+\verb{step2_args = list( gene_model = \\"snp-wise=mean\\", genes_only = TRUE, pval_use = c(\\"SNP\\", \\"P\\"), pval_duplicate = \\"drop\\", bfile_synonyms = NULL, bfile_synonym_dup = NULL, extra_args = character() )}
 }

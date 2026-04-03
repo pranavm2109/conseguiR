@@ -47,3 +47,15 @@ An epigenomic score bundle.
 \description{
 Prepare regulatory epigenomic scores
 }
+\details{
+Exact formatting:
+\itemize{
+\item \code{track_dir}: a single directory path containing bigWig files.
+\item \code{bw_files}: a character vector of bigWig paths. Supply at least three
+tracks, for example
+\verb{c(\\"sample1.bw\\", \\"sample2.bw\\", \\"sample3.bw\\")}.
+\item \code{exclude_patterns}: a character vector of regex fragments used to exclude
+files discovered from \code{track_dir}.
+\item \code{summary_fun}: a function object such as \code{mean} or \code{max}.
+}
+}

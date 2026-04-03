@@ -81,3 +81,17 @@ A selected subgraph bundle.
 This wrapper exposes the main candidate-selection, objective-weighting, and
 solver controls used by the current subgraph-calling implementation.
 }
+\details{
+Exact formatting:
+\itemize{
+\item \code{diffusion}: the bundle returned by \code{run_gene_reg_diffusion()}
+\item \code{diffusion_path}: path to the full diffusion results table if \code{diffusion}
+is not supplied
+\item \code{target_genes}, \code{candidate_pool_size}, \code{max_edges_in_model},
+\code{max_time_seconds}, \code{num_workers}, \code{random_seed}: integer scalars
+\item \code{node_prize_weight}, \code{edge_conf_weight}, \code{edge_cost_weight}: numeric
+scalars
+\item \code{prize_column}, \code{confidence_column}, \code{edge_cost_column}: single column
+names present in the input tables
+}
+}
