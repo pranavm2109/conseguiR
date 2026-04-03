@@ -190,6 +190,13 @@ validate_inputs <- function(
 
 #' Run MAGMA germline gene scoring
 #'
+#' This wrapper exposes both MAGMA stages for the gene-level run:
+#'
+#' - step 1: annotation
+#' - step 2: gene analysis
+#'
+#' Pass stage-specific MAGMA arguments through `step1_args` and `step2_args`.
+#'
 #' User-facing wrapper around the internal MAGMA gene-scoring pipeline.
 #'
 #' @param gwas_sumstats GWAS summary statistics path or table.
@@ -206,8 +213,12 @@ validate_inputs <- function(
 #' @param reuse_existing_analysis Whether to reuse an existing MAGMA gene
 #'   analysis output.
 #' @param keep_intermediates Whether to keep intermediate MAGMA files.
-#' @param step1_args Named list of MAGMA step 1 arguments.
-#' @param step2_args Named list of MAGMA step 2 arguments.
+#' @param step1_args Named list of MAGMA step 1 arguments. Supported entries
+#'   include `annotation_window`, `filter_path`, `ignore_strand`, `nonhuman`,
+#'   and `extra_args`.
+#' @param step2_args Named list of MAGMA step 2 arguments. Supported entries
+#'   include `gene_model`, `genes_only`, `pval_use`, `pval_duplicate`,
+#'   `bfile_synonyms`, `bfile_synonym_dup`, and `extra_args`.
 #'
 #' @return A germline gene score bundle.
 run_germline_gene_scoring <- function(
@@ -280,6 +291,13 @@ run_germline_gene_scoring <- function(
 }
 
 #' Run MAGMA germline regulatory scoring
+#'
+#' This wrapper exposes both MAGMA stages for the regulatory-element run:
+#'
+#' - step 1: annotation
+#' - step 2: gene analysis
+#'
+#' Pass stage-specific MAGMA arguments through `step1_args` and `step2_args`.
 #'
 #' User-facing wrapper around the internal MAGMA regulatory scoring pipeline.
 #'
@@ -371,6 +389,16 @@ run_germline_regulatory_scoring <- function(
 }
 
 #' Prepare germline scores for genes and regulatory elements
+#'
+#' This wrapper orchestrates two separate MAGMA runs:
+#'
+#' - one gene-level run with its own MAGMA step 1 and step 2 settings
+#' - one regulatory-level run with its own MAGMA step 1 and step 2 settings
+#'
+#' In other words, MAGMA stage customization is exposed twice:
+#'
+#' - `gene_step1_args` and `gene_step2_args`
+#' - `reg_step1_args` and `reg_step2_args`
 #'
 #' Runs both MAGMA germline scoring paths with separately customizable step 1
 #' and step 2 argument lists for genes and regulatory elements.
@@ -473,6 +501,9 @@ prepare_germline_scores <- function(
 
 #' Run dndscv somatic gene scoring
 #'
+#' This wrapper exposes the core dndscv settings used by the current pipeline
+#' and leaves less common controls available through `dndscv_args`.
+#'
 #' @param maf Somatic MAF path or table.
 #' @param refdb dndscv reference database path.
 #' @param output_path Optional output path for saved scores.
@@ -524,6 +555,10 @@ run_somatic_gene_scoring <- function(
 }
 
 #' Run fishHook somatic regulatory scoring
+#'
+#' This wrapper exposes the main fishHook configuration surface used by the
+#' package workflow and leaves less common model tuning available through
+#' `fishhook_args`.
 #'
 #' @param maf Somatic MAF path or table.
 #' @param reg_ref_path Regulatory-element reference path.
@@ -578,8 +613,13 @@ run_somatic_regulatory_scoring <- function(
 
 #' Prepare somatic scores for genes and regulatory elements
 #'
-#' Runs dndscv-based gene scoring and fishHook-based regulatory scoring with
-#' separately customizable argument sets.
+#' This wrapper orchestrates two distinct somatic scoring branches:
+#'
+#' - a gene-level `dndscv` run
+#' - a regulatory `fishHook` run
+#'
+#' The dndscv and fishHook settings are kept separate so users can tune each
+#' modeling framework independently.
 #'
 #' @param maf Somatic MAF path or table.
 #' @param refdb dndscv reference database path.
@@ -804,6 +844,9 @@ build_scored_gene_reg_graph <- function(
 #'
 #' User-facing wrapper for the Python-backed diffusion stage.
 #'
+#' This wrapper exposes the main hyperparameters used by the current
+#' regulatory-to-gene diffusion implementation.
+#'
 #' @param scored_graph Optional scored graph bundle.
 #' @param nodes_path Optional explicit scored node table path.
 #' @param edges_path Optional explicit scored edge table path.
@@ -873,6 +916,9 @@ run_gene_reg_diffusion <- function(
 #'
 #' User-facing wrapper for the Python-backed cardinality-constrained subgraph
 #' selection stage.
+#'
+#' This wrapper exposes the main candidate-selection, objective-weighting, and
+#' solver controls used by the current subgraph-calling implementation.
 #'
 #' @param diffusion Optional diffusion bundle.
 #' @param diffusion_path Optional explicit diffusion table path.
@@ -969,6 +1015,9 @@ call_selected_subgraph <- function(
 }
 
 #' Plot a selected subgraph and build a visualization bundle
+#'
+#' This wrapper exposes the main input-resolution, saving, layout, labelling,
+#' and rendering controls used by the current plotting implementation.
 #'
 #' @param selected_subgraph Optional selected subgraph bundle.
 #' @param nodes Optional selected-subgraph node table.

@@ -19,6 +19,19 @@ Every external function returns a bundle with:
 
 Many bundles also expose their main objects at top level for convenience.
 
+## Shared Terminology
+
+Across the external API docs, the following terms are used consistently:
+
+- `bundle`: a named result object with `objects`, `output_paths`, and `config`
+- `wrapper-level input`: a parameter exposed directly by the user-facing R
+  function
+- `passthrough argument`: a parameter forwarded through a list such as
+  `extra_args`, `dndscv_args`, or `fishhook_args`
+- `output path`: a file path recorded in the returned bundle for reuse by a
+  downstream stage
+- `stage`: one computational step in the end-to-end pipeline
+
 ## Validation
 
 ### `validate_inputs()`
@@ -43,6 +56,10 @@ Returns:
 
 ## Germline Scoring
 
+For a more detailed MAGMA option map, see:
+
+- `scripts/Externals/R/MAGMA_ARGUMENT_COVERAGE.md`
+
 ### `run_germline_gene_scoring()`
 
 Purpose:
@@ -53,6 +70,30 @@ Main inputs:
 - `gene_loc_path`
 - `reference_bfile`
 - separate `step1_args` and `step2_args`
+
+Stage split:
+- MAGMA step 1 = annotation
+- MAGMA step 2 = gene analysis
+
+Typical `step1_args` entries:
+- `annotation_window`
+- `filter_path`
+- `ignore_strand`
+- `nonhuman`
+- `extra_args`
+
+Typical `step2_args` entries:
+- `gene_model`
+- `genes_only`
+- `pval_use`
+- `pval_duplicate`
+- `bfile_synonyms`
+- `bfile_synonym_dup`
+- `extra_args`
+
+Core wrapper-level MAGMA step 2 inputs:
+- `sample_size`
+- `sample_size_col`
 
 Main outputs:
 - gene germline score table
@@ -71,6 +112,13 @@ Main inputs:
 - `reg_loc_path`
 - `reference_bfile`
 - separate `step1_args` and `step2_args`
+
+Stage split:
+- MAGMA step 1 = annotation
+- MAGMA step 2 = gene analysis
+
+The same MAGMA stage-specific structure is used here, but for the regulatory
+run rather than the gene run.
 
 Main outputs:
 - regulatory germline score table
@@ -91,6 +139,15 @@ Main inputs:
 - `reg_loc_path`
 - separate parameter lists for gene step 1, gene step 2, reg step 1, reg step 2
 
+Concretely, this function exposes MAGMA stage customization twice:
+- `gene_step1_args`
+- `gene_step2_args`
+- `reg_step1_args`
+- `reg_step2_args`
+
+So the user can tune the gene MAGMA run and the regulatory MAGMA run
+independently.
+
 Main outputs:
 - `gene_scores`
 - `reg_scores`
@@ -101,6 +158,11 @@ Returns:
 
 ## Somatic Scoring
 
+For more detailed argument maps, see:
+
+- `scripts/Externals/R/DNDSCV_ARGUMENT_COVERAGE.md`
+- `scripts/Externals/R/FISHHOOK_ARGUMENT_COVERAGE.md`
+
 ### `run_somatic_gene_scoring()`
 
 Purpose:
@@ -110,7 +172,9 @@ Main inputs:
 - `maf`
 - `refdb`
 - `cv`
-- dndscv-specific argument list
+- `max_muts_per_gene_per_sample`
+- `max_coding_muts_per_sample`
+- `dndscv_args`
 
 Main outputs:
 - somatic gene score table
@@ -129,7 +193,8 @@ Main inputs:
 - `eligible_gr`
 - `fishhook_covariates`
 - `fishhook_covariate_data`
-- fishHook-specific argument list
+- `idcol`
+- `fishhook_args`
 
 Main outputs:
 - somatic regulatory score table
@@ -146,8 +211,8 @@ Main inputs:
 - `maf`
 - `refdb`
 - `reg_ref_path`
-- dndscv-specific settings
-- fishHook-specific settings
+- wrapper-level dndscv settings
+- wrapper-level fishHook settings
 
 Main outputs:
 - `gene_scores`
@@ -207,6 +272,10 @@ Returns:
 
 ## Diffusion
 
+For a more detailed argument map, see:
+
+- `scripts/Externals/R/DIFFUSION_ARGUMENT_COVERAGE.md`
+
 ### `run_gene_reg_diffusion()`
 
 Purpose:
@@ -224,6 +293,10 @@ Returns:
 - diffusion bundle
 
 ## Subgraph Calling
+
+For a more detailed argument map, see:
+
+- `scripts/Externals/R/SUBGRAPH_ARGUMENT_COVERAGE.md`
 
 ### `call_selected_subgraph()`
 
@@ -246,6 +319,10 @@ Returns:
 - selected subgraph bundle
 
 ## Plotting
+
+For a more detailed argument map, see:
+
+- `scripts/Externals/R/PLOTTING_ARGUMENT_COVERAGE.md`
 
 ### `plot_selected_subgraph()`
 
