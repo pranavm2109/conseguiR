@@ -105,7 +105,7 @@ consequIR_find_python <- function() {
     if (!nzchar(python_path)) {
       python_path <- Sys.which("python")
     }
-    if (!is.null(python_path) && consequiR_valid_python_bin(python_path)) {
+    if (!is.null(python_path) && consequIR_valid_python_bin(python_path)) {
       return(python_path)
     }
   }
