@@ -6,6 +6,9 @@ suppressPackageStartupMessages({
 })
 
 source("R/zzz.R")
+# Manually trigger package initialization to set up lymphoma_graph_env for Python execution
+.onLoad(libname = ".", pkgname = "conseguiR")
+
 source("scripts/Externals/R/00_user_callable_functions.R")
 
 default_external_test_output_dir <- "data/processed/test_outputs/external_api"

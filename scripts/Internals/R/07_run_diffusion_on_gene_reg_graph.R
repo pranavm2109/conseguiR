@@ -65,7 +65,7 @@ find_python <- function() {
   stop("Could not find a Python interpreter on PATH. Install Python 3 or make it available as 'python3' or 'python'.")
 }
 
-python_module_execute <- function(script_path, module_name, function_name, config, python_path = NULL) {
+python_module_execute_diffusion <- function(script_path, module_name, function_name, config, python_path = NULL) {
   if (!file.exists(script_path)) {
     stop("Python script not found: ", script_path)
   }
@@ -229,7 +229,7 @@ run_gene_reg_diffusion <- function(
     top_n_to_save = top_n_to_save
   )
 
-  output_paths <- python_module_execute(
+  output_paths <- python_module_execute_diffusion(
     script_path = "scripts/Internals/Python/07_run_diffusion_on_gene_reg_graph.py",
     module_name = "conseguiR_step7_r",
     function_name = "run_gene_reg_diffusion",

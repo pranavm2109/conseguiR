@@ -73,7 +73,7 @@ find_python <- function() {
   stop("Could not find a Python interpreter on PATH. Install Python 3 or make it available as 'python3' or 'python'.")
 }
 
-python_module_execute <- function(script_path, module_name, function_name, config, python_path = NULL) {
+python_module_execute_subgraph <- function(script_path, module_name, function_name, config, python_path = NULL) {
   if (!file.exists(script_path)) {
     stop("Python script not found: ", script_path)
   }
@@ -289,7 +289,7 @@ run_cardinality_subgraph_calling <- function(
     edge_cost_column = edge_cost_column
   )
 
-  output_paths <- python_module_execute(
+  output_paths <- python_module_execute_subgraph(
     script_path = "scripts/Internals/Python/08_call_subgraph.py",
     module_name = "conseguiR_step8_r",
     function_name = "run_cardinality_subgraph_calling",

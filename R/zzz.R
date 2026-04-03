@@ -2,6 +2,7 @@
 # This file is intentionally not exported; it only sets package-level options on load.
 
 lymphoma_graph_env_name <- "lymphoma_graph_env"
+.conseguiR_pkg_root <- NULL
 
 consequIR_valid_python_bin <- function(path) {
   is.character(path) && length(path) == 1L && nzchar(path) && file.exists(path) && !dir.exists(path)
@@ -123,6 +124,10 @@ consequIR_find_python <- function() {
 }
 
 .onLoad <- function(libname, pkgname) {
+  if (!is.null(libname) && !is.null(pkgname)) {
+    .conseguiR_pkg_root <<- file.path(libname, pkgname)
+  }
+
   if (!is.null(getOption("conseguiR.python"))) {
     return(invisible())
   }
