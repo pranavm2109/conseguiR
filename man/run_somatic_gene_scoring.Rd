@@ -46,3 +46,13 @@ mutation records.
 \verb{list(sm = \\"192r_3w\\", kc = \\"cgc81\\")}.
 }
 }
+\examples{
+\dontrun{
+run_somatic_gene_scoring(
+  maf = "study_somatic.maf",
+  refdb = "RefCDS_human_GRCh38.rda",
+  dndscv_args = list(sm = "192r_3w")
+)
+}
+
+}

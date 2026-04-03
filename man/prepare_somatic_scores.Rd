@@ -79,3 +79,15 @@ Example:
 
 \verb{prepare_somatic_scores( maf = maf_path, refdb = dndscv_refdb, reg_ref_path = reg_ref_path, dndscv_args = list(sm = \\"192r_3w\\"), fishhook_args = list() )}
 }
+\examples{
+\dontrun{
+prepare_somatic_scores(
+  maf = "study_somatic.maf",
+  refdb = "RefCDS_human_GRCh38.rda",
+  reg_ref_path = "regulatory_elements.loc",
+  dndscv_args = list(sm = "192r_3w"),
+  fishhook_covariate_data = covariate_dt
+)
+}
+
+}

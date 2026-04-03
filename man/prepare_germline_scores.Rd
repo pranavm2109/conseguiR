@@ -99,3 +99,16 @@ Example:
 
 \verb{prepare_germline_scores( gwas_sumstats = gwas_path, reference_bfile = \\"/path/to/g1000_eur/g1000_eur\\", gene_step1_args = list(annotation_window = c(35, 10)), gene_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")) )}
 }
+\examples{
+\dontrun{
+prepare_germline_scores(
+  gwas_sumstats = "study_gwas.tsv",
+  reference_bfile = "/path/to/g1000_eur/g1000_eur",
+  gene_step1_args = list(annotation_window = c(35, 10)),
+  gene_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P")),
+  reg_step1_args = list(annotation_window = c(0, 0)),
+  reg_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P"))
+)
+}
+
+}

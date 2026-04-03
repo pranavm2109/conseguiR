@@ -79,3 +79,18 @@ graphics device extension supported by the plotting helper
 \item \code{layout}: a single layout keyword such as \verb{\\"fr\\"}
 }
 }
+\examples{
+\dontrun{
+selected_subgraph <- call_selected_subgraph(
+  diffusion_path = "gene_reg_graph_diffusion_all_genes.tsv",
+  target_genes = 50L
+)
+
+plot_selected_subgraph(
+  selected_subgraph = selected_subgraph,
+  plot_file_path = "selected_subgraph.pdf",
+  title = "Selected Gene Subgraph"
+)
+}
+
+}

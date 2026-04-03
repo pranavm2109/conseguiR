@@ -21,3 +21,7 @@ output paths, and graph build status.
 Builds the package's unscored backend graph resources when they are missing
 and the required raw graph resources are available.
 }
+\examples{
+initialize_backend_graphs()
+
+}

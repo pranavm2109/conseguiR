@@ -52,3 +52,14 @@ regulatory element and the covariate columns needed by fishHook.
 \item \code{fishhook_args}: a named list of additional fishHook arguments.
 }
 }
+\examples{
+\dontrun{
+run_somatic_regulatory_scoring(
+  maf = "study_somatic.maf",
+  reg_ref_path = "regulatory_elements.loc",
+  fishhook_covariate_data = covariate_dt,
+  fishhook_args = list()
+)
+}
+
+}

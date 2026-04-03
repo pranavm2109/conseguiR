@@ -90,3 +90,18 @@ suffixes, for example \verb{\\"/path/to/g1000_eur/g1000_eur\\"}.
 
 \verb{step2_args = list( gene_model = \\"snp-wise=mean\\", genes_only = TRUE, pval_use = c(\\"SNP\\", \\"P\\"), pval_duplicate = \\"drop\\", bfile_synonyms = NULL, bfile_synonym_dup = NULL, extra_args = character() )}
 }
+\examples{
+\dontrun{
+run_germline_gene_scoring(
+  gwas_sumstats = "study_gwas.tsv",
+  reference_bfile = "/path/to/g1000_eur/g1000_eur",
+  sample_size = 456348,
+  step1_args = list(annotation_window = c(35, 10)),
+  step2_args = list(
+    gene_model = "snp-wise=mean",
+    pval_use = c("SNP", "P")
+  )
+)
+}
+
+}

@@ -121,3 +121,33 @@ Exact list formatting:
 
 \verb{epigenomic_args = list( bw_files = c(\\"track1.bw\\", \\"track2.bw\\", \\"track3.bw\\"), exclude_patterns = c(\\"_BL_\\", \\"_FL_\\"), min_tracks = 3L, transform = \\"log1p\\" )}
 }
+\examples{
+\dontrun{
+run_conseguiR(
+  gwas_sumstats = "study_gwas.tsv",
+  somatic_maf = "study_somatic.maf",
+  reg_ref_path = "regulatory_elements.loc",
+  reference_bfile = "/path/to/g1000_eur/g1000_eur",
+  dndscv_refdb = "RefCDS_human_GRCh38.rda",
+  epigenomic_tracks = c("track1.bw", "track2.bw", "track3.bw"),
+  target_genes = 50L,
+  germline_args = list(
+    gene_sample_size = 456348,
+    reg_sample_size = 456348,
+    gene_step1_args = list(annotation_window = c(35, 10)),
+    gene_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P")),
+    reg_step1_args = list(annotation_window = c(0, 0)),
+    reg_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P"))
+  ),
+  somatic_args = list(
+    dndscv_args = list(sm = "192r_3w"),
+    fishhook_covariate_data = covariate_dt
+  ),
+  epigenomic_args = list(
+    bw_files = c("track1.bw", "track2.bw", "track3.bw"),
+    min_tracks = 3L
+  )
+)
+}
+
+}

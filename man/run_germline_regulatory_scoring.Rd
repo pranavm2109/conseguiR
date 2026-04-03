@@ -80,3 +80,18 @@ file. The stage argument lists use the same format as
 \code{run_germline_gene_scoring()}: \code{step1_args = list(...)} for annotation-stage
 settings and \code{step2_args = list(...)} for gene-analysis-stage settings.
 }
+\examples{
+\dontrun{
+run_germline_regulatory_scoring(
+  gwas_sumstats = "study_gwas.tsv",
+  reference_bfile = "/path/to/g1000_eur/g1000_eur",
+  sample_size = 456348,
+  step1_args = list(annotation_window = c(0, 0)),
+  step2_args = list(
+    gene_model = "snp-wise=mean",
+    pval_use = c("SNP", "P")
+  )
+)
+}
+
+}

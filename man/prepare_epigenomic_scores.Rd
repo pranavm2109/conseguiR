@@ -59,3 +59,14 @@ files discovered from \code{track_dir}.
 \item \code{summary_fun}: a function object such as \code{mean} or \code{max}.
 }
 }
+\examples{
+\dontrun{
+prepare_epigenomic_scores(
+  reg_ref_path = "regulatory_elements.loc",
+  bw_files = c("track1.bw", "track2.bw", "track3.bw"),
+  min_tracks = 3L,
+  transform = "log1p"
+)
+}
+
+}

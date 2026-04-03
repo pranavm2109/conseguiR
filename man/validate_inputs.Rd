@@ -56,3 +56,16 @@ chromosome, start, end, and regulatory-element identifier.
 files. Use either \code{epigenomic_tracks} or \code{epigenomic_track_dir}.
 }
 }
+\examples{
+validate_inputs()
+
+\dontrun{
+validate_inputs(
+  gwas_sumstats = "study_gwas.tsv",
+  somatic_maf = "study_somatic.maf",
+  reg_ref_path = "regulatory_elements.loc",
+  epigenomic_tracks = c("track1.bw", "track2.bw", "track3.bw")
+)
+}
+
+}

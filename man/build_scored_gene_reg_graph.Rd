@@ -65,3 +65,15 @@ score tables directly through \code{gene_germline_scores},
 \code{reg_germline_scores}, \code{gene_somatic_scores}, \code{reg_somatic_scores}, and
 \code{reg_epigenomic_scores}.
 }
+\examples{
+\dontrun{
+build_scored_gene_reg_graph(
+  gene_germline_scores = "germline_gene_scores.tsv",
+  reg_germline_scores = "germline_reg_scores.tsv",
+  gene_somatic_scores = "somatic_gene_scores.tsv",
+  reg_somatic_scores = "somatic_reg_scores.tsv",
+  reg_epigenomic_scores = "epigenomic_reg_scores.tsv"
+)
+}
+
+}

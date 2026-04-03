@@ -85,6 +85,18 @@
 #' - `epigenomic_track_dir` must be a single directory path containing bigWig
 #'   files. Use either `epigenomic_tracks` or `epigenomic_track_dir`.
 #'
+#' @examples
+#' validate_inputs()
+#'
+#' \dontrun{
+#' validate_inputs(
+#'   gwas_sumstats = "study_gwas.tsv",
+#'   somatic_maf = "study_somatic.maf",
+#'   reg_ref_path = "regulatory_elements.loc",
+#'   epigenomic_tracks = c("track1.bw", "track2.bw", "track3.bw")
+#' )
+#' }
+#'
 #' @return A validation bundle containing validated objects and config.
 #' @export
 validate_inputs <- function(
@@ -111,6 +123,9 @@ validate_inputs <- function(
 #' and the required raw graph resources are available.
 #'
 #' @inheritParams initialize_backend_graphs
+#'
+#' @examples
+#' initialize_backend_graphs()
 #'
 #' @return A backend-initialization result describing the backend directory,
 #'   output paths, and graph build status.
@@ -197,6 +212,20 @@ initialize_backend_graphs <- function(
 #'   extra_args = character()
 #' )`
 #'
+#' @examples
+#' \dontrun{
+#' run_germline_gene_scoring(
+#'   gwas_sumstats = "study_gwas.tsv",
+#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
+#'   sample_size = 456348,
+#'   step1_args = list(annotation_window = c(35, 10)),
+#'   step2_args = list(
+#'     gene_model = "snp-wise=mean",
+#'     pval_use = c("SNP", "P")
+#'   )
+#' )
+#' }
+#'
 #' @return A germline gene score bundle.
 #' @export
 run_germline_gene_scoring <- function(
@@ -258,6 +287,20 @@ run_germline_gene_scoring <- function(
 #' file. The stage argument lists use the same format as
 #' `run_germline_gene_scoring()`: `step1_args = list(...)` for annotation-stage
 #' settings and `step2_args = list(...)` for gene-analysis-stage settings.
+#'
+#' @examples
+#' \dontrun{
+#' run_germline_regulatory_scoring(
+#'   gwas_sumstats = "study_gwas.tsv",
+#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
+#'   sample_size = 456348,
+#'   step1_args = list(annotation_window = c(0, 0)),
+#'   step2_args = list(
+#'     gene_model = "snp-wise=mean",
+#'     pval_use = c("SNP", "P")
+#'   )
+#' )
+#' }
 #'
 #' @return A germline regulatory score bundle.
 #' @export
@@ -358,6 +401,18 @@ run_germline_regulatory_scoring <- function(
 #'   reg_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\"))
 #' )`
 #'
+#' @examples
+#' \dontrun{
+#' prepare_germline_scores(
+#'   gwas_sumstats = "study_gwas.tsv",
+#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
+#'   gene_step1_args = list(annotation_window = c(35, 10)),
+#'   gene_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P")),
+#'   reg_step1_args = list(annotation_window = c(0, 0)),
+#'   reg_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P"))
+#' )
+#' }
+#'
 #' @return A germline score bundle with gene and regulatory score tables.
 #' @export
 prepare_germline_scores <- function(
@@ -429,6 +484,15 @@ prepare_germline_scores <- function(
 #' - `dndscv_args`: a named list of additional dndscv arguments, for example
 #'   `list(sm = \"192r_3w\", kc = \"cgc81\")`.
 #'
+#' @examples
+#' \dontrun{
+#' run_somatic_gene_scoring(
+#'   maf = "study_somatic.maf",
+#'   refdb = "RefCDS_human_GRCh38.rda",
+#'   dndscv_args = list(sm = "192r_3w")
+#' )
+#' }
+#'
 #' @return A somatic gene score bundle.
 #' @export
 run_somatic_gene_scoring <- function(
@@ -475,6 +539,16 @@ run_somatic_gene_scoring <- function(
 #' - `fishhook_covariate_data`: a data frame/data.table containing one row per
 #'   regulatory element and the covariate columns needed by fishHook.
 #' - `fishhook_args`: a named list of additional fishHook arguments.
+#'
+#' @examples
+#' \dontrun{
+#' run_somatic_regulatory_scoring(
+#'   maf = "study_somatic.maf",
+#'   reg_ref_path = "regulatory_elements.loc",
+#'   fishhook_covariate_data = covariate_dt,
+#'   fishhook_args = list()
+#' )
+#' }
 #'
 #' @return A somatic regulatory score bundle.
 #' @export
@@ -543,6 +617,17 @@ run_somatic_regulatory_scoring <- function(
 #'   fishhook_args = list()
 #' )`
 #'
+#' @examples
+#' \dontrun{
+#' prepare_somatic_scores(
+#'   maf = "study_somatic.maf",
+#'   refdb = "RefCDS_human_GRCh38.rda",
+#'   reg_ref_path = "regulatory_elements.loc",
+#'   dndscv_args = list(sm = "192r_3w"),
+#'   fishhook_covariate_data = covariate_dt
+#' )
+#' }
+#'
 #' @return A somatic score bundle with gene and regulatory score tables.
 #' @export
 prepare_somatic_scores <- function(
@@ -606,6 +691,16 @@ prepare_somatic_scores <- function(
 #'   files discovered from `track_dir`.
 #' - `summary_fun`: a function object such as `mean` or `max`.
 #'
+#' @examples
+#' \dontrun{
+#' prepare_epigenomic_scores(
+#'   reg_ref_path = "regulatory_elements.loc",
+#'   bw_files = c("track1.bw", "track2.bw", "track3.bw"),
+#'   min_tracks = 3L,
+#'   transform = "log1p"
+#' )
+#' }
+#'
 #' @return An epigenomic score bundle.
 #' @export
 prepare_epigenomic_scores <- function(
@@ -662,6 +757,17 @@ prepare_epigenomic_scores <- function(
 #' score tables directly through `gene_germline_scores`,
 #' `reg_germline_scores`, `gene_somatic_scores`, `reg_somatic_scores`, and
 #' `reg_epigenomic_scores`.
+#'
+#' @examples
+#' \dontrun{
+#' build_scored_gene_reg_graph(
+#'   gene_germline_scores = "germline_gene_scores.tsv",
+#'   reg_germline_scores = "germline_reg_scores.tsv",
+#'   gene_somatic_scores = "somatic_gene_scores.tsv",
+#'   reg_somatic_scores = "somatic_reg_scores.tsv",
+#'   reg_epigenomic_scores = "epigenomic_reg_scores.tsv"
+#' )
+#' }
 #'
 #' @return A scored gene-reg graph bundle containing the graph, nodes, and edges.
 #' @export
@@ -729,6 +835,23 @@ build_scored_gene_reg_graph <- function(
 #' - `top_k`: a positive integer
 #' - `confidence_power`, `beta_germline`, `beta_somatic`,
 #'   `beta_epigenomic`, `reg_signal_clip`: numeric scalars
+#'
+#' @examples
+#' \dontrun{
+#' scored_graph <- build_scored_gene_reg_graph(
+#'   gene_germline_scores = "germline_gene_scores.tsv",
+#'   reg_germline_scores = "germline_reg_scores.tsv",
+#'   gene_somatic_scores = "somatic_gene_scores.tsv",
+#'   reg_somatic_scores = "somatic_reg_scores.tsv",
+#'   reg_epigenomic_scores = "epigenomic_reg_scores.tsv"
+#' )
+#'
+#' run_gene_reg_diffusion(
+#'   scored_graph = scored_graph,
+#'   top_k = 3L,
+#'   beta_epigenomic = 0.7
+#' )
+#' }
 #'
 #' @return A diffusion bundle containing full and top-gene diffusion tables.
 #' @export
@@ -806,6 +929,19 @@ run_gene_reg_diffusion <- function(
 #'   scalars
 #' - `prize_column`, `confidence_column`, `edge_cost_column`: single column
 #'   names present in the input tables
+#'
+#' @examples
+#' \dontrun{
+#' diffusion <- run_gene_reg_diffusion(
+#'   nodes_path = "gene_reg_graph_scored_nodes.tsv.gz",
+#'   edges_path = "gene_reg_graph_scored_edges.tsv.gz"
+#' )
+#'
+#' call_selected_subgraph(
+#'   diffusion = diffusion,
+#'   target_genes = 50L
+#' )
+#' }
 #'
 #' @return A selected subgraph bundle.
 #' @export
@@ -900,6 +1036,20 @@ call_selected_subgraph <- function(
 #' - `plot_file_path`: a single file path ending in `.pdf`, `.png`, or another
 #'   graphics device extension supported by the plotting helper
 #' - `layout`: a single layout keyword such as `\"fr\"`
+#'
+#' @examples
+#' \dontrun{
+#' selected_subgraph <- call_selected_subgraph(
+#'   diffusion_path = "gene_reg_graph_diffusion_all_genes.tsv",
+#'   target_genes = 50L
+#' )
+#'
+#' plot_selected_subgraph(
+#'   selected_subgraph = selected_subgraph,
+#'   plot_file_path = "selected_subgraph.pdf",
+#'   title = "Selected Gene Subgraph"
+#' )
+#' }
 #'
 #' @return A plot bundle containing the ggplot object and visualization bundle.
 #' @export
@@ -1027,6 +1177,35 @@ plot_selected_subgraph <- function(
 #'   min_tracks = 3L,
 #'   transform = \"log1p\"
 #' )`
+#'
+#' @examples
+#' \dontrun{
+#' run_conseguiR(
+#'   gwas_sumstats = "study_gwas.tsv",
+#'   somatic_maf = "study_somatic.maf",
+#'   reg_ref_path = "regulatory_elements.loc",
+#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
+#'   dndscv_refdb = "RefCDS_human_GRCh38.rda",
+#'   epigenomic_tracks = c("track1.bw", "track2.bw", "track3.bw"),
+#'   target_genes = 50L,
+#'   germline_args = list(
+#'     gene_sample_size = 456348,
+#'     reg_sample_size = 456348,
+#'     gene_step1_args = list(annotation_window = c(35, 10)),
+#'     gene_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P")),
+#'     reg_step1_args = list(annotation_window = c(0, 0)),
+#'     reg_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P"))
+#'   ),
+#'   somatic_args = list(
+#'     dndscv_args = list(sm = "192r_3w"),
+#'     fishhook_covariate_data = covariate_dt
+#'   ),
+#'   epigenomic_args = list(
+#'     bw_files = c("track1.bw", "track2.bw", "track3.bw"),
+#'     min_tracks = 3L
+#'   )
+#' )
+#' }
 #'
 #' @return A pipeline bundle containing all stage bundles.
 #' @export
