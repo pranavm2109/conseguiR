@@ -77,4 +77,6 @@ The main remaining rough edges are:
 
 - some package-facing wrappers still delegate into `scripts/...`
 - Python and MAGMA setup still matter for a smooth first run
-- backend graph/resource management still needs a cleaner package-owned story
+- backend graph/resource management still needs a cleaner package-owned story,
+  even though the package now attempts backend graph initialization on load
+  when the required graph resources are available

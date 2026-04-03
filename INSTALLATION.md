@@ -112,9 +112,12 @@ So before running germline scoring, make sure that:
 The intended package behavior is that these backend graph resources should be
 package-managed rather than tied to a private development workflow.
 
+The package now attempts to initialize these backend graph resources on load
+when the required graph inputs are available.
+
 For this first draft, that story is still in progress. So if you are trying the
 package before that final cleanup is complete, make sure the required backend
-graph resources exist where the wrappers expect them.
+graph resources or their raw inputs exist where the package can discover them.
 
 ## 6. Sanity check package startup
 

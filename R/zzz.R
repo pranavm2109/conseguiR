@@ -128,21 +128,30 @@ consequIR_find_python <- function() {
     .conseguiR_pkg_root <<- file.path(libname, pkgname)
   }
 
-  if (!is.null(getOption("conseguiR.python"))) {
-    return(invisible())
-  }
-
-  python_path <- consequIR_find_python()
-  if (!is.null(python_path)) {
-    options(
-      conseguiR.python = python_path,
-      conseguiR.conda_env = lymphoma_graph_env_name
-    )
+  if (is.null(getOption("conseguiR.python"))) {
+    python_path <- consequIR_find_python()
+    if (!is.null(python_path)) {
+      options(
+        conseguiR.python = python_path,
+        conseguiR.conda_env = lymphoma_graph_env_name
+      )
+    }
   }
 
   conda_prefix <- Sys.getenv("CONDA_PREFIX")
   if (nzchar(conda_prefix) && identical(Sys.getenv("CONDA_DEFAULT_ENV"), lymphoma_graph_env_name)) {
     consequIR_prepend_path(conda_prefix)
+  }
+
+  auto_init <- getOption("conseguiR.auto_initialize_backend_graphs", TRUE)
+  if (isTRUE(auto_init)) {
+    try(
+      .conseguiR_initialize_backend_graphs(
+        strict = FALSE,
+        quiet = TRUE
+      ),
+      silent = TRUE
+    )
   }
 
   invisible()

@@ -75,6 +75,34 @@ validate_inputs <- function(
   )
 }
 
+#' Initialize backend graph resources
+#'
+#' Builds the package's unscored backend graph resources when they are missing
+#' and the required raw graph resources are available.
+#'
+#' @inheritParams initialize_backend_graphs
+#'
+#' @return A backend-initialization result describing the backend directory,
+#'   output paths, and graph build status.
+#' @export
+initialize_backend_graphs <- function(
+  backend_dir = NULL,
+  build_gene_reg = TRUE,
+  build_gene_gene = TRUE,
+  force = FALSE,
+  strict = TRUE,
+  quiet = FALSE
+) {
+  .conseguiR_initialize_backend_graphs(
+    backend_dir = backend_dir,
+    build_gene_reg = build_gene_reg,
+    build_gene_gene = build_gene_gene,
+    force = force,
+    strict = strict,
+    quiet = quiet
+  )
+}
+
 #' Run MAGMA germline gene scoring
 #'
 #' This wrapper exposes both MAGMA stages for the gene-level run:
@@ -451,7 +479,7 @@ prepare_epigenomic_scores <- function(
 #' @export
 build_scored_gene_reg_graph <- function(
   graph = NULL,
-  graph_rds_path = "data/processed/gene_reg_graph_no_scores.rds",
+  graph_rds_path = NULL,
   output_prefix = "data/processed/gene_reg_graph_scored",
   germline_scores = NULL,
   somatic_scores = NULL,
@@ -463,6 +491,11 @@ build_scored_gene_reg_graph <- function(
   reg_epigenomic_scores = NULL,
   save_outputs = TRUE
 ) {
+  if (is.null(graph_rds_path)) {
+    initialize_backend_graphs(strict = FALSE, quiet = TRUE)
+    graph_rds_path <- .conseguiR_backend_paths()$gene_reg_graph_rds
+  }
+
   .conseguiR_external_fun("build_scored_gene_reg_graph")(
     graph = graph,
     graph_rds_path = graph_rds_path,
@@ -568,8 +601,8 @@ run_gene_reg_diffusion <- function(
 call_selected_subgraph <- function(
   diffusion = NULL,
   diffusion_path = NULL,
-  gg_nodes_path = "data/processed/gene_gene_graph_nodes.tsv.gz",
-  gg_edges_path = "data/processed/gene_gene_graph_edges.tsv.gz",
+  gg_nodes_path = NULL,
+  gg_edges_path = NULL,
   output_dir = "data/processed",
   output_stem = "gene_gene_selected_subgraph",
   target_genes = 50L,
@@ -589,6 +622,13 @@ call_selected_subgraph <- function(
   edge_cost_column = "weight",
   python_path = NULL
 ) {
+  if (is.null(gg_nodes_path) || is.null(gg_edges_path)) {
+    initialize_backend_graphs(strict = FALSE, quiet = TRUE)
+    backend_paths <- .conseguiR_backend_paths()
+    gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
+    gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
+  }
+
   .conseguiR_external_fun("call_selected_subgraph")(
     diffusion = diffusion,
     diffusion_path = diffusion_path,
@@ -723,9 +763,9 @@ run_conseguiR <- function(
   epigenomic_tracks = NULL,
   gene_loc_path = "data/raw/NCBI38/NCBI38.gene.loc",
   reg_loc_path = "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc",
-  graph_rds_path = "data/processed/gene_reg_graph_no_scores.rds",
-  gg_nodes_path = "data/processed/gene_gene_graph_nodes.tsv.gz",
-  gg_edges_path = "data/processed/gene_gene_graph_edges.tsv.gz",
+  graph_rds_path = NULL,
+  gg_nodes_path = NULL,
+  gg_edges_path = NULL,
   output_dir = "data/processed",
   target_genes = 50L,
   germline_args = list(),
@@ -736,6 +776,12 @@ run_conseguiR <- function(
   subgraph_args = list(),
   plot_args = list()
 ) {
+  initialize_backend_graphs(strict = FALSE, quiet = TRUE)
+  backend_paths <- .conseguiR_backend_paths()
+  graph_rds_path <- graph_rds_path %||% backend_paths$gene_reg_graph_rds
+  gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
+  gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
+
   .conseguiR_external_fun("run_conseguiR")(
     gwas_sumstats = gwas_sumstats,
     somatic_maf = somatic_maf,
