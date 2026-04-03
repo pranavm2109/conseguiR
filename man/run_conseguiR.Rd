@@ -12,8 +12,6 @@ run_conseguiR(
   dndscv_refdb,
   epigenomic_track_dir = NULL,
   epigenomic_tracks = NULL,
-  gene_loc_path = NULL,
-  reg_loc_path = NULL,
   graph_rds_path = NULL,
   gg_nodes_path = NULL,
   gg_edges_path = NULL,
@@ -42,12 +40,6 @@ run_conseguiR(
 \item{epigenomic_track_dir}{Optional directory containing epigenomic tracks.}
 
 \item{epigenomic_tracks}{Optional explicit vector of bigWig paths.}
-
-\item{gene_loc_path}{Optional gene location file path. When \code{NULL},
-\code{conseguiR} uses its backend gene location resource.}
-
-\item{reg_loc_path}{Optional regulatory-element location file path. When
-\code{NULL}, \code{conseguiR} uses its backend regulatory location resource.}
 
 \item{graph_rds_path}{Backend no-score gene-reg graph path.}
 
@@ -109,9 +101,8 @@ through stage-specific named lists:
 are forwarded to their corresponding downstream stages
 }
 
-The gene and regulatory location resources are backend-managed by default.
-Users only need to supply \code{gene_loc_path} or \code{reg_loc_path} when they
-intentionally want to override the shipped backend resources.
+The gene and regulatory location resources are backend-managed by the
+package and are not user-facing arguments in this high-level wrapper.
 
 Exact list formatting:
 

@@ -419,8 +419,6 @@ run_germline_regulatory_scoring <- function(
 #'
 #' @param gwas_sumstats GWAS summary statistics path or table.
 #' @param reference_bfile PLINK reference prefix for MAGMA step 2.
-#' @param gene_loc_path Gene location file.
-#' @param reg_loc_path Regulatory-element location file.
 #' @param gene_output_prefix Output prefix for gene-level germline scores.
 #' @param reg_output_prefix Output prefix for regulatory germline scores.
 #' @param magma_gwas_cache_prefix Shared MAGMA GWAS cache prefix.
@@ -438,8 +436,6 @@ run_germline_regulatory_scoring <- function(
 prepare_germline_scores <- function(
   gwas_sumstats,
   reference_bfile,
-  gene_loc_path = "data/raw/NCBI38/NCBI38.gene.loc",
-  reg_loc_path = "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc",
   gene_output_prefix = "data/processed/germline_gene_scores",
   reg_output_prefix = "data/processed/germline_reg_scores",
   magma_gwas_cache_prefix = "data/processed/magma_shared_gwas_cache",
@@ -454,6 +450,8 @@ prepare_germline_scores <- function(
   shared_args = list()
 ) {
   shared_args <- as_list_or_empty(shared_args)
+  gene_loc_path <- if (exists(".conseguiR_default_gene_loc_path", inherits = TRUE)) .conseguiR_default_gene_loc_path() else "data/raw/NCBI38/NCBI38.gene.loc"
+  reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
 
   gene_bundle <- run_with_args(
     run_germline_gene_scoring,
@@ -1184,8 +1182,6 @@ run_conseguiR <- function(
   dndscv_refdb,
   epigenomic_track_dir = NULL,
   epigenomic_tracks = NULL,
-  gene_loc_path = "data/raw/NCBI38/NCBI38.gene.loc",
-  reg_loc_path = "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc",
   graph_rds_path = "data/processed/gene_reg_graph_no_scores.rds",
   gg_nodes_path = "data/processed/gene_gene_graph_nodes.tsv.gz",
   gg_edges_path = "data/processed/gene_gene_graph_edges.tsv.gz",
@@ -1199,6 +1195,9 @@ run_conseguiR <- function(
   subgraph_args = list(),
   plot_args = list()
 ) {
+  gene_loc_path <- if (exists(".conseguiR_default_gene_loc_path", inherits = TRUE)) .conseguiR_default_gene_loc_path() else "data/raw/NCBI38/NCBI38.gene.loc"
+  reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
+
   validation <- validate_inputs(
     gwas_sumstats = gwas_sumstats,
     somatic_maf = somatic_maf,

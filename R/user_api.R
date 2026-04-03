@@ -356,10 +356,6 @@ run_germline_regulatory_scoring <- function(
 #' - `reg_step1_args` and `reg_step2_args`
 #'
 #' @inheritParams run_germline_gene_scoring
-#' @param gene_loc_path Optional gene location file. When `NULL`, `conseguiR`
-#'   uses its backend gene location resource.
-#' @param reg_loc_path Optional regulatory-element location file. When `NULL`,
-#'   `conseguiR` uses its backend regulatory location resource.
 #' @param gene_output_prefix Output prefix for gene-level germline scores.
 #' @param reg_output_prefix Output prefix for regulatory germline scores.
 #' @param gene_sample_size Fixed sample size for the gene run.
@@ -418,8 +414,6 @@ run_germline_regulatory_scoring <- function(
 prepare_germline_scores <- function(
   gwas_sumstats,
   reference_bfile,
-  gene_loc_path = NULL,
-  reg_loc_path = NULL,
   gene_output_prefix = "data/processed/germline_gene_scores",
   reg_output_prefix = "data/processed/germline_reg_scores",
   magma_gwas_cache_prefix = "data/processed/magma_shared_gwas_cache",
@@ -433,8 +427,8 @@ prepare_germline_scores <- function(
   reg_step2_args = list(),
   shared_args = list()
 ) {
-  gene_loc_path <- gene_loc_path %||% .conseguiR_default_gene_loc_path()
-  reg_loc_path <- reg_loc_path %||% .conseguiR_default_reg_loc_path()
+  gene_loc_path <- .conseguiR_default_gene_loc_path()
+  reg_loc_path <- .conseguiR_default_reg_loc_path()
   if (is.null(gene_loc_path)) {
     stop("No gene location resource was provided and no backend gene location resource could be found.")
   }
@@ -1102,10 +1096,6 @@ plot_selected_subgraph <- function(
 #' @param dndscv_refdb dndscv reference database path.
 #' @param epigenomic_track_dir Optional directory containing epigenomic tracks.
 #' @param epigenomic_tracks Optional explicit vector of bigWig paths.
-#' @param gene_loc_path Optional gene location file path. When `NULL`,
-#'   `conseguiR` uses its backend gene location resource.
-#' @param reg_loc_path Optional regulatory-element location file path. When
-#'   `NULL`, `conseguiR` uses its backend regulatory location resource.
 #' @param graph_rds_path Backend no-score gene-reg graph path.
 #' @param gg_nodes_path Gene-gene node table path.
 #' @param gg_edges_path Gene-gene edge table path.
@@ -1148,9 +1138,8 @@ plot_selected_subgraph <- function(
 #' - `scored_graph_args`, `diffusion_args`, `subgraph_args`, and `plot_args`
 #'   are forwarded to their corresponding downstream stages
 #'
-#' The gene and regulatory location resources are backend-managed by default.
-#' Users only need to supply `gene_loc_path` or `reg_loc_path` when they
-#' intentionally want to override the shipped backend resources.
+#' The gene and regulatory location resources are backend-managed by the
+#' package and are not user-facing arguments in this high-level wrapper.
 #'
 #' Exact list formatting:
 #'
@@ -1217,8 +1206,6 @@ run_conseguiR <- function(
   dndscv_refdb,
   epigenomic_track_dir = NULL,
   epigenomic_tracks = NULL,
-  gene_loc_path = NULL,
-  reg_loc_path = NULL,
   graph_rds_path = NULL,
   gg_nodes_path = NULL,
   gg_edges_path = NULL,
@@ -1234,8 +1221,8 @@ run_conseguiR <- function(
 ) {
   initialize_backend_graphs(strict = FALSE, quiet = TRUE)
   backend_paths <- .conseguiR_backend_paths()
-  gene_loc_path <- gene_loc_path %||% .conseguiR_default_gene_loc_path()
-  reg_loc_path <- reg_loc_path %||% .conseguiR_default_reg_loc_path()
+  gene_loc_path <- .conseguiR_default_gene_loc_path()
+  reg_loc_path <- .conseguiR_default_reg_loc_path()
   if (is.null(gene_loc_path)) {
     stop("No gene location resource was provided and no backend gene location resource could be found.")
   }

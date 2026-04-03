@@ -7,8 +7,6 @@
 prepare_germline_scores(
   gwas_sumstats,
   reference_bfile,
-  gene_loc_path = NULL,
-  reg_loc_path = NULL,
   gene_output_prefix = "data/processed/germline_gene_scores",
   reg_output_prefix = "data/processed/germline_reg_scores",
   magma_gwas_cache_prefix = "data/processed/magma_shared_gwas_cache",
@@ -27,12 +25,6 @@ prepare_germline_scores(
 \item{gwas_sumstats}{GWAS summary statistics path or table.}
 
 \item{reference_bfile}{PLINK reference prefix for MAGMA step 2.}
-
-\item{gene_loc_path}{Optional gene location file. When \code{NULL}, \code{conseguiR}
-uses its backend gene location resource.}
-
-\item{reg_loc_path}{Optional regulatory-element location file. When \code{NULL},
-\code{conseguiR} uses its backend regulatory location resource.}
 
 \item{gene_output_prefix}{Output prefix for gene-level germline scores.}
 
