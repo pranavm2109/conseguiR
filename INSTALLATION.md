@@ -151,7 +151,43 @@ The final plotted graph path is then available from:
 
 - `result$plot$output_paths$plot_file_path`
 
-## 8. What is still rough in the first draft
+## 8. Fresh-clone validation checklist
+
+After cloning the repository into a separate directory, a good first validation
+path is:
+
+1. install the package with `devtools::install()`
+2. load the package with `library(conseguiR)`
+3. run `check_conseguiR_runtime()`
+4. run `initialize_backend_graphs()`
+
+In a clean R session, that looks like:
+
+```r
+devtools::install()
+library(conseguiR)
+
+check_conseguiR_runtime()
+initialize_backend_graphs()
+```
+
+The ideal success state is:
+
+- `library(conseguiR)` loads cleanly
+- `check_conseguiR_runtime()` reports `OK`
+- `initialize_backend_graphs()` reports `reused` or `seeded`
+
+Useful follow-up checks:
+
+```r
+getOption("conseguiR.runtime_status")
+list.files(system.file("extdata", "backend", package = "conseguiR"))
+```
+
+If you want to go one step further, then try one exported workflow function
+with real study inputs, for example `run_conseguiR(...)`.
+
+## 9. What is still rough in the first draft
 
 The main installation-related caveats right now are:
 
