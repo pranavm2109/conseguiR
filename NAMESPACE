@@ -2,6 +2,7 @@
 
 export(build_scored_gene_reg_graph)
 export(call_selected_subgraph)
+export(check_conseguiR_runtime)
 export(initialize_backend_graphs)
 export(plot_selected_subgraph)
 export(prepare_epigenomic_scores)

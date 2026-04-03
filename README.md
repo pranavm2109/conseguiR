@@ -21,6 +21,13 @@ The current package workflow is:
 7. call a cardinality-constrained gene-gene subgraph
 8. build a visualization bundle and save a plotted graph
 
+The package ships prebuilt unscored backend graphs for:
+
+- the gene-regulatory graph
+- the gene-gene graph
+
+These are treated as package-owned resources rather than user-provided inputs.
+
 ## User API
 
 The package-facing API currently exports:
@@ -77,6 +84,5 @@ The main remaining rough edges are:
 
 - some package-facing wrappers still delegate into `scripts/...`
 - Python and MAGMA setup still matter for a smooth first run
-- backend graph/resource management still needs a cleaner package-owned story,
-  even though the package now attempts backend graph initialization on load
-  when the required graph resources are available
+- the package still needs some final packaging polish around installation and
+  resource discovery

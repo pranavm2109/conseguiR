@@ -19,7 +19,7 @@ So installation currently involves four layers:
 1. R
 2. Python
 3. MAGMA
-4. backend graph/resources expected by the package workflow
+4. package-owned backend graph resources
 
 ## 1. Clone the repository
 
@@ -109,15 +109,15 @@ So before running germline scoring, make sure that:
 - a gene-regulatory graph without user-specific scores
 - a gene-gene graph used after diffusion
 
-The intended package behavior is that these backend graph resources should be
-package-managed rather than tied to a private development workflow.
+These backend graph resources are now intended to ship with the package as
+package-owned resources.
 
-The package now attempts to initialize these backend graph resources on load
-when the required graph inputs are available.
+On package load, `conseguiR` attempts to ensure these backend graph files exist
+in the working backend directory. If they are missing there, it first tries to
+seed them from the packaged backend graph resources.
 
-For this first draft, that story is still in progress. So if you are trying the
-package before that final cleanup is complete, make sure the required backend
-graph resources or their raw inputs exist where the package can discover them.
+Only if those packaged backend graphs are unavailable does the package fall back
+to rebuilding them from raw backend resources.
 
 ## 6. Sanity check package startup
 
@@ -158,13 +158,14 @@ The main installation-related caveats right now are:
 - some package-facing wrappers still delegate into `scripts/...`
 - Python setup is important for a smooth first run
 - MAGMA is an external dependency rather than a pure R package dependency
-- backend graph/resource management is not yet as automated as it should be
+- installation and package-resource discovery still need final cleanup
 
 ## Recommended next improvement
 
 The next installation improvement for the package should be:
 
-- a cleaner setup path for backend graph/resource creation and discovery
+- a cleaner fully packaged install path with less reliance on development-time
+  repository structure
 
 That would move the package closer to the ideal user experience where loading
 the library and calling the exported wrappers is enough, without relying on any

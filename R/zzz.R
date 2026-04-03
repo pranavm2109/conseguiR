@@ -23,11 +23,19 @@ consequIR_python_from_conda_run <- function(env = lymphoma_graph_env_name) {
     error = function(e) NULL
   )
 
-  if (is.null(out) || length(out) != 1L) {
+  if (is.null(out) || length(out) == 0L) {
     return(NULL)
   }
 
-  python_path <- trimws(out)
+  out <- trimws(out)
+  out <- out[nzchar(out)]
+  out <- out[file.exists(out) & !dir.exists(out)]
+
+  if (length(out) == 0L) {
+    return(NULL)
+  }
+
+  python_path <- out[[1]]
   if (consequIR_valid_python_bin(python_path)) {
     python_path
   } else {
@@ -150,6 +158,14 @@ consequIR_find_python <- function() {
         strict = FALSE,
         quiet = TRUE
       ),
+      silent = TRUE
+    )
+  }
+
+  auto_runtime_check <- getOption("conseguiR.auto_check_runtime", TRUE)
+  if (isTRUE(auto_runtime_check)) {
+    try(
+      check_conseguiR_runtime(quiet = TRUE),
       silent = TRUE
     )
   }

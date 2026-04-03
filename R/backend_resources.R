@@ -39,6 +39,57 @@
 }
 
 #' @keywords internal
+.conseguiR_backend_seed_dir <- function() {
+  installed <- tryCatch(system.file("extdata", "backend", package = "conseguiR"), error = function(e) "")
+  candidates <- c(
+    installed,
+    if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, "extdata", "backend"),
+    if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, "inst", "extdata", "backend"),
+    file.path(getwd(), "extdata", "backend"),
+    file.path(getwd(), "inst", "extdata", "backend")
+  )
+  candidates <- unique(candidates[!is.na(candidates) & nzchar(candidates)])
+  existing <- candidates[dir.exists(candidates)]
+  if (length(existing) == 0L) {
+    return(NULL)
+  }
+  normalizePath(existing[[1]], winslash = "/", mustWork = TRUE)
+}
+
+#' @keywords internal
+.conseguiR_seed_backend_graph <- function(kind = c("gene_reg", "gene_gene"), backend_dir) {
+  kind <- match.arg(kind)
+  seed_dir <- .conseguiR_backend_seed_dir()
+  if (is.null(seed_dir)) {
+    return(FALSE)
+  }
+
+  files <- switch(
+    kind,
+    gene_reg = c(
+      "gene_reg_graph_no_scores.rds",
+      "gene_reg_graph_no_scores_nodes.tsv.gz",
+      "gene_reg_graph_no_scores_edges.tsv.gz"
+    ),
+    gene_gene = c(
+      "gene_gene_graph.rds",
+      "gene_gene_graph_nodes.tsv.gz",
+      "gene_gene_graph_edges.tsv.gz"
+    )
+  )
+
+  src <- file.path(seed_dir, files)
+  if (!all(file.exists(src))) {
+    return(FALSE)
+  }
+
+  dest <- file.path(backend_dir, files)
+  dir.create(backend_dir, recursive = TRUE, showWarnings = FALSE)
+  ok <- file.copy(src, dest, overwrite = TRUE)
+  all(ok)
+}
+
+#' @keywords internal
 .conseguiR_data_candidates <- function(relpath) {
   unique(c(
     if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, relpath),
@@ -96,6 +147,9 @@
     if (!isTRUE(force) && .conseguiR_graph_files_exist(target_paths)) {
       status$gene_reg <- "reused"
     } else {
+      if (.conseguiR_seed_backend_graph("gene_reg", backend_dir = backend_dir)) {
+        status$gene_reg <- "seeded"
+      } else {
       interactions_path <- .conseguiR_find_data_path("data/raw/GeneHancer/gh_interactions_hg38_primary_assembly")
       reg_elements_path <- .conseguiR_find_data_path("data/raw/GeneHancer/gh_reg_elements_hg38_primary_assembly")
 
@@ -115,6 +169,7 @@
         env$prepare_gene_reg_graph(config = config)
         status$gene_reg <- "built"
       }
+      }
     }
   }
 
@@ -128,6 +183,9 @@
     if (!isTRUE(force) && .conseguiR_graph_files_exist(target_paths)) {
       status$gene_gene <- "reused"
     } else {
+      if (.conseguiR_seed_backend_graph("gene_gene", backend_dir = backend_dir)) {
+        status$gene_gene <- "seeded"
+      } else {
       links_path <- .conseguiR_find_data_path("data/raw/STRING/9606.protein.links.v12.0.txt")
       info_path <- .conseguiR_find_data_path("data/raw/STRING/9606.protein.info.v12.0.txt")
 
@@ -146,6 +204,7 @@
         config$output_prefix <- file.path(backend_dir, "gene_gene_graph")
         env$prepare_gene_gene_graph(config = config)
         status$gene_gene <- "built"
+      }
       }
     }
   }
