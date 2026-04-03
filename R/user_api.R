@@ -4,6 +4,10 @@
 #' @keywords internal
 .conseguiR_runtime_file <- function(relpath) {
   candidates <- c(
+    {
+      pkg_path <- system.file(relpath, package = "conseguiR")
+      if (nzchar(pkg_path)) pkg_path else NA_character_
+    },
     if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, relpath),
     file.path(getwd(), relpath)
   )
