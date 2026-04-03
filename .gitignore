@@ -8,3 +8,22 @@ data/raw/**
 data/processed/**
 !data/processed/
 !data/processed/.gitkeep
+
+# Package-owned backend graph resources
+!inst/
+!inst/extdata/
+!inst/extdata/backend/
+!inst/extdata/backend/gene_reg_graph_no_scores.rds
+!inst/extdata/backend/gene_reg_graph_no_scores_nodes.tsv.gz
+!inst/extdata/backend/gene_reg_graph_no_scores_edges.tsv.gz
+!inst/extdata/backend/gene_gene_graph.rds
+!inst/extdata/backend/gene_gene_graph_nodes.tsv.gz
+!inst/extdata/backend/gene_gene_graph_edges.tsv.gz
+
+# macOS metadata and Python/R build junk
+.DS_Store
+._*
+__pycache__/
+*.pyc
+.Rhistory
+*.log.suppl
