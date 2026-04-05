@@ -18,7 +18,8 @@ run_germline_regulatory_scoring(
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
   step1_args = list(),
-  step2_args = list()
+  step2_args = list(),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -58,6 +59,9 @@ and \code{extra_args}.}
 \item{step2_args}{Named list of MAGMA step 2 arguments. Supported entries
 include \code{gene_model}, \code{genes_only}, \code{pval_use}, \code{pval_duplicate},
 \code{bfile_synonyms}, \code{bfile_synonym_dup}, and \code{extra_args}.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show a progress bar and MAGMA step
+output.}
 }
 \value{
 A germline regulatory score bundle.
@@ -79,6 +83,9 @@ regulatory location resource shipped with \code{conseguiR}.
 file. The stage argument lists use the same format as
 \code{run_germline_gene_scoring()}: \code{step1_args = list(...)} for annotation-stage
 settings and \code{step2_args = list(...)} for gene-analysis-stage settings.
+
+MAGMA manual:
+\url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 }
 \examples{
 \dontrun{

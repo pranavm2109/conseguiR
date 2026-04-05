@@ -18,7 +18,8 @@ prepare_germline_scores(
   gene_step2_args = list(),
   reg_step1_args = list(),
   reg_step2_args = list(),
-  shared_args = list()
+  shared_args = list(),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -49,6 +50,9 @@ prepare_germline_scores(
 \item{reg_step2_args}{Named list of regulatory MAGMA step 2 arguments.}
 
 \item{shared_args}{Named list of arguments passed to both runs.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show progress bars and MAGMA step
+output for both the gene and regulatory branches.}
 }
 \value{
 A germline score bundle with gene and regulatory score tables.
@@ -90,6 +94,9 @@ Typical entries for the step-specific lists include:
 Example:
 
 \verb{prepare_germline_scores( gwas_sumstats = gwas_path, reference_bfile = \\"/path/to/g1000_eur/g1000_eur\\", gene_step1_args = list(annotation_window = c(35, 10)), gene_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")) )}
+
+MAGMA manual:
+\url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 }
 \examples{
 \dontrun{

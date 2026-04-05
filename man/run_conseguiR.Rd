@@ -23,7 +23,8 @@ run_conseguiR(
   scored_graph_args = list(),
   diffusion_args = list(),
   subgraph_args = list(),
-  plot_args = list()
+  plot_args = list(),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -81,6 +82,9 @@ settings, for example \code{gene_cv},
 
 \item{plot_args}{Named list of overrides passed to
 \code{plot_selected_subgraph()}.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show progress bars and stage
+output across the pipeline.}
 }
 \value{
 A pipeline bundle containing all stage bundles.

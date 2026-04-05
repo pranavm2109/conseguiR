@@ -10,7 +10,8 @@ validate_inputs(
   reg_ref_path = NULL,
   epigenomic_tracks = NULL,
   epigenomic_track_dir = NULL,
-  epigenomic_exclude_patterns = c("_BL_", "_FL_")
+  epigenomic_exclude_patterns = c("_BL_", "_FL_"),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -26,6 +27,9 @@ validate_inputs(
 
 \item{epigenomic_exclude_patterns}{Patterns used to exclude bigWigs when
 discovering tracks from \code{epigenomic_track_dir}.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show progress bars and stage
+messages when available.}
 }
 \value{
 A validation bundle containing validated objects and config.

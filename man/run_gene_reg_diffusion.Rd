@@ -18,7 +18,8 @@ run_gene_reg_diffusion(
   positive_only = FALSE,
   reg_signal_clip = 5,
   top_n_to_save = 50L,
-  python_path = NULL
+  python_path = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -49,6 +50,9 @@ run_gene_reg_diffusion(
 \item{top_n_to_save}{Number of top genes to save separately.}
 
 \item{python_path}{Optional explicit Python interpreter path.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show stage messages while running
+diffusion.}
 }
 \value{
 A diffusion bundle containing full and top-gene diffusion tables.

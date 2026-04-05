@@ -16,7 +16,8 @@ build_scored_gene_reg_graph(
   gene_somatic_scores = NULL,
   reg_somatic_scores = NULL,
   reg_epigenomic_scores = NULL,
-  save_outputs = TRUE
+  save_outputs = TRUE,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -44,6 +45,9 @@ build_scored_gene_reg_graph(
 table.}
 
 \item{save_outputs}{Whether to save the scored graph to disk.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show stage messages while building
+the scored graph.}
 }
 \value{
 A scored gene-reg graph bundle containing the graph, nodes, and edges.

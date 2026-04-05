@@ -11,7 +11,8 @@ run_somatic_gene_scoring(
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
-  dndscv_args = list()
+  dndscv_args = list(),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,9 @@ run_somatic_gene_scoring(
 \item{max_coding_muts_per_sample}{dndscv sample-level coding mutation cap.}
 
 \item{dndscv_args}{Named list of additional dndscv arguments.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show stage messages and dndscv
+output.}
 }
 \value{
 A somatic gene score bundle.
@@ -45,6 +49,9 @@ mutation records.
 \item \code{dndscv_args}: a named list of additional dndscv arguments, for example
 \verb{list(sm = \\"192r_3w\\", kc = \\"cgc81\\")}.
 }
+
+dndscv documentation:
+\url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
 }
 \examples{
 \dontrun{

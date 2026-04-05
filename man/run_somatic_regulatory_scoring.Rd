@@ -12,7 +12,8 @@ run_somatic_regulatory_scoring(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
-  fishhook_args = list()
+  fishhook_args = list(),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -31,6 +32,9 @@ run_somatic_regulatory_scoring(
 \item{idcol}{Sample identifier column for fishHook.}
 
 \item{fishhook_args}{Named list of additional fishHook scoring arguments.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show stage messages and fishHook
+output.}
 }
 \value{
 A somatic regulatory score bundle.
@@ -51,6 +55,12 @@ internal fishHook runner, or \code{NULL}.
 regulatory element and the covariate columns needed by fishHook.
 \item \code{fishhook_args}: a named list of additional fishHook arguments.
 }
+
+fishHook documentation:
+\url{https://rdrr.io/github/mskilab/fish.hook/man/FishHook.html}
+
+fishHook tutorial:
+\url{https://mskilab.com/fishHook/tutorial.html}
 }
 \examples{
 \dontrun{

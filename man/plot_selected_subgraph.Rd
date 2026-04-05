@@ -21,7 +21,8 @@ plot_selected_subgraph(
   height = 10,
   dpi = 300,
   save_bundle = TRUE,
-  save_plot = !is.null(plot_file_path)
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -58,6 +59,9 @@ plot_selected_subgraph(
 \item{save_bundle}{Whether to save the visualization bundle.}
 
 \item{save_plot}{Whether to save the figure.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show stage messages while building
+the plot bundle.}
 }
 \value{
 A plot bundle containing the ggplot object and visualization bundle.

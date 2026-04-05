@@ -134,6 +134,12 @@ run_with_args <- function(fun, base_args = list(), extra_args = list()) {
   do.call(fun, c(base_args, extra_args))
 }
 
+verbose_message <- function(verbose, ...) {
+  if (isTRUE(verbose)) {
+    message(...)
+  }
+}
+
 #' Validate raw conseguiR inputs
 #'
 #' Validates raw GWAS, somatic, regulatory-reference, and epigenomic inputs
@@ -154,8 +160,10 @@ validate_inputs <- function(
   reg_ref_path = NULL,
   epigenomic_tracks = NULL,
   epigenomic_track_dir = NULL,
-  epigenomic_exclude_patterns = c("_BL_", "_FL_")
+  epigenomic_exclude_patterns = c("_BL_", "_FL_"),
+  verbose = FALSE
 ) {
+  verbose_message(verbose, "Validating inputs...")
   objects <- list()
 
   if (!is.null(gwas_sumstats)) {
@@ -249,7 +257,8 @@ run_germline_gene_scoring <- function(
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
   step1_args = list(),
-  step2_args = list()
+  step2_args = list(),
+  verbose = FALSE
 ) {
   step1_args <- as_list_or_empty(step1_args)
   step2_args <- as_list_or_empty(step2_args)
@@ -270,6 +279,7 @@ run_germline_gene_scoring <- function(
       reuse_existing_annotation = reuse_existing_annotation,
       reuse_existing_analysis = reuse_existing_analysis,
       keep_intermediates = keep_intermediates,
+      verbose = verbose,
       annotation_window = step1_args$annotation_window %||% NULL,
       filter_path = step1_args$filter_path %||% NULL,
       ignore_strand = step1_args$ignore_strand %||% FALSE,
@@ -347,7 +357,8 @@ run_germline_regulatory_scoring <- function(
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
   step1_args = list(),
-  step2_args = list()
+  step2_args = list(),
+  verbose = FALSE
 ) {
   step1_args <- as_list_or_empty(step1_args)
   step2_args <- as_list_or_empty(step2_args)
@@ -368,6 +379,7 @@ run_germline_regulatory_scoring <- function(
       reuse_existing_annotation = reuse_existing_annotation,
       reuse_existing_analysis = reuse_existing_analysis,
       keep_intermediates = keep_intermediates,
+      verbose = verbose,
       annotation_window = step1_args$annotation_window %||% NULL,
       filter_path = step1_args$filter_path %||% NULL,
       ignore_strand = step1_args$ignore_strand %||% FALSE,
@@ -447,9 +459,11 @@ prepare_germline_scores <- function(
   gene_step2_args = list(),
   reg_step1_args = list(),
   reg_step2_args = list(),
-  shared_args = list()
+  shared_args = list(),
+  verbose = FALSE
 ) {
   shared_args <- as_list_or_empty(shared_args)
+  verbose_message(verbose, "Preparing germline scores...")
   gene_loc_path <- if (exists(".conseguiR_default_gene_loc_path", inherits = TRUE)) .conseguiR_default_gene_loc_path() else "data/raw/NCBI38/NCBI38.gene.loc"
   reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
 
@@ -464,6 +478,7 @@ prepare_germline_scores <- function(
         sample_size = gene_sample_size,
         sample_size_col = gene_sample_size_col,
         magma_gwas_cache_prefix = magma_gwas_cache_prefix,
+        verbose = verbose,
         step1_args = gene_step1_args,
         step2_args = gene_step2_args
       ),
@@ -482,6 +497,7 @@ prepare_germline_scores <- function(
         sample_size = reg_sample_size %||% gene_sample_size,
         sample_size_col = reg_sample_size_col %||% gene_sample_size_col,
         magma_gwas_cache_prefix = magma_gwas_cache_prefix,
+        verbose = verbose,
         step1_args = reg_step1_args,
         step2_args = reg_step2_args
       ),
@@ -532,9 +548,11 @@ run_somatic_gene_scoring <- function(
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
-  dndscv_args = list()
+  dndscv_args = list(),
+  verbose = FALSE
 ) {
   dndscv_args <- as_list_or_empty(dndscv_args)
+  verbose_message(verbose, "Preparing somatic gene scores...")
 
   scores <- run_with_args(
     run_dndscv_gene_scoring,
@@ -544,7 +562,8 @@ run_somatic_gene_scoring <- function(
         refdb = refdb,
         cv = cv,
         max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
-        max_coding_muts_per_sample = max_coding_muts_per_sample
+        max_coding_muts_per_sample = max_coding_muts_per_sample,
+        verbose = verbose
       ),
       dndscv_args
     )
@@ -590,9 +609,11 @@ run_somatic_regulatory_scoring <- function(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
-  fishhook_args = list()
+  fishhook_args = list(),
+  verbose = FALSE
 ) {
   fishhook_args <- as_list_or_empty(fishhook_args)
+  verbose_message(verbose, "Preparing somatic regulatory scores...")
 
   scores <- run_with_args(
     run_fishhook_reg_scoring,
@@ -603,7 +624,8 @@ run_somatic_regulatory_scoring <- function(
         eligible_gr = eligible_gr,
         fishhook_covariates = fishhook_covariates,
         fishhook_covariate_data = fishhook_covariate_data,
-        idcol = idcol
+        idcol = idcol,
+        verbose = verbose
       ),
       fishhook_args
     )
@@ -663,8 +685,10 @@ prepare_somatic_scores <- function(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   fishhook_idcol = "Tumor_Sample_Barcode",
-  fishhook_args = list()
+  fishhook_args = list(),
+  verbose = FALSE
 ) {
+  verbose_message(verbose, "Preparing somatic scores...")
   gene_bundle <- run_somatic_gene_scoring(
     maf = maf,
     refdb = refdb,
@@ -672,7 +696,8 @@ prepare_somatic_scores <- function(
     cv = gene_cv,
     max_muts_per_gene_per_sample = gene_max_muts_per_gene_per_sample,
     max_coding_muts_per_sample = gene_max_coding_muts_per_sample,
-    dndscv_args = dndscv_args
+    dndscv_args = dndscv_args,
+    verbose = verbose
   )
 
   reg_bundle <- run_somatic_regulatory_scoring(
@@ -683,7 +708,8 @@ prepare_somatic_scores <- function(
     fishhook_covariates = fishhook_covariates,
     fishhook_covariate_data = fishhook_covariate_data,
     idcol = fishhook_idcol,
-    fishhook_args = fishhook_args
+    fishhook_args = fishhook_args,
+    verbose = verbose
   )
 
   new_bundle(
@@ -735,8 +761,10 @@ prepare_epigenomic_scores <- function(
   drop_mhc = TRUE,
   transform = "log1p",
   return_diagnostics = TRUE,
-  summary_fun = mean
+  summary_fun = mean,
+  verbose = FALSE
 ) {
+  verbose_message(verbose, "Preparing epigenomic scores...")
   result <- run_epigenomic_reg_scoring(
     track_dir = track_dir,
     reg_ref_path = reg_ref_path,
@@ -746,7 +774,8 @@ prepare_epigenomic_scores <- function(
     drop_mhc = drop_mhc,
     transform = transform,
     return_diagnostics = return_diagnostics,
-    summary_fun = summary_fun
+    summary_fun = summary_fun,
+    verbose = verbose
   )
 
   if (is.list(result) && "zscores" %in% names(result)) {
@@ -813,8 +842,10 @@ build_scored_gene_reg_graph <- function(
   gene_somatic_scores = NULL,
   reg_somatic_scores = NULL,
   reg_epigenomic_scores = NULL,
-  save_outputs = TRUE
+  save_outputs = TRUE,
+  verbose = FALSE
 ) {
+  verbose_message(verbose, "Building scored gene-regulatory graph...")
   gene_germline_scores <- gene_germline_scores %||% resolve_bundle_component(germline_scores, "gene_scores")
   reg_germline_scores <- reg_germline_scores %||% resolve_bundle_component(germline_scores, "reg_scores")
   gene_somatic_scores <- gene_somatic_scores %||% resolve_bundle_component(somatic_scores, "gene_scores")
@@ -889,8 +920,10 @@ run_gene_reg_diffusion <- function(
   positive_only = FALSE,
   reg_signal_clip = 5.0,
   top_n_to_save = 50L,
-  python_path = NULL
+  python_path = NULL,
+  verbose = FALSE
 ) {
+  verbose_message(verbose, "Running gene-regulatory diffusion...")
   nodes_path <- nodes_path %||% resolve_output_path(scored_graph, "nodes_path")
   edges_path <- edges_path %||% resolve_output_path(scored_graph, "edges_path")
 
@@ -978,8 +1011,10 @@ call_selected_subgraph <- function(
   prize_column = "post_norm",
   confidence_column = "confidence",
   edge_cost_column = "weight",
-  python_path = NULL
+  python_path = NULL,
+  verbose = FALSE
 ) {
+  verbose_message(verbose, "Calling selected subgraph...")
   diffusion_path <- diffusion_path %||% resolve_output_path(diffusion, "all_genes_path")
 
   validate_diffusion_results(read_diffusion_results(diffusion_path %||% default_subgraph_config$diffusion_path), prize_column = prize_column)
@@ -1067,8 +1102,10 @@ plot_selected_subgraph <- function(
   height = 10,
   dpi = 300,
   save_bundle = TRUE,
-  save_plot = !is.null(plot_file_path)
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
 ) {
+  verbose_message(verbose, "Preparing selected-subgraph plot...")
   nodes <- nodes %||% resolve_bundle_component(selected_subgraph, "nodes")
   edges <- edges %||% resolve_bundle_component(selected_subgraph, "edges")
   summary <- summary %||% resolve_bundle_component(selected_subgraph, "summary")
@@ -1151,8 +1188,6 @@ plot_selected_subgraph <- function(
 #' @param dndscv_refdb dndscv reference database path.
 #' @param epigenomic_track_dir Optional directory containing epigenomic tracks.
 #' @param epigenomic_tracks Optional explicit vector of bigWig paths.
-#' @param gene_loc_path Gene location file path.
-#' @param reg_loc_path Regulatory-element location file path.
 #' @param graph_rds_path Backend no-score gene-reg graph path.
 #' @param gg_nodes_path Gene-gene node table path.
 #' @param gg_edges_path Gene-gene edge table path.
@@ -1193,8 +1228,10 @@ run_conseguiR <- function(
   scored_graph_args = list(),
   diffusion_args = list(),
   subgraph_args = list(),
-  plot_args = list()
+  plot_args = list(),
+  verbose = FALSE
 ) {
+  verbose_message(verbose, "Running end-to-end conseguiR pipeline...")
   gene_loc_path <- if (exists(".conseguiR_default_gene_loc_path", inherits = TRUE)) .conseguiR_default_gene_loc_path() else "data/raw/NCBI38/NCBI38.gene.loc"
   reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
 
@@ -1203,7 +1240,8 @@ run_conseguiR <- function(
     somatic_maf = somatic_maf,
     reg_ref_path = reg_ref_path,
     epigenomic_tracks = epigenomic_tracks,
-    epigenomic_track_dir = epigenomic_track_dir
+    epigenomic_track_dir = epigenomic_track_dir,
+    verbose = verbose
   )
 
   germline <- run_with_args(
@@ -1212,11 +1250,10 @@ run_conseguiR <- function(
       list(
         gwas_sumstats = gwas_sumstats,
         reference_bfile = reference_bfile,
-        gene_loc_path = gene_loc_path,
-        reg_loc_path = reg_loc_path,
         gene_output_prefix = file.path(output_dir, "germline_gene_scores"),
         reg_output_prefix = file.path(output_dir, "germline_reg_scores"),
-        magma_gwas_cache_prefix = file.path(output_dir, "magma_shared_gwas_cache")
+        magma_gwas_cache_prefix = file.path(output_dir, "magma_shared_gwas_cache"),
+        verbose = verbose
       ),
       as_list_or_empty(germline_args)
     )
@@ -1230,7 +1267,8 @@ run_conseguiR <- function(
         refdb = dndscv_refdb,
         reg_ref_path = reg_ref_path,
         gene_output_path = file.path(output_dir, "somatic_gene_scores.tsv"),
-        reg_output_path = file.path(output_dir, "somatic_reg_scores.tsv")
+        reg_output_path = file.path(output_dir, "somatic_reg_scores.tsv"),
+        verbose = verbose
       ),
       as_list_or_empty(somatic_args)
     )
@@ -1243,7 +1281,8 @@ run_conseguiR <- function(
         reg_ref_path = reg_ref_path,
         track_dir = epigenomic_track_dir,
         bw_files = epigenomic_tracks,
-        output_path = file.path(output_dir, "epigenomic_reg_scores.tsv")
+        output_path = file.path(output_dir, "epigenomic_reg_scores.tsv"),
+        verbose = verbose
       ),
       as_list_or_empty(epigenomic_args)
     )
@@ -1258,7 +1297,8 @@ run_conseguiR <- function(
         germline_scores = germline,
         somatic_scores = somatic,
         epigenomic_scores = epigenomic,
-        save_outputs = TRUE
+        save_outputs = TRUE,
+        verbose = verbose
       ),
       as_list_or_empty(scored_graph_args)
     )
@@ -1270,7 +1310,8 @@ run_conseguiR <- function(
       list(
         scored_graph = scored_graph,
         output_dir = output_dir,
-        output_stem = "gene_reg_graph_diffusion"
+        output_stem = "gene_reg_graph_diffusion",
+        verbose = verbose
       ),
       as_list_or_empty(diffusion_args)
     )
@@ -1285,7 +1326,8 @@ run_conseguiR <- function(
         gg_edges_path = gg_edges_path,
         output_dir = output_dir,
         output_stem = "gene_gene_selected_subgraph",
-        target_genes = target_genes
+        target_genes = target_genes,
+        verbose = verbose
       ),
       as_list_or_empty(subgraph_args)
     )
@@ -1297,7 +1339,8 @@ run_conseguiR <- function(
       list(
         selected_subgraph = selected_subgraph,
         bundle_output_prefix = file.path(output_dir, "gene_gene_selected_subgraph_plot_bundle"),
-        plot_file_path = file.path(output_dir, "gene_gene_selected_subgraph_plot.pdf")
+        plot_file_path = file.path(output_dir, "gene_gene_selected_subgraph_plot.pdf"),
+        verbose = verbose
       ),
       as_list_or_empty(plot_args)
     )

@@ -18,7 +18,8 @@ prepare_somatic_scores(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   fishhook_idcol = "Tumor_Sample_Barcode",
-  fishhook_args = list()
+  fishhook_args = list(),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -49,6 +50,9 @@ prepare_somatic_scores(
 \item{fishhook_idcol}{Sample identifier column for fishHook.}
 
 \item{fishhook_args}{Named list of additional fishHook arguments.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show progress bars and tool output
+for both the dndscv and fishHook branches.}
 }
 \value{
 A somatic score bundle with gene and regulatory score tables.
@@ -78,6 +82,15 @@ modeling framework independently.
 Example:
 
 \verb{prepare_somatic_scores( maf = maf_path, refdb = dndscv_refdb, reg_ref_path = reg_ref_path, dndscv_args = list(sm = \\"192r_3w\\"), fishhook_args = list() )}
+
+dndscv documentation:
+\url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
+
+fishHook documentation:
+\url{https://rdrr.io/github/mskilab/fish.hook/man/FishHook.html}
+
+fishHook tutorial:
+\url{https://mskilab.com/fishHook/tutorial.html}
 }
 \examples{
 \dontrun{

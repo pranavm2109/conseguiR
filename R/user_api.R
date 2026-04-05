@@ -63,6 +63,8 @@
 #' @param epigenomic_track_dir Optional directory containing bigWig tracks.
 #' @param epigenomic_exclude_patterns Patterns used to exclude bigWigs when
 #'   discovering tracks from `epigenomic_track_dir`.
+#' @param verbose Logical scalar. If `TRUE`, show progress bars and stage
+#'   messages when available.
 #'
 #' @details
 #' Input formatting rules:
@@ -105,7 +107,8 @@ validate_inputs <- function(
   reg_ref_path = NULL,
   epigenomic_tracks = NULL,
   epigenomic_track_dir = NULL,
-  epigenomic_exclude_patterns = c("_BL_", "_FL_")
+  epigenomic_exclude_patterns = c("_BL_", "_FL_"),
+  verbose = FALSE
 ) {
   .conseguiR_external_fun("validate_inputs")(
     gwas_sumstats = gwas_sumstats,
@@ -113,7 +116,8 @@ validate_inputs <- function(
     reg_ref_path = reg_ref_path,
     epigenomic_tracks = epigenomic_tracks,
     epigenomic_track_dir = epigenomic_track_dir,
-    epigenomic_exclude_patterns = epigenomic_exclude_patterns
+    epigenomic_exclude_patterns = epigenomic_exclude_patterns,
+    verbose = verbose
   )
 }
 
@@ -123,6 +127,8 @@ validate_inputs <- function(
 #' and the required raw graph resources are available.
 #'
 #' @inheritParams initialize_backend_graphs
+#' @param verbose Logical scalar. If `TRUE`, print backend initialization
+#'   status messages.
 #'
 #' @examples
 #' initialize_backend_graphs()
@@ -136,7 +142,8 @@ initialize_backend_graphs <- function(
   build_gene_gene = TRUE,
   force = FALSE,
   strict = TRUE,
-  quiet = FALSE
+  quiet = FALSE,
+  verbose = FALSE
 ) {
   .conseguiR_initialize_backend_graphs(
     backend_dir = backend_dir,
@@ -144,7 +151,7 @@ initialize_backend_graphs <- function(
     build_gene_gene = build_gene_gene,
     force = force,
     strict = strict,
-    quiet = quiet
+    quiet = if (isTRUE(verbose)) FALSE else quiet
   )
 }
 
@@ -180,6 +187,8 @@ initialize_backend_graphs <- function(
 #' @param step2_args Named list of MAGMA step 2 arguments. Supported entries
 #'   include `gene_model`, `genes_only`, `pval_use`, `pval_duplicate`,
 #'   `bfile_synonyms`, `bfile_synonym_dup`, and `extra_args`.
+#' @param verbose Logical scalar. If `TRUE`, show a progress bar and MAGMA step
+#'   output.
 #'
 #' @details
 #' Exact formatting:
@@ -212,6 +221,9 @@ initialize_backend_graphs <- function(
 #'   extra_args = character()
 #' )`
 #'
+#' MAGMA manual:
+#' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
+#'
 #' @examples
 #' \dontrun{
 #' run_germline_gene_scoring(
@@ -242,7 +254,8 @@ run_germline_gene_scoring <- function(
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
   step1_args = list(),
-  step2_args = list()
+  step2_args = list(),
+  verbose = FALSE
 ) {
   gene_loc_path <- gene_loc_path %||% .conseguiR_default_gene_loc_path()
   if (is.null(gene_loc_path)) {
@@ -263,7 +276,8 @@ run_germline_gene_scoring <- function(
     reuse_existing_analysis = reuse_existing_analysis,
     keep_intermediates = keep_intermediates,
     step1_args = step1_args,
-    step2_args = step2_args
+    step2_args = step2_args,
+    verbose = verbose
   )
 }
 
@@ -281,12 +295,17 @@ run_germline_gene_scoring <- function(
 #' @inheritParams run_germline_gene_scoring
 #' @param reg_loc_path Optional regulatory-element location file for MAGMA step
 #'   1. When `NULL`, `conseguiR` uses its backend regulatory location resource.
+#' @param verbose Logical scalar. If `TRUE`, show a progress bar and MAGMA step
+#'   output.
 #'
 #' @details
 #' `reg_loc_path` must point to a MAGMA-compatible regulatory-element location
 #' file. The stage argument lists use the same format as
 #' `run_germline_gene_scoring()`: `step1_args = list(...)` for annotation-stage
 #' settings and `step2_args = list(...)` for gene-analysis-stage settings.
+#'
+#' MAGMA manual:
+#' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 #'
 #' @examples
 #' \dontrun{
@@ -318,7 +337,8 @@ run_germline_regulatory_scoring <- function(
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
   step1_args = list(),
-  step2_args = list()
+  step2_args = list(),
+  verbose = FALSE
 ) {
   reg_loc_path <- reg_loc_path %||% .conseguiR_default_reg_loc_path()
   if (is.null(reg_loc_path)) {
@@ -339,7 +359,8 @@ run_germline_regulatory_scoring <- function(
     reuse_existing_analysis = reuse_existing_analysis,
     keep_intermediates = keep_intermediates,
     step1_args = step1_args,
-    step2_args = step2_args
+    step2_args = step2_args,
+    verbose = verbose
   )
 }
 
@@ -367,6 +388,8 @@ run_germline_regulatory_scoring <- function(
 #' @param reg_step1_args Named list of regulatory MAGMA step 1 arguments.
 #' @param reg_step2_args Named list of regulatory MAGMA step 2 arguments.
 #' @param shared_args Named list of arguments passed to both runs.
+#' @param verbose Logical scalar. If `TRUE`, show progress bars and MAGMA step
+#'   output for both the gene and regulatory branches.
 #'
 #' @details
 #' `prepare_germline_scores()` orchestrates two MAGMA runs, one for genes and
@@ -397,6 +420,9 @@ run_germline_regulatory_scoring <- function(
 #'   reg_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\"))
 #' )`
 #'
+#' MAGMA manual:
+#' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
+#'
 #' @examples
 #' \dontrun{
 #' prepare_germline_scores(
@@ -425,7 +451,8 @@ prepare_germline_scores <- function(
   gene_step2_args = list(),
   reg_step1_args = list(),
   reg_step2_args = list(),
-  shared_args = list()
+  shared_args = list(),
+  verbose = FALSE
 ) {
   gene_loc_path <- .conseguiR_default_gene_loc_path()
   reg_loc_path <- .conseguiR_default_reg_loc_path()
@@ -452,7 +479,8 @@ prepare_germline_scores <- function(
     gene_step2_args = gene_step2_args,
     reg_step1_args = reg_step1_args,
     reg_step2_args = reg_step2_args,
-    shared_args = shared_args
+    shared_args = shared_args,
+    verbose = verbose
   )
 }
 
@@ -468,6 +496,8 @@ prepare_germline_scores <- function(
 #' @param max_muts_per_gene_per_sample dndscv gene-level mutation cap.
 #' @param max_coding_muts_per_sample dndscv sample-level coding mutation cap.
 #' @param dndscv_args Named list of additional dndscv arguments.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages and dndscv
+#'   output.
 #'
 #' @details
 #' Exact formatting:
@@ -477,6 +507,9 @@ prepare_germline_scores <- function(
 #' - `refdb`: a single path to a dndscv reference database `.rda` file.
 #' - `dndscv_args`: a named list of additional dndscv arguments, for example
 #'   `list(sm = \"192r_3w\", kc = \"cgc81\")`.
+#'
+#' dndscv documentation:
+#' \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
 #'
 #' @examples
 #' \dontrun{
@@ -496,7 +529,8 @@ run_somatic_gene_scoring <- function(
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
-  dndscv_args = list()
+  dndscv_args = list(),
+  verbose = FALSE
 ) {
   .conseguiR_external_fun("run_somatic_gene_scoring")(
     maf = maf,
@@ -505,7 +539,8 @@ run_somatic_gene_scoring <- function(
     cv = cv,
     max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
     max_coding_muts_per_sample = max_coding_muts_per_sample,
-    dndscv_args = dndscv_args
+    dndscv_args = dndscv_args,
+    verbose = verbose
   )
 }
 
@@ -522,6 +557,8 @@ run_somatic_gene_scoring <- function(
 #' @param fishhook_covariate_data Optional tabular covariate data.
 #' @param idcol Sample identifier column for fishHook.
 #' @param fishhook_args Named list of additional fishHook scoring arguments.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages and fishHook
+#'   output.
 #'
 #' @details
 #' Exact formatting:
@@ -533,6 +570,12 @@ run_somatic_gene_scoring <- function(
 #' - `fishhook_covariate_data`: a data frame/data.table containing one row per
 #'   regulatory element and the covariate columns needed by fishHook.
 #' - `fishhook_args`: a named list of additional fishHook arguments.
+#'
+#' fishHook documentation:
+#' \url{https://rdrr.io/github/mskilab/fish.hook/man/FishHook.html}
+#'
+#' fishHook tutorial:
+#' \url{https://mskilab.com/fishHook/tutorial.html}
 #'
 #' @examples
 #' \dontrun{
@@ -554,7 +597,8 @@ run_somatic_regulatory_scoring <- function(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
-  fishhook_args = list()
+  fishhook_args = list(),
+  verbose = FALSE
 ) {
   .conseguiR_external_fun("run_somatic_regulatory_scoring")(
     maf = maf,
@@ -564,7 +608,8 @@ run_somatic_regulatory_scoring <- function(
     fishhook_covariates = fishhook_covariates,
     fishhook_covariate_data = fishhook_covariate_data,
     idcol = idcol,
-    fishhook_args = fishhook_args
+    fishhook_args = fishhook_args,
+    verbose = verbose
   )
 }
 
@@ -590,6 +635,8 @@ run_somatic_regulatory_scoring <- function(
 #' @param fishhook_covariate_data Optional tabular covariate data.
 #' @param fishhook_idcol Sample identifier column for fishHook.
 #' @param fishhook_args Named list of additional fishHook arguments.
+#' @param verbose Logical scalar. If `TRUE`, show progress bars and tool output
+#'   for both the dndscv and fishHook branches.
 #'
 #' @details
 #' `prepare_somatic_scores()` combines two independent somatic branches:
@@ -610,6 +657,15 @@ run_somatic_regulatory_scoring <- function(
 #'   dndscv_args = list(sm = \"192r_3w\"),
 #'   fishhook_args = list()
 #' )`
+#'
+#' dndscv documentation:
+#' \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
+#'
+#' fishHook documentation:
+#' \url{https://rdrr.io/github/mskilab/fish.hook/man/FishHook.html}
+#'
+#' fishHook tutorial:
+#' \url{https://mskilab.com/fishHook/tutorial.html}
 #'
 #' @examples
 #' \dontrun{
@@ -638,7 +694,8 @@ prepare_somatic_scores <- function(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   fishhook_idcol = "Tumor_Sample_Barcode",
-  fishhook_args = list()
+  fishhook_args = list(),
+  verbose = FALSE
 ) {
   .conseguiR_external_fun("prepare_somatic_scores")(
     maf = maf,
@@ -654,7 +711,8 @@ prepare_somatic_scores <- function(
     fishhook_covariates = fishhook_covariates,
     fishhook_covariate_data = fishhook_covariate_data,
     fishhook_idcol = fishhook_idcol,
-    fishhook_args = fishhook_args
+    fishhook_args = fishhook_args,
+    verbose = verbose
   )
 }
 
@@ -673,6 +731,8 @@ prepare_somatic_scores <- function(
 #'   matrix alongside z scores.
 #' @param summary_fun Summary function applied to each bigWig over each
 #'   regulatory element.
+#' @param verbose Logical scalar. If `TRUE`, show a progress bar and stage
+#'   messages during epigenomic scoring.
 #'
 #' @details
 #' Exact formatting:
@@ -707,7 +767,8 @@ prepare_epigenomic_scores <- function(
   drop_mhc = TRUE,
   transform = "log1p",
   return_diagnostics = TRUE,
-  summary_fun = mean
+  summary_fun = mean,
+  verbose = FALSE
 ) {
   .conseguiR_external_fun("prepare_epigenomic_scores")(
     reg_ref_path = reg_ref_path,
@@ -719,7 +780,8 @@ prepare_epigenomic_scores <- function(
     drop_mhc = drop_mhc,
     transform = transform,
     return_diagnostics = return_diagnostics,
-    summary_fun = summary_fun
+    summary_fun = summary_fun,
+    verbose = verbose
   )
 }
 
@@ -738,6 +800,8 @@ prepare_epigenomic_scores <- function(
 #' @param reg_epigenomic_scores Optional explicit regulatory epigenomic score
 #'   table.
 #' @param save_outputs Whether to save the scored graph to disk.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages while building
+#'   the scored graph.
 #'
 #' @details
 #' Score-table formatting:
@@ -777,7 +841,8 @@ build_scored_gene_reg_graph <- function(
   gene_somatic_scores = NULL,
   reg_somatic_scores = NULL,
   reg_epigenomic_scores = NULL,
-  save_outputs = TRUE
+  save_outputs = TRUE,
+  verbose = FALSE
 ) {
   if (is.null(graph_rds_path)) {
     initialize_backend_graphs(strict = FALSE, quiet = TRUE)
@@ -796,7 +861,8 @@ build_scored_gene_reg_graph <- function(
     gene_somatic_scores = gene_somatic_scores,
     reg_somatic_scores = reg_somatic_scores,
     reg_epigenomic_scores = reg_epigenomic_scores,
-    save_outputs = save_outputs
+    save_outputs = save_outputs,
+    verbose = verbose
   )
 }
 
@@ -819,6 +885,8 @@ build_scored_gene_reg_graph <- function(
 #' @param reg_signal_clip Regulatory signal clip value.
 #' @param top_n_to_save Number of top genes to save separately.
 #' @param python_path Optional explicit Python interpreter path.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages while running
+#'   diffusion.
 #'
 #' @details
 #' Exact formatting:
@@ -863,7 +931,8 @@ run_gene_reg_diffusion <- function(
   positive_only = FALSE,
   reg_signal_clip = 5.0,
   top_n_to_save = 50L,
-  python_path = NULL
+  python_path = NULL,
+  verbose = FALSE
 ) {
   .conseguiR_external_fun("run_gene_reg_diffusion")(
     scored_graph = scored_graph,
@@ -879,7 +948,8 @@ run_gene_reg_diffusion <- function(
     positive_only = positive_only,
     reg_signal_clip = reg_signal_clip,
     top_n_to_save = top_n_to_save,
-    python_path = python_path
+    python_path = python_path,
+    verbose = verbose
   )
 }
 
@@ -910,6 +980,8 @@ run_gene_reg_diffusion <- function(
 #' @param confidence_column Gene-gene confidence column.
 #' @param edge_cost_column Gene-gene edge-cost column.
 #' @param python_path Optional explicit Python interpreter path.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages while calling
+#'   the selected subgraph.
 #'
 #' @details
 #' Exact formatting:
@@ -961,7 +1033,8 @@ call_selected_subgraph <- function(
   prize_column = "post_norm",
   confidence_column = "confidence",
   edge_cost_column = "weight",
-  python_path = NULL
+  python_path = NULL,
+  verbose = FALSE
 ) {
   if (is.null(gg_nodes_path) || is.null(gg_edges_path)) {
     initialize_backend_graphs(strict = FALSE, quiet = TRUE)
@@ -992,7 +1065,8 @@ call_selected_subgraph <- function(
     prize_column = prize_column,
     confidence_column = confidence_column,
     edge_cost_column = edge_cost_column,
-    python_path = python_path
+    python_path = python_path,
+    verbose = verbose
   )
 }
 
@@ -1018,6 +1092,8 @@ call_selected_subgraph <- function(
 #' @param dpi Plot DPI.
 #' @param save_bundle Whether to save the visualization bundle.
 #' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages while building
+#'   the plot bundle.
 #'
 #' @details
 #' Exact formatting:
@@ -1064,7 +1140,8 @@ plot_selected_subgraph <- function(
   height = 10,
   dpi = 300,
   save_bundle = TRUE,
-  save_plot = !is.null(plot_file_path)
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
 ) {
   .conseguiR_external_fun("plot_selected_subgraph")(
     selected_subgraph = selected_subgraph,
@@ -1083,7 +1160,8 @@ plot_selected_subgraph <- function(
     height = height,
     dpi = dpi,
     save_bundle = save_bundle,
-    save_plot = save_plot
+    save_plot = save_plot,
+    verbose = verbose
   )
 }
 
@@ -1125,6 +1203,8 @@ plot_selected_subgraph <- function(
 #'   `call_selected_subgraph()`.
 #' @param plot_args Named list of overrides passed to
 #'   `plot_selected_subgraph()`.
+#' @param verbose Logical scalar. If `TRUE`, show progress bars and stage
+#'   output across the pipeline.
 #'
 #' @details
 #' `run_conseguiR()` is a thin orchestration wrapper. Most tuning is passed
@@ -1217,7 +1297,8 @@ run_conseguiR <- function(
   scored_graph_args = list(),
   diffusion_args = list(),
   subgraph_args = list(),
-  plot_args = list()
+  plot_args = list(),
+  verbose = FALSE
 ) {
   initialize_backend_graphs(strict = FALSE, quiet = TRUE)
   backend_paths <- .conseguiR_backend_paths()
@@ -1254,6 +1335,7 @@ run_conseguiR <- function(
     scored_graph_args = scored_graph_args,
     diffusion_args = diffusion_args,
     subgraph_args = subgraph_args,
-    plot_args = plot_args
+    plot_args = plot_args,
+    verbose = verbose
   )
 }

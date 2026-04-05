@@ -10,8 +10,13 @@ initialize_backend_graphs(
   build_gene_gene = TRUE,
   force = FALSE,
   strict = TRUE,
-  quiet = FALSE
+  quiet = FALSE,
+  verbose = FALSE
 )
+}
+\arguments{
+\item{verbose}{Logical scalar. If \code{TRUE}, print backend initialization
+status messages.}
 }
 \value{
 A backend-initialization result describing the backend directory,

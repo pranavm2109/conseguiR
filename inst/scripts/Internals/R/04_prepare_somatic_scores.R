@@ -23,6 +23,12 @@ conseguiR_runtime_file <- function(relpath) {
 
 sys.source(conseguiR_runtime_file("scripts/Internals/R/00_harmonise_and_validate_inputs.R"), envir = environment())
 
+conseguiR_verbose_message <- function(verbose, ...) {
+  if (isTRUE(verbose)) {
+    message(...)
+  }
+}
+
 # Somatic scoring design:
 # - gene-level scores come from dndscv
 # - regulatory-element-level scores come from fishHook
@@ -293,6 +299,7 @@ run_dndscv_gene_scoring <- function(
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
+  verbose = FALSE,
   ...
 ) {
   maf_ready <- prepare_dndscv_input(maf)
@@ -321,7 +328,12 @@ run_dndscv_gene_scoring <- function(
     ...
   )
 
-  dndscv_fit <- do.call(dndscv::dndscv, dndscv_args)
+  conseguiR_verbose_message(verbose, "Running dndscv gene scoring...")
+  dndscv_fit <- if (isTRUE(verbose)) {
+    do.call(dndscv::dndscv, dndscv_args)
+  } else {
+    suppressMessages(do.call(dndscv::dndscv, dndscv_args))
+  }
 
   if (!"sel_cv" %in% names(dndscv_fit)) {
     stop("dndscv result does not contain `sel_cv`.")
@@ -337,6 +349,7 @@ run_fishhook_reg_scoring <- function(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
+  verbose = FALSE,
   ...
 ) {
   event_gr <- make_fishhook_event_granges(maf)
@@ -391,6 +404,7 @@ run_fishhook_reg_scoring <- function(
     covs <- instantiate_fishhook_covariates(fishhook_covariates)
   }
 
+  conseguiR_verbose_message(verbose, "Constructing fishHook model...")
   fish <- fishHook::Fish(
     hypotheses = hypothesis_gr,
     events = event_gr,
@@ -399,7 +413,12 @@ run_fishhook_reg_scoring <- function(
     idcol = idcol
   )
 
-  fish$score(...)
+  conseguiR_verbose_message(verbose, "Running fishHook scoring...")
+  if (isTRUE(verbose)) {
+    fish$score(...)
+  } else {
+    suppressMessages(fish$score(...))
+  }
 
   if (is.null(fish$res)) {
     stop("fishHook did not produce a `$res` result table.")
@@ -426,20 +445,28 @@ run_somatic_scoring_pipeline <- function(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
+  verbose = FALSE,
   ...
 ) {
+  pb <- if (isTRUE(verbose)) utils::txtProgressBar(min = 0, max = 2, style = 3) else NULL
+  on.exit(if (!is.null(pb)) close(pb), add = TRUE)
+
   gene_scores <- if (!is.null(dndscv_result)) {
     extract_dndscv_gene_scores(dndscv_result)
   } else {
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, 0.5)
     run_dndscv_gene_scoring(
       maf = maf,
       refdb = refdb,
       cv = cv,
       max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
       max_coding_muts_per_sample = max_coding_muts_per_sample,
+      verbose = verbose,
       ...
     )
   }
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 1)
+  conseguiR_verbose_message(verbose, "Somatic gene scoring complete.")
 
   reg_scores <- NULL
   if (!is.null(fishhook_result)) {
@@ -452,9 +479,12 @@ run_somatic_scoring_pipeline <- function(
       fishhook_covariates = fishhook_covariates,
       fishhook_covariate_data = fishhook_covariate_data,
       idcol = idcol,
+      verbose = verbose,
       ...
     )
   }
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 2)
+  conseguiR_verbose_message(verbose, "Somatic regulatory scoring complete.")
 
   list(
     gene_scores = gene_scores,

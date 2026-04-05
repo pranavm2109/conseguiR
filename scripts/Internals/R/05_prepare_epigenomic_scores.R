@@ -25,6 +25,12 @@ conseguiR_runtime_file <- function(relpath) {
 
 sys.source(conseguiR_runtime_file("scripts/Internals/R/00_harmonise_and_validate_inputs.R"), envir = environment())
 
+conseguiR_verbose_message <- function(verbose, ...) {
+  if (isTRUE(verbose)) {
+    message(...)
+  }
+}
+
 # Epigenomic scoring design:
 # - regulatory-element scores come from cross-track variation in bigWig signal
 # - signal is quantified per regulatory element in each track
@@ -273,44 +279,58 @@ run_epigenomic_reg_scoring <- function(
   drop_mhc = TRUE,
   transform = c("log1p", "none"),
   return_diagnostics = FALSE,
-  summary_fun = mean
+  summary_fun = mean,
+  verbose = FALSE
 ) {
   transform <- match.arg(transform)
+  pb <- if (isTRUE(verbose)) utils::txtProgressBar(min = 0, max = 5, style = 3) else NULL
+  on.exit(if (!is.null(pb)) close(pb), add = TRUE)
 
   if (is.null(bw_files)) {
+    conseguiR_verbose_message(verbose, "Discovering epigenomic tracks...")
     bw_files <- list_epigenomic_track_files(
       track_dir = track_dir,
       exclude_patterns = exclude_patterns,
       min_tracks = min_tracks
     )
   } else {
+    conseguiR_verbose_message(verbose, "Validating supplied epigenomic tracks...")
     bw_files <- validate_epigenomic_tracks(bw_files)
     if (length(bw_files) < min_tracks) {
       stop("At least ", min_tracks, " epigenomic bigWig tracks are required; found ", length(bw_files), ".")
     }
   }
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 1)
 
+  conseguiR_verbose_message(verbose, "Loading regulatory elements for epigenomic scoring...")
   reg_gr <- load_regulatory_elements_for_epigenomic_scores(
     reg_ref_path = reg_ref_path,
     drop_mhc = drop_mhc
   )
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 2)
 
+  conseguiR_verbose_message(verbose, "Harmonizing regulatory elements to track seqlevels...")
   reg_gr <- harmonize_regulatory_seqlevels_to_track(
     reg_gr = reg_gr,
     bw_file = bw_files[[1]]
   )
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 3)
 
+  conseguiR_verbose_message(verbose, "Quantifying bigWig signal over regulatory elements...")
   signal_mat <- quantify_epigenomic_signal_matrix(
     bw_files = bw_files,
     reg_gr = reg_gr,
     summary_fun = summary_fun
   )
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 4)
 
+  conseguiR_verbose_message(verbose, "Computing epigenomic z-scores...")
   zscores <- compute_epigenomic_reg_scores(
     signal_mat = signal_mat,
     reg_gr = reg_gr,
     transform = transform
   )
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 5)
 
   if (!isTRUE(return_diagnostics)) {
     return(zscores)

@@ -26,7 +26,8 @@ call_selected_subgraph(
   prize_column = "post_norm",
   confidence_column = "confidence",
   edge_cost_column = "weight",
-  python_path = NULL
+  python_path = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -73,6 +74,9 @@ call_selected_subgraph(
 \item{edge_cost_column}{Gene-gene edge-cost column.}
 
 \item{python_path}{Optional explicit Python interpreter path.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show stage messages while calling
+the selected subgraph.}
 }
 \value{
 A selected subgraph bundle.

@@ -14,7 +14,8 @@ prepare_epigenomic_scores(
   drop_mhc = TRUE,
   transform = "log1p",
   return_diagnostics = TRUE,
-  summary_fun = mean
+  summary_fun = mean,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -40,6 +41,9 @@ matrix alongside z scores.}
 
 \item{summary_fun}{Summary function applied to each bigWig over each
 regulatory element.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show a progress bar and stage
+messages during epigenomic scoring.}
 }
 \value{
 An epigenomic score bundle.

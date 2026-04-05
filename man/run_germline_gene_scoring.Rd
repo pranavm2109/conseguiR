@@ -18,7 +18,8 @@ run_germline_gene_scoring(
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
   step1_args = list(),
-  step2_args = list()
+  step2_args = list(),
+  verbose = FALSE
 )
 }
 \arguments{
@@ -56,6 +57,9 @@ and \code{extra_args}.}
 \item{step2_args}{Named list of MAGMA step 2 arguments. Supported entries
 include \code{gene_model}, \code{genes_only}, \code{pval_use}, \code{pval_duplicate},
 \code{bfile_synonyms}, \code{bfile_synonym_dup}, and \code{extra_args}.}
+
+\item{verbose}{Logical scalar. If \code{TRUE}, show a progress bar and MAGMA step
+output.}
 }
 \value{
 A germline gene score bundle.
@@ -89,6 +93,9 @@ suffixes, for example \verb{\\"/path/to/g1000_eur/g1000_eur\\"}.
 \code{step1_args = list( annotation_window = c(35, 10), filter_path = NULL, ignore_strand = FALSE, nonhuman = FALSE, extra_args = character() )}
 
 \verb{step2_args = list( gene_model = \\"snp-wise=mean\\", genes_only = TRUE, pval_use = c(\\"SNP\\", \\"P\\"), pval_duplicate = \\"drop\\", bfile_synonyms = NULL, bfile_synonym_dup = NULL, extra_args = character() )}
+
+MAGMA manual:
+\url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 }
 \examples{
 \dontrun{

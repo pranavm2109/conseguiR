@@ -20,6 +20,18 @@ conseguiR_runtime_file <- function(relpath) {
 
 sys.source(conseguiR_runtime_file("scripts/Internals/R/00_harmonise_and_validate_inputs.R"), envir = environment())
 
+conseguiR_verbose_message <- function(verbose, ...) {
+  if (isTRUE(verbose)) {
+    message(...)
+  }
+}
+
+conseguiR_verbose_cat <- function(lines, verbose) {
+  if (isTRUE(verbose) && length(lines) > 0L) {
+    cat(paste(lines, collapse = "\n"), "\n")
+  }
+}
+
 default_magma_gwas_select_columns <- unique(c(
   "hm_rsid",
   "hm_variant_id",
@@ -160,7 +172,8 @@ run_magma_step1_annotation <- function(
   nonhuman = FALSE,
   reuse_prepared_inputs = TRUE,
   reuse_existing_annotation = FALSE,
-  extra_args = character()
+  extra_args = character(),
+  verbose = FALSE
 ) {
   if (!file.exists(magma_path)) {
     stop("MAGMA executable does not exist: ", magma_path)
@@ -246,8 +259,8 @@ run_magma_step1_annotation <- function(
   )
 
   command_string <- paste(c(shQuote(magma_path), shQuote(args)), collapse = " ")
-  message("Running MAGMA command:")
-  message(command_string)
+  conseguiR_verbose_message(verbose, "Running MAGMA step 1 annotation command:")
+  conseguiR_verbose_message(verbose, command_string)
 
   status <- system2(
     command = magma_path,
@@ -267,6 +280,8 @@ run_magma_step1_annotation <- function(
       paste(status, collapse = "\n")
     )
   }
+
+  conseguiR_verbose_cat(status, verbose)
 
   list(
     status = exit_status,
@@ -299,7 +314,8 @@ run_magma_step2_gene_analysis <- function(
   bfile_synonyms = NULL,
   bfile_synonym_dup = NULL,
   reuse_existing_analysis = FALSE,
-  extra_args = character()
+  extra_args = character(),
+  verbose = FALSE
 ) {
   if (!file.exists(magma_path)) {
     stop("MAGMA executable does not exist: ", magma_path)
@@ -395,8 +411,8 @@ run_magma_step2_gene_analysis <- function(
   args <- c(args, extra_args)
 
   command_string <- paste(c(shQuote(magma_path), shQuote(args)), collapse = " ")
-  message("Running MAGMA command:")
-  message(command_string)
+  conseguiR_verbose_message(verbose, "Running MAGMA step 2 gene analysis command:")
+  conseguiR_verbose_message(verbose, command_string)
 
   status <- system2(
     command = magma_path,
@@ -416,6 +432,8 @@ run_magma_step2_gene_analysis <- function(
       paste(status, collapse = "\n")
     )
   }
+
+  conseguiR_verbose_cat(status, verbose)
 
   if (!file.exists(genes_out_path) || file.info(genes_out_path)$size <= 0) {
     stop("MAGMA step 2 did not produce a usable .genes.out file: ", genes_out_path)
@@ -528,15 +546,20 @@ run_magma_feature_scoring_pipeline <- function(
   step1_extra_args = character(),
   step2_extra_args = character(),
   keep_intermediates = FALSE,
-  zstat_output_path = paste0(output_prefix, ".zstat.tsv")
+  zstat_output_path = paste0(output_prefix, ".zstat.tsv"),
+  verbose = FALSE
 ) {
   feature_type <- match.arg(feature_type)
+  pb <- if (isTRUE(verbose)) utils::txtProgressBar(min = 0, max = 4, style = 3) else NULL
+  on.exit(if (!is.null(pb)) close(pb), add = TRUE)
   step1_prefix <- paste0(output_prefix, ".step1")
   step2_prefix <- paste0(output_prefix, ".step2")
   shared_snp_loc_path <- NULL
   shared_pval_path <- NULL
 
   if (!is.null(magma_gwas_cache_prefix)) {
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, 1)
+    conseguiR_verbose_message(verbose, "Preparing shared MAGMA GWAS cache...")
     gwas_cache <- prepare_magma_gwas_cache(
       gwas_sumstats = gwas_sumstats,
       cache_prefix = magma_gwas_cache_prefix,
@@ -566,8 +589,11 @@ run_magma_feature_scoring_pipeline <- function(
     nonhuman = nonhuman,
     reuse_prepared_inputs = TRUE,
     reuse_existing_annotation = reuse_existing_annotation,
-    extra_args = step1_extra_args
+    extra_args = step1_extra_args,
+    verbose = verbose
   )
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 2)
+  conseguiR_verbose_message(verbose, "MAGMA step 1 complete.")
 
   step2 <- run_magma_step2_gene_analysis(
     gene_annot_path = step1$annot_path,
@@ -584,8 +610,11 @@ run_magma_feature_scoring_pipeline <- function(
     bfile_synonyms = bfile_synonyms,
     bfile_synonym_dup = bfile_synonym_dup,
     reuse_existing_analysis = reuse_existing_analysis,
-    extra_args = step2_extra_args
+    extra_args = step2_extra_args,
+    verbose = verbose
   )
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 3)
+  conseguiR_verbose_message(verbose, "MAGMA step 2 complete.")
 
   cleanup_paths <- NULL
   if (!isTRUE(keep_intermediates)) {
@@ -608,6 +637,9 @@ run_magma_feature_scoring_pipeline <- function(
     output_path = zstat_output_path,
     cleanup_paths = cleanup_paths
   )
+
+  if (!is.null(pb)) utils::setTxtProgressBar(pb, 4)
+  conseguiR_verbose_message(verbose, "MAGMA z-score extraction complete.")
 
   list(
     step1 = step1,
