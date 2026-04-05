@@ -1,0 +1,9 @@
+^\.git$
+^\.gitignore$
+^\.Rhistory$
+^\.DS_Store$
+^._.*$
+^data$
+^scripts$
+^conseguiR_tmp$
+^INSTALLATION\.md$
