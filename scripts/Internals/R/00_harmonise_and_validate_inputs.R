@@ -11,7 +11,9 @@ suppressPackageStartupMessages({
 # Minimal harmonization helpers for early conseguiR scripts.
 #
 # GWAS output columns:
-# - variant_id: taken from rs_id, rsid, hm_rsid, or variant_id
+# - rsid: taken from rs_id, rsid, or hm_rsid when present
+# - variant_id: taken from variant_id or hm_variant_id when present
+# - magma_snp_id: prefer rsid; otherwise fall back to variant_id
 # - chromosome: taken from chromosome, hm_chrom, chr, or CHR
 # - base_pair_location: taken from base_pair_location, hm_pos, bp, pos, or BP
 # - p_value: taken from p_value, p, P, or pval
@@ -60,11 +62,15 @@ pick_first_existing_column <- function(dt, candidates, field_name) {
 validate_gwas_sumstats <- function(sumstats) {
   dt <- normalize_colnames(sumstats)
 
-  id_col <- pick_first_existing_column(
-    dt,
-    c("rs_id", "rsid", "hm_rsid", "variant_id"),
-    "variant identifier"
-  )
+  rsid_candidates <- intersect(c("rs_id", "rsid", "hm_rsid"), names(dt))
+  variant_id_candidates <- intersect(c("variant_id", "hm_variant_id"), names(dt))
+
+  if (length(rsid_candidates) == 0L && length(variant_id_candidates) == 0L) {
+    stop(
+      "Could not find a column for GWAS SNP identifiers. Tried rs_id, rsid, hm_rsid, variant_id, hm_variant_id."
+    )
+  }
+
   chr_col <- pick_first_existing_column(
     dt,
     c("chromosome", "hm_chrom", "chr", "CHR"),
@@ -81,17 +87,25 @@ validate_gwas_sumstats <- function(sumstats) {
     "p-value"
   )
 
+  rsid_col <- if (length(rsid_candidates) > 0L) rsid_candidates[[1]] else NULL
+  variant_id_col <- if (length(variant_id_candidates) > 0L) variant_id_candidates[[1]] else NULL
+
   out <- unique(dt[, .(
-    variant_id = as.character(get(id_col)),
+    rsid = if (is.null(rsid_col)) NA_character_ else as.character(get(rsid_col)),
+    variant_id = if (is.null(variant_id_col)) NA_character_ else as.character(get(variant_id_col)),
     chromosome = as.character(get(chr_col)),
     base_pair_location = as.integer(get(pos_col)),
     p_value = as.numeric(get(p_col))
   )])
 
+  out[, rsid := trimws(rsid)]
   out[, variant_id := trimws(variant_id)]
   out[, chromosome := trimws(chromosome)]
+  out[, rsid := fifelse(is.na(rsid) | rsid == "", NA_character_, rsid)]
+  out[, variant_id := fifelse(is.na(variant_id) | variant_id == "", NA_character_, variant_id)]
+  out[, magma_snp_id := fifelse(!is.na(rsid), rsid, variant_id)]
   out <- out[
-    !is.na(variant_id) & variant_id != "" &
+    !is.na(magma_snp_id) & magma_snp_id != "" &
     !is.na(chromosome) & chromosome != "" &
     !is.na(base_pair_location) &
     !is.na(p_value)
@@ -109,13 +123,13 @@ prepare_magma_input <- function(sumstats) {
   dt <- validate_gwas_sumstats(sumstats)
 
   snp_loc <- unique(dt[, .(
-    SNP = variant_id,
+    SNP = magma_snp_id,
     CHR = chromosome,
     POS = base_pair_location
   )])
 
   pval <- unique(dt[, .(
-    SNP = variant_id,
+    SNP = magma_snp_id,
     P = p_value
   )])
 

@@ -8,14 +8,14 @@ suppressPackageStartupMessages({
 })
 
 conseguiR_runtime_file <- function(relpath) {
-  pkg_path <- system.file(relpath, package = "conseguiR")
-  if (nzchar(pkg_path) && file.exists(pkg_path)) {
-    return(pkg_path)
-  }
-
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
     return(candidate)
+  }
+
+  pkg_path <- system.file(relpath, package = "conseguiR")
+  if (nzchar(pkg_path) && file.exists(pkg_path)) {
+    return(pkg_path)
   }
 
   stop("Could not locate required runtime file: ", relpath)
@@ -119,13 +119,14 @@ extract_dndscv_gene_scores <- function(
 
   out <- dt[, .(
     gene_id = as.character(get(gene_col)),
+    p_value = as.numeric(get(p_col)),
     zstat = compute_signed_z_from_p(
       p_value = get(p_col),
       effect_direction = if (!is.null(effect_col)) get(effect_col) - 1 else NULL
     )
   )]
 
-  out <- unique(out[!is.na(gene_id) & gene_id != "" & !is.na(zstat)])
+  out <- unique(out[!is.na(gene_id) & gene_id != "" & !is.na(zstat) & !is.na(p_value)])
   out[, gene_id := toupper(gene_id)]
   out
 }
@@ -145,6 +146,7 @@ extract_fishhook_reg_scores <- function(
 
   out <- dt[, .(
     reg_elem_id = as.character(get(reg_col)),
+    p_value = as.numeric(get(p_col)),
     zstat = if (!is.null(effect_col) && effect_col %in% c("zscore", "z")) {
       as.numeric(get(effect_col))
     } else {
@@ -155,7 +157,7 @@ extract_fishhook_reg_scores <- function(
     }
   )]
 
-  out <- unique(out[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(zstat)])
+  out <- unique(out[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(zstat) & !is.na(p_value)])
   out
 }
 

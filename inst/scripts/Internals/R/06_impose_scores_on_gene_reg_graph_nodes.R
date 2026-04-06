@@ -7,7 +7,8 @@ suppressPackageStartupMessages({
 
 default_gene_reg_scoring_config <- list(
   graph_rds_path = "data/processed/gene_reg_graph_no_scores.rds",
-  output_prefix = "data/processed/gene_reg_graph_scored"
+  output_prefix = "data/processed/gene_reg_graph_scored",
+  filter_to_supported_universe = TRUE
 )
 
 ensure_parent_dir <- function(path) {
@@ -62,11 +63,35 @@ validate_gene_reg_graph_nodes <- function(nodes) {
   dt
 }
 
+read_backend_gene_id_map <- function() {
+  loc_candidates <- c(
+    "inst/extdata/backend/NCBI38.gene.loc",
+    "data/raw/NCBI38/NCBI38.gene.loc"
+  )
+
+  loc_path <- loc_candidates[file.exists(loc_candidates)][1]
+  if (is.na(loc_path) || !nzchar(loc_path)) {
+    stop("Could not locate backend gene ID map file: NCBI38.gene.loc")
+  }
+
+  dt <- data.table::fread(loc_path, header = FALSE, showProgress = FALSE)
+  if (ncol(dt) < 6L) {
+    stop("Backend gene ID map does not contain the expected symbol column.")
+  }
+
+  unique(dt[, .(
+    feature_id = as.character(V1),
+    gene_id = toupper(as.character(V6))
+  )], by = "feature_id")[!is.na(feature_id) & feature_id != "" & !is.na(gene_id) & gene_id != ""]
+}
+
 standardize_gene_score_table <- function(scores, modality_name) {
   dt <- as.data.table(scores)
 
   if (!"gene_id" %in% names(dt) && "feature_id" %in% names(dt)) {
-    dt[, gene_id := feature_id]
+    id_map <- read_backend_gene_id_map()
+    dt[, feature_id := as.character(feature_id)]
+    dt <- merge(dt, id_map, by = "feature_id", all.x = TRUE, sort = FALSE)
   }
 
   required_cols <- c("gene_id", "zstat")
@@ -80,10 +105,15 @@ standardize_gene_score_table <- function(scores, modality_name) {
     )
   }
 
-  unique(dt[, .(
+  dt <- dt[, .(
     gene_id = toupper(as.character(gene_id)),
     zstat = as.numeric(zstat)
-  )])[!is.na(gene_id) & gene_id != ""]
+  )][!is.na(gene_id) & gene_id != "" & !is.na(zstat)]
+
+  dt[, abs_zstat := abs(zstat)]
+  dt <- dt[order(-abs_zstat)][, .SD[1], by = gene_id][, abs_zstat := NULL]
+
+  dt
 }
 
 standardize_reg_score_table <- function(scores, modality_name) {
@@ -104,10 +134,15 @@ standardize_reg_score_table <- function(scores, modality_name) {
     )
   }
 
-  unique(dt[, .(
+  dt <- dt[, .(
     reg_elem_id = as.character(reg_elem_id),
     zstat = as.numeric(zstat)
-  )])[!is.na(reg_elem_id) & reg_elem_id != ""]
+  )][!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(zstat)]
+
+  dt[, abs_zstat := abs(zstat)]
+  dt <- dt[order(-abs_zstat)][, .SD[1], by = reg_elem_id][, abs_zstat := NULL]
+
+  dt
 }
 
 merge_gene_modality_scores <- function(nodes, scores, score_col, modality_name) {
@@ -236,6 +271,101 @@ impose_scores_on_gene_reg_graph <- function(
   )
 }
 
+compute_supported_gene_ids <- function(gene_somatic_scores = NULL, gene_germline_scores = NULL) {
+  gene_sets <- list()
+
+  if (!is.null(gene_somatic_scores)) {
+    gene_sets <- c(gene_sets, list(unique(standardize_gene_score_table(gene_somatic_scores, "somatic")$gene_id)))
+  }
+  if (!is.null(gene_germline_scores)) {
+    gene_sets <- c(gene_sets, list(unique(standardize_gene_score_table(gene_germline_scores, "germline")$gene_id)))
+  }
+
+  if (length(gene_sets) == 0L) {
+    return(NULL)
+  }
+
+  Reduce(intersect, gene_sets)
+}
+
+compute_supported_reg_ids <- function(
+  reg_somatic_scores = NULL,
+  reg_germline_scores = NULL,
+  reg_epigenomic_scores = NULL
+) {
+  if (!is.null(reg_epigenomic_scores)) {
+    return(unique(standardize_reg_score_table(reg_epigenomic_scores, "epigenomic")$reg_elem_id))
+  }
+
+  reg_sets <- list()
+  if (!is.null(reg_somatic_scores)) {
+    reg_sets <- c(reg_sets, list(unique(standardize_reg_score_table(reg_somatic_scores, "somatic")$reg_elem_id)))
+  }
+  if (!is.null(reg_germline_scores)) {
+    reg_sets <- c(reg_sets, list(unique(standardize_reg_score_table(reg_germline_scores, "germline")$reg_elem_id)))
+  }
+
+  if (length(reg_sets) == 0L) {
+    return(NULL)
+  }
+
+  Reduce(intersect, reg_sets)
+}
+
+subset_gene_reg_graph_to_supported_universe <- function(
+  graph,
+  gene_somatic_scores = NULL,
+  gene_germline_scores = NULL,
+  reg_somatic_scores = NULL,
+  reg_germline_scores = NULL,
+  reg_epigenomic_scores = NULL
+) {
+  nodes <- validate_gene_reg_graph_nodes(extract_gene_reg_graph_nodes(graph))
+  edges <- extract_gene_reg_graph_edges(graph)
+
+  keep_gene_ids <- compute_supported_gene_ids(
+    gene_somatic_scores = gene_somatic_scores,
+    gene_germline_scores = gene_germline_scores
+  )
+  keep_reg_ids <- compute_supported_reg_ids(
+    reg_somatic_scores = reg_somatic_scores,
+    reg_germline_scores = reg_germline_scores,
+    reg_epigenomic_scores = reg_epigenomic_scores
+  )
+
+  if (is.null(keep_gene_ids) || length(keep_gene_ids) == 0L) {
+    stop("Could not derive a supported gene universe from the supplied pre-diffusion gene score tables.")
+  }
+  if (is.null(keep_reg_ids) || length(keep_reg_ids) == 0L) {
+    stop("Could not derive a supported regulatory universe from the supplied regulatory score tables.")
+  }
+
+  edge_dt <- as.data.table(edges)
+  edge_dt <- edge_dt[toupper(from) %in% keep_gene_ids & to %in% keep_reg_ids]
+
+  if (nrow(edge_dt) == 0L) {
+    stop("Supported-universe filtering removed all gene-reg edges. Check identifier harmonization and regulatory coverage.")
+  }
+
+  kept_gene_ids <- unique(toupper(edge_dt$from))
+  kept_reg_ids <- unique(edge_dt$to)
+
+  node_dt <- as.data.table(nodes)[
+    (node_type == "gene" & toupper(node_id) %in% kept_gene_ids) |
+      (node_type == "reg" & node_id %in% kept_reg_ids)
+  ]
+
+  if (nrow(node_dt) == 0L) {
+    stop("Supported-universe filtering removed all graph nodes.")
+  }
+
+  graph_from_data_frame(
+    d = as.data.frame(edge_dt),
+    vertices = as.data.frame(node_dt),
+    directed = is_directed(graph)
+  )
+}
+
 save_scored_gene_reg_graph_outputs <- function(graph, nodes, edges, output_prefix) {
   ensure_parent_dir(output_prefix)
 
@@ -255,10 +385,22 @@ prepare_scored_gene_reg_graph <- function(
   reg_somatic_scores = NULL,
   reg_germline_scores = NULL,
   reg_epigenomic_scores = NULL,
+  filter_to_supported_universe = default_gene_reg_scoring_config$filter_to_supported_universe,
   save_outputs = TRUE
 ) {
   if (is.null(graph)) {
     graph <- read_gene_reg_graph_no_scores(graph_rds_path)
+  }
+
+  if (isTRUE(filter_to_supported_universe)) {
+    graph <- subset_gene_reg_graph_to_supported_universe(
+      graph = graph,
+      gene_somatic_scores = gene_somatic_scores,
+      gene_germline_scores = gene_germline_scores,
+      reg_somatic_scores = reg_somatic_scores,
+      reg_germline_scores = reg_germline_scores,
+      reg_epigenomic_scores = reg_epigenomic_scores
+    )
   }
 
   result <- impose_scores_on_gene_reg_graph(

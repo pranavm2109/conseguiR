@@ -4,107 +4,231 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
+conseguiR_plot_runtime_file <- function(relpath) {
+  candidate <- file.path(getwd(), relpath)
+  if (file.exists(candidate)) {
+    return(candidate)
+  }
+
+  pkg_path <- system.file(relpath, package = "conseguiR")
+  if (nzchar(pkg_path) && file.exists(pkg_path)) {
+    return(pkg_path)
+  }
+
+  stop("Could not locate required plotting runtime file: ", relpath)
+}
+
 default_stage_plot_config <- list(
-  scores_output_prefix = "data/processed/conseguiR_scores_plot",
-  diffusion_output_prefix = "data/processed/conseguiR_diffusion_plot"
+  score_output_prefix = "data/processed/conseguiR_score_plot"
 )
 
-infer_feature_column <- function(dt, candidates = NULL) {
-  dt <- data.table::as.data.table(dt)
-  candidates <- candidates %||% c(
-    "gene_name", "feature_id", "node_id", "reg_id", "symbol", "gene", "feature"
-  )
-  matches <- intersect(candidates, names(dt))
-  if (length(matches) > 0L) {
-    return(matches[[1]])
-  }
-
-  char_cols <- names(dt)[vapply(dt, function(x) is.character(x) || is.factor(x), logical(1))]
-  if (length(char_cols) > 0L) {
-    return(char_cols[[1]])
-  }
-
-  stop("Could not infer a feature-label column for plotting.")
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
 }
 
-infer_value_column <- function(dt, candidates = NULL) {
-  dt <- data.table::as.data.table(dt)
-  candidates <- candidates %||% c(
-    "post_norm", "zscore", "z", "ZSTAT", "prize", "score",
-    "wmis_cv", "qglobal_cv", "n_muts", "mean_signal_z"
-  )
-  matches <- intersect(candidates, names(dt))
-  if (length(matches) > 0L) {
-    return(matches[[1]])
+read_backend_gene_label_map <- function() {
+  loc_path <- conseguiR_plot_runtime_file("inst/extdata/backend/NCBI38.gene.loc")
+  dt <- data.table::fread(loc_path, header = FALSE, showProgress = FALSE)
+  if (ncol(dt) < 6L) {
+    stop("Backend gene location file does not contain the expected label column.")
   }
 
-  numeric_cols <- names(dt)[vapply(dt, is.numeric, logical(1))]
-  numeric_cols <- setdiff(
-    numeric_cols,
-    c("chr", "chromosome", "start", "end", "pos", "position", "n", "rank")
-  )
-  if (length(numeric_cols) > 0L) {
-    return(numeric_cols[[1]])
-  }
-
-  stop("Could not infer a numeric score column for plotting.")
+  out <- unique(dt[, .(
+    feature_id = as.character(V1),
+    label = as.character(V6)
+  )], by = "feature_id")
+  out[!is.na(feature_id) & feature_id != "" & !is.na(label) & label != ""]
 }
 
-prepare_ranked_plot_table <- function(
+read_backend_reg_label_map <- function() {
+  mapping_path <- conseguiR_plot_runtime_file("inst/extdata/backend/genehancer_reg_target_labels.tsv.gz")
+  if (!file.exists(mapping_path)) {
+    return(data.table(reg_elem_id = character(), label = character()))
+  }
+
+  dt <- data.table::as.data.table(data.table::fread(mapping_path, showProgress = FALSE))
+  unique(dt[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(label) & label != ""], by = "reg_elem_id")
+}
+
+resolve_score_feature_column <- function(dt) {
+  candidates <- c("gene_id", "feature_id", "reg_elem_id", "gene_name")
+  match <- intersect(candidates, names(dt))
+  if (length(match) == 0L) {
+    stop("Could not infer a feature column for score plotting.")
+  }
+  match[[1]]
+}
+
+infer_feature_context <- function(feature_column, which = NULL, dt = NULL) {
+  if (identical(feature_column, "reg_elem_id")) {
+    return("reg")
+  }
+  if (identical(feature_column, "gene_id") || identical(feature_column, "gene_name")) {
+    return("gene")
+  }
+  if (!is.null(which) && grepl("reg", which, ignore.case = TRUE)) {
+    return("reg")
+  }
+  if (!is.null(which) && grepl("gene", which, ignore.case = TRUE)) {
+    return("gene")
+  }
+  if (!is.null(dt) && "feature_id" %in% names(dt)) {
+    feature_values <- unique(stats::na.omit(as.character(dt$feature_id)))
+    feature_values <- feature_values[nzchar(feature_values)]
+    if (length(feature_values) > 0L && any(grepl("^GH", feature_values))) {
+      return("reg")
+    }
+  }
+  "gene"
+}
+
+resolve_score_label_map <- function(feature_column, which = NULL, dt = NULL) {
+  feature_context <- infer_feature_context(
+    feature_column = feature_column,
+    which = which,
+    dt = dt
+  )
+
+  switch(
+    feature_context,
+    reg = read_backend_reg_label_map(),
+    gene = read_backend_gene_label_map(),
+    NULL
+  )
+}
+
+prepare_score_plot_table <- function(
   table,
+  which = NULL,
   feature_column = NULL,
-  value_column = NULL,
-  top_n = NULL,
-  highlight_features = NULL
+  z_column = "zstat",
+  p_value_column = NULL,
+  label_features = NULL
 ) {
   dt <- data.table::as.data.table(data.table::copy(table))
-  feature_column <- feature_column %||% infer_feature_column(dt)
-  value_column <- value_column %||% infer_value_column(dt)
+  feature_column <- feature_column %||% resolve_score_feature_column(dt)
 
-  dt <- dt[!is.na(get(feature_column)) & !is.na(get(value_column))]
-  dt[, feature := as.character(get(feature_column))]
-  dt[, value := as.numeric(get(value_column))]
-  dt <- dt[is.finite(value)]
-
-  if (nrow(dt) == 0L) {
-    stop("No finite rows are available to plot.")
+  if (!feature_column %in% names(dt)) {
+    stop("Feature column not found in score table: ", feature_column)
+  }
+  if (!z_column %in% names(dt)) {
+    stop("Z-score column not found in score table: ", z_column)
   }
 
-  data.table::setorder(dt, -value, feature)
-  dt[, rank := seq_len(.N)]
-  dt[, highlighted := feature %in% (highlight_features %||% character())]
+  dt[, feature_id_plot := as.character(get(feature_column))]
+  dt[, z_raw := as.numeric(get(z_column))]
+  dt <- dt[!is.na(feature_id_plot) & feature_id_plot != "" & !is.na(z_raw)]
 
-  if (!is.null(top_n)) {
-    dt <- dt[seq_len(min(as.integer(top_n), .N))]
+  finite_z <- dt[is.finite(z_raw), z_raw]
+  z_cap <- if (length(finite_z) > 0L) max(abs(finite_z), na.rm = TRUE) + 0.5 else 10
+  dt[, z_plot := z_raw]
+  dt[is.infinite(z_plot) & z_plot > 0, z_plot := z_cap]
+  dt[is.infinite(z_plot) & z_plot < 0, z_plot := -z_cap]
+
+  label_map <- resolve_score_label_map(
+    feature_column = feature_column,
+    which = which,
+    dt = dt
+  )
+  if (!is.null(label_map) && nrow(label_map) > 0L) {
+    merge_cols <- names(label_map)[1]
+    dt <- merge(
+      dt,
+      label_map,
+      by.x = "feature_id_plot",
+      by.y = merge_cols,
+      all.x = TRUE
+    )
+    dt[, feature_label := data.table::fifelse(!is.na(label) & label != "", label, feature_id_plot)]
+    dt[, label := NULL]
+  } else {
+    dt[, feature_label := feature_id_plot]
   }
 
-  dt[]
+  if (!is.null(p_value_column) && p_value_column %in% names(dt)) {
+    dt[, p_value_plot := as.numeric(get(p_value_column))]
+  } else if ("p_value" %in% names(dt)) {
+    dt[, p_value_plot := as.numeric(p_value)]
+  } else {
+    dt[, p_value_plot := NA_real_]
+  }
+
+  if (all(!is.finite(dt$p_value_plot))) {
+    dt[, p_value_plot := 2 * stats::pnorm(-abs(z_plot))]
+  }
+
+  dt[p_value_plot <= 0 | !is.finite(p_value_plot), p_value_plot := 1e-300]
+
+  dt[, neglog10_p := ifelse(
+    is.finite(p_value_plot) & p_value_plot > 0,
+    -log10(pmax(p_value_plot, 1e-300)),
+    NA_real_
+  )]
+
+  data.table::setorder(dt, -z_plot)
+  dt[, rank_plot := seq_len(.N)]
+  requested_labels <- unique(as.character(label_features %||% character()))
+  requested_labels <- requested_labels[nzchar(requested_labels)]
+
+  dt[, feature_label_tokens := strsplit(feature_label, "|", fixed = TRUE)]
+  dt[, matched_label := vapply(
+    feature_label_tokens,
+    function(labels) {
+      matched <- intersect(labels, requested_labels)
+      if (length(matched) == 0L) "" else matched[[1]]
+    },
+    character(1)
+  )]
+  dt[, highlighted := feature_id_plot %in% requested_labels |
+       feature_label %in% requested_labels |
+       matched_label != ""]
+  dt[, should_label := highlighted]
+  dt[matched_label != "",
+     label_rank := data.table::frank(-z_plot, ties.method = "first"),
+     by = matched_label]
+  dt[matched_label != "" & label_rank > 1L, should_label := FALSE]
+  dt[, feature_label_tokens := NULL]
+  dt[, label_rank := NULL]
+  dt
 }
 
-create_scores_plot <- function(
+infer_plot_mode <- function(dt, test_tail = c("auto", "one_tailed", "two_tailed")) {
+  test_tail <- match.arg(test_tail)
+  if (identical(test_tail, "one_tailed")) {
+    return("rank")
+  }
+  if (identical(test_tail, "two_tailed")) {
+    return("volcano")
+  }
+
+  if ("p_value_plot" %in% names(dt) && any(is.finite(dt$p_value_plot))) {
+    "volcano"
+  } else {
+    "rank"
+  }
+}
+
+create_score_plot <- function(
   bundle = NULL,
   table = NULL,
   which = NULL,
-  plot_type = c("ranked_points", "top_bar", "histogram"),
-  top_n = 25L,
+  test_tail = c("auto", "one_tailed", "two_tailed"),
   feature_column = NULL,
-  value_column = NULL,
-  highlight_features = NULL,
-  title = "conseguiR Scores",
-  subtitle = NULL
+  z_column = "zstat",
+  p_value_column = NULL,
+  label_features = NULL,
+  title = "conseguiR Scores"
 ) {
-  required_packages <- c("ggplot2", "scales")
+  required_packages <- c("ggplot2", "ggrepel")
   missing_packages <- required_packages[!vapply(required_packages, requireNamespace, quietly = TRUE, logical(1))]
   if (length(missing_packages) > 0L) {
     stop("The following packages are required to create score plots: ",
          paste(missing_packages, collapse = ", "))
   }
 
-  plot_type <- match.arg(plot_type)
-
   if (is.null(table)) {
     if (is.null(bundle) || !is.list(bundle)) {
-      stop("Provide either `bundle` or `table` to `create_scores_plot()`.")
+      stop("Provide either `bundle` or `table` to `create_score_plot()`.")
     }
 
     if (!is.null(which) && which %in% names(bundle)) {
@@ -112,84 +236,114 @@ create_scores_plot <- function(
     } else if (!is.null(which) && "objects" %in% names(bundle) && which %in% names(bundle$objects)) {
       table <- bundle$objects[[which]]
     } else if ("objects" %in% names(bundle)) {
-      score_names <- intersect(
-        c("gene_scores", "reg_scores", "scores"),
-        names(bundle$objects)
-      )
-      if (length(score_names) == 0L) {
-        stop("Could not resolve a score table from the supplied bundle.")
+      candidates <- intersect(c("gene_scores", "reg_scores", "all_genes", "top_genes"), names(bundle$objects))
+      if (length(candidates) == 0L) {
+        stop("Could not resolve a plottable table from the supplied bundle.")
       }
-      table <- bundle$objects[[score_names[[1]]]]
+      table <- bundle$objects[[candidates[[1]]]]
     } else {
-      stop("Could not resolve a score table from the supplied bundle.")
+      stop("Could not resolve a plottable table from the supplied bundle.")
     }
   }
 
-  ranked_dt <- prepare_ranked_plot_table(
+  dt <- prepare_score_plot_table(
     table = table,
+    which = which,
     feature_column = feature_column,
-    value_column = value_column,
-    top_n = if (plot_type %in% c("ranked_points", "top_bar")) top_n else NULL,
-    highlight_features = highlight_features
+    z_column = z_column,
+    p_value_column = p_value_column,
+    label_features = label_features
   )
 
-  value_label <- value_column %||% infer_value_column(data.table::as.data.table(table))
-  p <- switch(
-    plot_type,
-    ranked_points = {
-      ggplot2::ggplot(ranked_dt, ggplot2::aes(x = rank, y = value)) +
-        ggplot2::geom_line(colour = "#8a1538", linewidth = 0.45, alpha = 0.6) +
-        ggplot2::geom_point(
-          ggplot2::aes(colour = highlighted),
-          size = 2.2,
-          show.legend = FALSE
-        ) +
-        ggplot2::scale_colour_manual(values = c(`TRUE` = "#b91c1c", `FALSE` = "#1f4e79")) +
-        ggplot2::labs(x = "Rank", y = value_label, title = title, subtitle = subtitle)
-    },
-    top_bar = {
-      ranked_dt[, feature := factor(feature, levels = rev(feature))]
-      ggplot2::ggplot(ranked_dt, ggplot2::aes(x = feature, y = value, fill = highlighted)) +
-        ggplot2::geom_col(show.legend = FALSE) +
-        ggplot2::coord_flip() +
-        ggplot2::scale_fill_manual(values = c(`TRUE` = "#b91c1c", `FALSE` = "#8a1538")) +
-        ggplot2::labs(x = NULL, y = value_label, title = title, subtitle = subtitle)
-    },
-    histogram = {
-      full_dt <- prepare_ranked_plot_table(
-        table = table,
-        feature_column = feature_column,
-        value_column = value_column,
-        top_n = NULL,
-        highlight_features = highlight_features
-      )
-      ggplot2::ggplot(full_dt, ggplot2::aes(x = value)) +
-        ggplot2::geom_histogram(fill = "#8a1538", colour = "white", bins = 30) +
-        ggplot2::labs(x = value_label, y = "Count", title = title, subtitle = subtitle)
-    }
-  )
+  plot_mode <- infer_plot_mode(dt, test_tail = test_tail)
 
-  p +
-    ggplot2::theme_minimal(base_family = "Helvetica") +
+  base <- ggplot2::theme_minimal(base_family = "Helvetica") +
     ggplot2::theme(
       plot.title = ggplot2::element_text(face = "bold", colour = "#111827"),
-      plot.subtitle = ggplot2::element_text(colour = "#4b5563"),
-      axis.title = ggplot2::element_text(face = "bold")
+      axis.title = ggplot2::element_text(face = "bold"),
+      panel.grid.minor = ggplot2::element_blank()
     )
+
+  if (identical(plot_mode, "volcano")) {
+    p <- ggplot2::ggplot(dt, ggplot2::aes(x = z_plot, y = neglog10_p)) +
+      ggplot2::geom_point(
+        data = dt[highlighted == FALSE],
+        colour = "#b3b3b3",
+        alpha = 0.8,
+        size = 2
+      ) +
+      ggplot2::geom_point(
+        data = dt[highlighted == TRUE],
+        colour = "#8a1538",
+        alpha = 0.75,
+        size = 2.4
+      ) +
+      ggrepel::geom_text_repel(
+        data = dt[should_label == TRUE],
+        ggplot2::aes(label = ifelse(matched_label != "", matched_label, feature_label)),
+        colour = "#111111",
+        size = 3.3,
+        box.padding = 0.35,
+        point.padding = 0.15,
+        min.segment.length = 0,
+        max.overlaps = Inf
+      ) +
+      ggplot2::labs(
+        title = title,
+        x = "Z-score",
+        y = expression(-log[10](p-value))
+      )
+  } else {
+    data.table::setorder(dt, -z_plot, feature_label)
+    dt[, rank_plot := seq_len(.N)]
+    p <- ggplot2::ggplot(dt, ggplot2::aes(x = rank_plot, y = z_plot)) +
+      ggplot2::geom_point(
+        data = dt[highlighted == FALSE],
+        colour = "#b3b3b3",
+        alpha = 0.8,
+        size = 2
+      ) +
+      ggplot2::geom_point(
+        data = dt[highlighted == TRUE],
+        colour = "#8a1538",
+        alpha = 0.75,
+        size = 2.4
+      ) +
+      ggrepel::geom_text_repel(
+        data = dt[should_label == TRUE],
+        ggplot2::aes(label = ifelse(matched_label != "", matched_label, feature_label)),
+        colour = "#111111",
+        size = 3.3,
+        box.padding = 0.35,
+        point.padding = 0.15,
+        min.segment.length = 0,
+        max.overlaps = Inf
+      ) +
+      ggplot2::labs(
+        title = title,
+        x = "Rank",
+        y = "Z-score"
+      )
+  }
+
+  list(
+    plot = p + base,
+    plot_data = dt,
+    plot_mode = plot_mode
+  )
 }
 
-save_scores_plot <- function(
+save_score_plot <- function(
   bundle = NULL,
   table = NULL,
   file_path,
   which = NULL,
-  plot_type = "ranked_points",
-  top_n = 25L,
+  test_tail = "auto",
   feature_column = NULL,
-  value_column = NULL,
-  highlight_features = NULL,
+  z_column = "zstat",
+  p_value_column = NULL,
+  label_features = NULL,
   title = "conseguiR Scores",
-  subtitle = NULL,
   width = 10,
   height = 7,
   dpi = 300
@@ -200,110 +354,21 @@ save_scores_plot <- function(
 
   dir.create(dirname(file_path), recursive = TRUE, showWarnings = FALSE)
 
-  plot_obj <- create_scores_plot(
+  out <- create_score_plot(
     bundle = bundle,
     table = table,
     which = which,
-    plot_type = plot_type,
-    top_n = top_n,
+    test_tail = test_tail,
     feature_column = feature_column,
-    value_column = value_column,
-    highlight_features = highlight_features,
-    title = title,
-    subtitle = subtitle
+    z_column = z_column,
+    p_value_column = p_value_column,
+    label_features = label_features,
+    title = title
   )
 
   ggplot2::ggsave(
     filename = file_path,
-    plot = plot_obj,
-    width = width,
-    height = height,
-    dpi = dpi,
-    limitsize = FALSE,
-    bg = "white"
-  )
-
-  invisible(file_path)
-}
-
-create_diffusion_plot <- function(
-  diffusion = NULL,
-  table = NULL,
-  which = c("all_genes", "top_genes"),
-  plot_type = c("ranked_points", "top_bar", "histogram"),
-  top_n = 50L,
-  gene_column = NULL,
-  score_column = NULL,
-  highlight_genes = NULL,
-  title = "conseguiR Diffusion Scores",
-  subtitle = NULL
-) {
-  which <- match.arg(which)
-  plot_type <- match.arg(plot_type)
-
-  if (is.null(table)) {
-    if (is.null(diffusion) || !is.list(diffusion)) {
-      stop("Provide either `diffusion` or `table` to `create_diffusion_plot()`.")
-    }
-    if (which %in% names(diffusion)) {
-      table <- diffusion[[which]]
-    } else if ("objects" %in% names(diffusion) && which %in% names(diffusion$objects)) {
-      table <- diffusion$objects[[which]]
-    } else {
-      stop("Could not resolve the requested diffusion table: ", which)
-    }
-  }
-
-  create_scores_plot(
-    table = table,
-    plot_type = plot_type,
-    top_n = top_n,
-    feature_column = gene_column %||% "gene_name",
-    value_column = score_column,
-    highlight_features = highlight_genes,
-    title = title,
-    subtitle = subtitle
-  )
-}
-
-save_diffusion_plot <- function(
-  diffusion = NULL,
-  table = NULL,
-  file_path,
-  which = "all_genes",
-  plot_type = "ranked_points",
-  top_n = 50L,
-  gene_column = NULL,
-  score_column = NULL,
-  highlight_genes = NULL,
-  title = "conseguiR Diffusion Scores",
-  subtitle = NULL,
-  width = 10,
-  height = 7,
-  dpi = 300
-) {
-  if (missing(file_path) || is.null(file_path) || !nzchar(file_path)) {
-    stop("`file_path` must be provided to save the diffusion plot.")
-  }
-
-  dir.create(dirname(file_path), recursive = TRUE, showWarnings = FALSE)
-
-  plot_obj <- create_diffusion_plot(
-    diffusion = diffusion,
-    table = table,
-    which = which,
-    plot_type = plot_type,
-    top_n = top_n,
-    gene_column = gene_column,
-    score_column = score_column,
-    highlight_genes = highlight_genes,
-    title = title,
-    subtitle = subtitle
-  )
-
-  ggplot2::ggsave(
-    filename = file_path,
-    plot = plot_obj,
+    plot = out$plot,
     width = width,
     height = height,
     dpi = dpi,

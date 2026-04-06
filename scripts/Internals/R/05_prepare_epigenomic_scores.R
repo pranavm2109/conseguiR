@@ -10,14 +10,14 @@ suppressPackageStartupMessages({
 })
 
 conseguiR_runtime_file <- function(relpath) {
-  pkg_path <- system.file(relpath, package = "conseguiR")
-  if (nzchar(pkg_path) && file.exists(pkg_path)) {
-    return(pkg_path)
-  }
-
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
     return(candidate)
+  }
+
+  pkg_path <- system.file(relpath, package = "conseguiR")
+  if (nzchar(pkg_path) && file.exists(pkg_path)) {
+    return(pkg_path)
   }
 
   stop("Could not locate required runtime file: ", relpath)

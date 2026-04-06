@@ -1,5 +1,5 @@
 #' @keywords internal
-.conseguiR_runtime_env <- new.env(parent = baseenv())
+.conseguiR_runtime_env <- new.env(parent = globalenv())
 
 #' @keywords internal
 `%||%` <- function(x, y) {
@@ -1060,23 +1060,22 @@ call_selected_subgraph <- function(
   )
 }
 
-#' Plot score tables from germline, somatic, or epigenomic bundles
+#' Plot score tables from scoring or diffusion outputs
 #'
-#' Creates a default score visualization from a score bundle or an explicit
-#' score table.
+#' Creates a rank plot for one-tailed outputs and a volcano plot for two-tailed
+#' outputs.
 #'
-#' @param scores Optional score bundle returned by a scoring wrapper.
-#' @param table Optional explicit score table.
-#' @param which Optional bundle component name such as `gene_scores` or
-#'   `reg_scores`.
+#' @param scores Optional bundle returned by a scoring wrapper or
+#'   `run_gene_reg_diffusion()`.
+#' @param table Optional explicit table.
+#' @param which Optional bundle component name such as `gene_scores`,
+#'   `reg_scores`, `all_genes`, or `top_genes`.
 #' @param plot_file_path Optional output path for the saved figure.
-#' @param plot_type Plot type. Supported values are `ranked_points`,
-#'   `top_bar`, and `histogram`.
-#' @param top_n Number of top-ranked features used by ranked/bar plots.
+#' @param test_tail One of `auto`, `one_tailed`, or `two_tailed`.
 #' @param feature_column Optional explicit feature-label column.
-#' @param value_column Optional explicit numeric score column.
-#' @param highlight_features Optional character vector of features to
-#'   highlight.
+#' @param z_column Z-score column name.
+#' @param p_value_column Optional explicit p-value column for volcano plots.
+#' @param label_features Optional character vector of features to label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -1090,11 +1089,13 @@ call_selected_subgraph <- function(
 #' - `scores`: a bundle returned by `run_germline_gene_scoring()`,
 #'   `run_germline_regulatory_scoring()`, `prepare_germline_scores()`,
 #'   `run_somatic_gene_scoring()`, `run_somatic_regulatory_scoring()`,
-#'   `prepare_somatic_scores()`, or `prepare_epigenomic_scores()`
-#' - `table`: a data frame/data.table containing one feature label column and
-#'   one numeric score column
+#'   `prepare_somatic_scores()`, `prepare_epigenomic_scores()`, or
+#'   `run_gene_reg_diffusion()`
+#' - `table`: a data frame/data.table containing at least a feature column and
+#'   a `zstat`-like numeric column
 #' - `which`: when `scores` contains multiple tables, use values like
-#'   `"gene_scores"` or `"reg_scores"`
+#'   `"gene_scores"`, `"reg_scores"`, `"all_genes"`, or `"top_genes"`
+#' - `test_tail = "two_tailed"` expects a usable p-value column in the table
 #' - `plot_file_path`: a single file path such as `"scores_plot.pdf"`
 #'
 #' @examples
@@ -1109,23 +1110,23 @@ call_selected_subgraph <- function(
 #'   scores = germline,
 #'   which = "gene_scores",
 #'   plot_file_path = "germline_gene_scores.pdf",
-#'   plot_type = "top_bar",
-#'   top_n = 25L
+#'   test_tail = "one_tailed",
+#'   label_features = c("MYC", "BCL2")
 #' )
 #' }
 #'
-#' @return A plot bundle containing the ggplot object.
+#' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
 plot_scores <- function(
   scores = NULL,
   table = NULL,
   which = NULL,
   plot_file_path = NULL,
-  plot_type = "ranked_points",
-  top_n = 25L,
+  test_tail = "auto",
   feature_column = NULL,
-  value_column = NULL,
-  highlight_features = NULL,
+  z_column = "zstat",
+  p_value_column = NULL,
+  label_features = NULL,
   title = "conseguiR Scores",
   width = 10,
   height = 7,
@@ -1138,11 +1139,11 @@ plot_scores <- function(
     table = table,
     which = which,
     plot_file_path = plot_file_path,
-    plot_type = plot_type,
-    top_n = top_n,
+    test_tail = test_tail,
     feature_column = feature_column,
-    value_column = value_column,
-    highlight_features = highlight_features,
+    z_column = z_column,
+    p_value_column = p_value_column,
+    label_features = label_features,
     title = title,
     width = width,
     height = height,
@@ -1152,82 +1153,276 @@ plot_scores <- function(
   )
 }
 
-#' Plot diffusion results
+#' Plot germline gene signal before or after diffusion
 #'
-#' Creates a default diffusion visualization from a diffusion bundle or an
-#' explicit diffusion table.
-#'
-#' @param diffusion Optional diffusion bundle returned by
-#'   `run_gene_reg_diffusion()`.
-#' @param table Optional explicit diffusion table.
-#' @param which Which diffusion table to use: `all_genes` or `top_genes`.
+#' @param germline_scores Optional germline score bundle.
+#' @param scored_graph Optional scored gene-reg graph bundle.
+#' @param diffusion Optional diffusion bundle.
+#' @param nodes_path Optional explicit scored node-table path.
+#' @param diffusion_path Optional explicit diffusion table path.
+#' @param stage One of `"pre"` or `"post"`.
 #' @param plot_file_path Optional output path for the saved figure.
-#' @param plot_type Plot type. Supported values are `ranked_points`,
-#'   `top_bar`, and `histogram`.
-#' @param top_n Number of top-ranked genes used by ranked/bar plots.
-#' @param gene_column Optional explicit gene-label column.
-#' @param score_column Optional explicit numeric diffusion-score column.
-#' @param highlight_genes Optional character vector of genes to highlight.
+#' @param label_features Optional gene symbols to highlight and label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
 #' @param dpi Plot DPI.
 #' @param save_plot Whether to save the figure.
-#' @param verbose Logical scalar. If `TRUE`, show stage messages while building
-#'   the plot.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages.
 #'
-#' @details
-#' Exact formatting:
-#' - `diffusion`: the bundle returned by `run_gene_reg_diffusion()`
-#' - `table`: a data frame/data.table with a gene-label column and a numeric
-#'   diffusion score column
-#' - `which`: either `"all_genes"` or `"top_genes"`
-#' - `plot_file_path`: a single file path such as `"diffusion_plot.pdf"`
-#'
-#' @examples
-#' \dontrun{
-#' diffusion <- run_gene_reg_diffusion(
-#'   nodes_path = "gene_reg_graph_scored_nodes.tsv.gz",
-#'   edges_path = "gene_reg_graph_scored_edges.tsv.gz"
-#' )
-#'
-#' plot_diffusion(
-#'   diffusion = diffusion,
-#'   which = "top_genes",
-#'   plot_file_path = "diffusion_top_genes.pdf",
-#'   highlight_genes = c("MYC", "PAX5", "BCL2")
-#' )
-#' }
-#'
-#' @return A plot bundle containing the ggplot object.
+#' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
-plot_diffusion <- function(
+plot_germline_gene_scores <- function(
+  germline_scores = NULL,
+  scored_graph = NULL,
   diffusion = NULL,
-  table = NULL,
-  which = "all_genes",
+  nodes_path = NULL,
+  diffusion_path = NULL,
+  stage = c("pre", "post"),
   plot_file_path = NULL,
-  plot_type = "ranked_points",
-  top_n = 50L,
-  gene_column = NULL,
-  score_column = NULL,
-  highlight_genes = NULL,
-  title = "conseguiR Diffusion Scores",
+  label_features = NULL,
+  title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
   verbose = FALSE
 ) {
-  .conseguiR_external_fun("plot_diffusion")(
+  .conseguiR_external_fun("plot_germline_gene_scores")(
+    germline_scores = germline_scores,
+    scored_graph = scored_graph,
     diffusion = diffusion,
-    table = table,
-    which = which,
+    nodes_path = nodes_path,
+    diffusion_path = diffusion_path,
+    stage = stage,
     plot_file_path = plot_file_path,
-    plot_type = plot_type,
-    top_n = top_n,
-    gene_column = gene_column,
-    score_column = score_column,
-    highlight_genes = highlight_genes,
+    label_features = label_features,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
+#' Plot germline regulatory signal
+#'
+#' @param germline_scores Optional germline score bundle.
+#' @param scored_graph Optional scored gene-reg graph bundle.
+#' @param nodes_path Optional explicit scored node-table path.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param label_features Optional gene symbols to highlight and label.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @return A plot bundle containing the ggplot object and plotting data.
+#' @export
+plot_germline_reg_scores <- function(
+  germline_scores = NULL,
+  scored_graph = NULL,
+  nodes_path = NULL,
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  .conseguiR_external_fun("plot_germline_reg_scores")(
+    germline_scores = germline_scores,
+    scored_graph = scored_graph,
+    nodes_path = nodes_path,
+    plot_file_path = plot_file_path,
+    label_features = label_features,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
+#' Plot somatic gene signal before or after diffusion
+#'
+#' @param somatic_scores Optional somatic score bundle.
+#' @param scored_graph Optional scored gene-reg graph bundle.
+#' @param diffusion Optional diffusion bundle.
+#' @param nodes_path Optional explicit scored node-table path.
+#' @param diffusion_path Optional explicit diffusion table path.
+#' @param stage One of `"pre"` or `"post"`.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param label_features Optional gene symbols to highlight and label.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @return A plot bundle containing the ggplot object and plotting data.
+#' @export
+plot_somatic_gene_scores <- function(
+  somatic_scores = NULL,
+  scored_graph = NULL,
+  diffusion = NULL,
+  nodes_path = NULL,
+  diffusion_path = NULL,
+  stage = c("pre", "post"),
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  .conseguiR_external_fun("plot_somatic_gene_scores")(
+    somatic_scores = somatic_scores,
+    scored_graph = scored_graph,
+    diffusion = diffusion,
+    nodes_path = nodes_path,
+    diffusion_path = diffusion_path,
+    stage = stage,
+    plot_file_path = plot_file_path,
+    label_features = label_features,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
+#' Plot somatic regulatory signal
+#'
+#' @param somatic_scores Optional somatic score bundle.
+#' @param scored_graph Optional scored gene-reg graph bundle.
+#' @param nodes_path Optional explicit scored node-table path.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param label_features Optional gene symbols to highlight and label.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @return A plot bundle containing the ggplot object and plotting data.
+#' @export
+plot_somatic_reg_scores <- function(
+  somatic_scores = NULL,
+  scored_graph = NULL,
+  nodes_path = NULL,
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  .conseguiR_external_fun("plot_somatic_reg_scores")(
+    somatic_scores = somatic_scores,
+    scored_graph = scored_graph,
+    nodes_path = nodes_path,
+    plot_file_path = plot_file_path,
+    label_features = label_features,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
+#' Plot post-diffusion epigenomic gene signal
+#'
+#' @param diffusion Optional diffusion bundle.
+#' @param diffusion_path Optional explicit diffusion table path.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param label_features Optional gene symbols to highlight and label.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @return A plot bundle containing the ggplot object and plotting data.
+#' @export
+plot_epigenomic_gene_scores <- function(
+  diffusion = NULL,
+  diffusion_path = NULL,
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  .conseguiR_external_fun("plot_epigenomic_gene_scores")(
+    diffusion = diffusion,
+    diffusion_path = diffusion_path,
+    plot_file_path = plot_file_path,
+    label_features = label_features,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
+#' Plot epigenomic regulatory signal
+#'
+#' @param epigenomic_scores Optional epigenomic score bundle.
+#' @param scored_graph Optional scored gene-reg graph bundle.
+#' @param nodes_path Optional explicit scored node-table path.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param label_features Optional features to highlight and label.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @return A plot bundle containing the ggplot object and plotting data.
+#' @export
+plot_epigenomic_reg_scores <- function(
+  epigenomic_scores = NULL,
+  scored_graph = NULL,
+  nodes_path = NULL,
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  .conseguiR_external_fun("plot_epigenomic_reg_scores")(
+    epigenomic_scores = epigenomic_scores,
+    scored_graph = scored_graph,
+    nodes_path = nodes_path,
+    plot_file_path = plot_file_path,
+    label_features = label_features,
     title = title,
     width = width,
     height = height,

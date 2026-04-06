@@ -22,9 +22,11 @@ make_gene_reg_scored_test_path <- function(stem, ext = "") {
 make_live_gene_reg_score_fixture <- function() {
   graph <- read_gene_reg_graph_no_scores(default_graph_rds_path)
   nodes <- extract_gene_reg_graph_nodes(graph)
-
-  gene_ids <- nodes[node_type == "gene", unique(node_id)][1:3]
-  reg_ids <- nodes[node_type == "reg", unique(node_id)][1:3]
+  edges <- extract_gene_reg_graph_edges(graph)
+  connected_pairs <- unique(edges[, .(gene_id = from, reg_id = to)])
+  connected_pairs <- connected_pairs[, .SD[1], by = gene_id][1:3]
+  gene_ids <- unique(connected_pairs$gene_id)
+  reg_ids <- unique(connected_pairs$reg_id)
 
   list(
     graph = graph,
@@ -114,6 +116,7 @@ test_prepare_scored_gene_reg_graph_saves_outputs <- function(print_scores = TRUE
   expect_true(file.exists(paste0(output_prefix, ".rds")))
   expect_true(file.exists(paste0(output_prefix, "_nodes.tsv.gz")))
   expect_true(file.exists(paste0(output_prefix, "_edges.tsv.gz")))
+  expect_true(all(result$nodes$node_id %in% c(fixture$gene_somatic_scores$gene_id, fixture$reg_somatic_scores$reg_elem_id)))
 
   if (isTRUE(print_scores)) {
     message("Scored gene-reg nodes with injected non-zero scores:")

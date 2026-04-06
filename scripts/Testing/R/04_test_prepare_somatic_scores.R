@@ -182,8 +182,9 @@ test_extract_dndscv_gene_scores <- function() {
 
   scores <- extract_dndscv_gene_scores(dndscv_mock)
 
-  expect_identical(names(scores), c("gene_id", "zstat"))
+  expect_identical(names(scores), c("gene_id", "p_value", "zstat"))
   expect_identical(as.character(scores$gene_id[[1]]), "TP53")
+  expect_true(all(scores$p_value > 0))
   expect_true(all(scores$zstat > 0))
   invisible(scores)
 }
@@ -197,8 +198,9 @@ test_extract_fishhook_reg_scores <- function() {
 
   scores <- extract_fishhook_reg_scores(fishhook_mock)
 
-  expect_identical(names(scores), c("reg_elem_id", "zstat"))
+  expect_identical(names(scores), c("reg_elem_id", "p_value", "zstat"))
   expect_identical(as.character(scores$reg_elem_id[[1]]), "GH01J000013")
+  expect_true(all(scores$p_value > 0))
   expect_true(all(scores$zstat > 0))
   invisible(scores)
 }
@@ -226,8 +228,8 @@ test_run_somatic_scoring_pipeline_with_mock_outputs <- function(print_scores = T
 
   expect_true(is.data.frame(result$gene_scores))
   expect_true(is.data.frame(result$reg_scores))
-  expect_identical(names(result$gene_scores), c("gene_id", "zstat"))
-  expect_identical(names(result$reg_scores), c("reg_elem_id", "zstat"))
+  expect_identical(names(result$gene_scores), c("gene_id", "p_value", "zstat"))
+  expect_identical(names(result$reg_scores), c("reg_elem_id", "p_value", "zstat"))
   expect_gt(nrow(result$gene_scores), 0L)
   expect_gt(nrow(result$reg_scores), 0L)
 
@@ -249,7 +251,7 @@ test_run_dndscv_gene_scoring_live <- function(refdb = find_dndscv_refdb()) {
   result <- run_dndscv_gene_scoring(maf, refdb = refdb)
 
   expect_true(is.data.frame(result))
-  expect_identical(names(result), c("gene_id", "zstat"))
+  expect_identical(names(result), c("gene_id", "p_value", "zstat"))
   expect_gt(nrow(result), 0L)
   message("Live dndscv gene scores:")
   print(result)
@@ -269,7 +271,7 @@ test_run_fishhook_reg_scoring_live <- function() {
   )
 
   expect_true(is.data.frame(result))
-  expect_identical(names(result), c("reg_elem_id", "zstat"))
+  expect_identical(names(result), c("reg_elem_id", "p_value", "zstat"))
   expect_gt(nrow(result), 0L)
   message("Live fishHook regulatory-element scores:")
   print(result)
@@ -297,8 +299,8 @@ test_run_somatic_scoring_pipeline_live <- function(
 
   expect_true(is.data.frame(result$gene_scores))
   expect_true(is.data.frame(result$reg_scores))
-  expect_identical(names(result$gene_scores), c("gene_id", "zstat"))
-  expect_identical(names(result$reg_scores), c("reg_elem_id", "zstat"))
+  expect_identical(names(result$gene_scores), c("gene_id", "p_value", "zstat"))
+  expect_identical(names(result$reg_scores), c("reg_elem_id", "p_value", "zstat"))
   expect_gt(nrow(result$gene_scores), 0L)
   expect_gt(nrow(result$reg_scores), 0L)
 

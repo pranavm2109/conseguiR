@@ -5,14 +5,14 @@ suppressPackageStartupMessages({
 })
 
 conseguiR_runtime_file <- function(relpath) {
-  pkg_path <- system.file(relpath, package = "conseguiR")
-  if (nzchar(pkg_path) && file.exists(pkg_path)) {
-    return(pkg_path)
-  }
-
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
     return(candidate)
+  }
+
+  pkg_path <- system.file(relpath, package = "conseguiR")
+  if (nzchar(pkg_path) && file.exists(pkg_path)) {
+    return(pkg_path)
   }
 
   stop("Could not locate required runtime file: ", relpath)
@@ -554,6 +554,7 @@ run_somatic_gene_scoring <- function(
 ) {
   dndscv_args <- as_list_or_empty(dndscv_args)
   verbose_message(verbose, "Preparing somatic gene scores...")
+  maf <- read_table_if_path(maf, showProgress = FALSE)
 
   scores <- run_with_args(
     run_dndscv_gene_scoring,
@@ -615,6 +616,7 @@ run_somatic_regulatory_scoring <- function(
 ) {
   fishhook_args <- as_list_or_empty(fishhook_args)
   verbose_message(verbose, "Preparing somatic regulatory scores...")
+  maf <- read_table_if_path(maf, showProgress = FALSE)
 
   scores <- run_with_args(
     run_fishhook_reg_scoring,
@@ -1177,40 +1179,38 @@ plot_selected_subgraph <- function(
   )
 }
 
-#' Plot score tables from germline, somatic, or epigenomic bundles
+#' Plot score tables from germline, somatic, epigenomic, or diffusion bundles
 #'
-#' Creates a default score visualization from an explicit score table or from a
-#' score bundle returned by the package wrappers.
+#' Creates a rank plot for one-tailed outputs and a volcano plot for two-tailed
+#' outputs.
 #'
-#' @param scores Optional score bundle.
+#' @param scores Optional bundle containing a plottable score table.
 #' @param table Optional explicit score table.
-#' @param which Optional bundle component name such as `gene_scores` or
-#'   `reg_scores`.
+#' @param which Optional bundle component name such as `gene_scores`,
+#'   `reg_scores`, `all_genes`, or `top_genes`.
 #' @param plot_file_path Optional output path for the saved figure.
-#' @param plot_type Plot type. Supported values are `ranked_points`,
-#'   `top_bar`, and `histogram`.
-#' @param top_n Number of top-ranked features used by ranked/bar plots.
+#' @param test_tail One of `auto`, `one_tailed`, or `two_tailed`.
 #' @param feature_column Optional explicit feature-label column.
-#' @param value_column Optional explicit score column.
-#' @param highlight_features Optional character vector of feature names to
-#'   highlight.
+#' @param z_column Z-score column name.
+#' @param p_value_column Optional explicit p-value column for volcano plots.
+#' @param label_features Optional character vector of features to label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
 #' @param dpi Plot DPI.
 #' @param save_plot Whether to save the figure.
 #'
-#' @return A plot bundle containing the ggplot object.
+#' @return A plot bundle containing the ggplot object and plotting data.
 plot_scores <- function(
   scores = NULL,
   table = NULL,
   which = NULL,
   plot_file_path = NULL,
-  plot_type = "ranked_points",
-  top_n = 25L,
+  test_tail = "auto",
   feature_column = NULL,
-  value_column = NULL,
-  highlight_features = NULL,
+  z_column = "zstat",
+  p_value_column = NULL,
+  label_features = NULL,
   title = "conseguiR Scores",
   width = 10,
   height = 7,
@@ -1220,15 +1220,15 @@ plot_scores <- function(
 ) {
   verbose_message(verbose, "Preparing score plot...")
 
-  plot_obj <- create_scores_plot(
+  plot_obj <- create_score_plot(
     bundle = scores,
     table = table,
     which = which,
-    plot_type = plot_type,
-    top_n = top_n,
+    test_tail = test_tail,
     feature_column = feature_column,
-    value_column = value_column,
-    highlight_features = highlight_features,
+    z_column = z_column,
+    p_value_column = p_value_column,
+    label_features = label_features,
     title = title
   )
 
@@ -1237,16 +1237,16 @@ plot_scores <- function(
       stop("`plot_file_path` must be provided when `save_plot = TRUE`.")
     }
 
-    save_scores_plot(
+    save_score_plot(
       bundle = scores,
       table = table,
       file_path = plot_file_path,
       which = which,
-      plot_type = plot_type,
-      top_n = top_n,
+      test_tail = test_tail,
       feature_column = feature_column,
-      value_column = value_column,
-      highlight_features = highlight_features,
+      z_column = z_column,
+      p_value_column = p_value_column,
+      label_features = label_features,
       title = title,
       width = width,
       height = height,
@@ -1256,109 +1256,319 @@ plot_scores <- function(
 
   new_bundle(
     type = "score_plot",
-    objects = list(plot = plot_obj),
+    objects = list(
+      plot = plot_obj$plot,
+      plot_data = plot_obj$plot_data
+    ),
     output_paths = list(
       plot_file_path = if (isTRUE(save_plot)) plot_file_path else NULL
     ),
     config = list(
       which = which,
-      plot_type = plot_type,
-      top_n = top_n,
+      test_tail = test_tail,
       feature_column = feature_column,
-      value_column = value_column
+      z_column = z_column,
+      p_value_column = p_value_column,
+      plot_mode = plot_obj$plot_mode
     )
   )
 }
 
-#' Plot diffusion results
-#'
-#' Creates a default diffusion visualization from a diffusion bundle or an
-#' explicit diffusion table.
-#'
-#' @param diffusion Optional diffusion bundle.
-#' @param table Optional explicit diffusion table.
-#' @param which Which diffusion table to use: `all_genes` or `top_genes`.
-#' @param plot_file_path Optional output path for the saved figure.
-#' @param plot_type Plot type. Supported values are `ranked_points`,
-#'   `top_bar`, and `histogram`.
-#' @param top_n Number of top-ranked genes used by ranked/bar plots.
-#' @param gene_column Optional explicit gene-label column.
-#' @param score_column Optional explicit diffusion-score column.
-#' @param highlight_genes Optional character vector of genes to highlight.
-#' @param title Plot title.
-#' @param width Plot width in inches.
-#' @param height Plot height in inches.
-#' @param dpi Plot DPI.
-#' @param save_plot Whether to save the figure.
-#'
-#' @return A plot bundle containing the ggplot object.
-plot_diffusion <- function(
+resolve_plot_nodes <- function(scored_graph = NULL, nodes_path = NULL) {
+  nodes <- resolve_bundle_component(scored_graph, "nodes")
+  if (!is.null(nodes)) {
+    return(as.data.table(nodes))
+  }
+
+  nodes_path <- nodes_path %||% resolve_output_path(scored_graph, "nodes_path")
+  nodes_path <- nodes_path %||% default_diffusion_config$nodes_path
+  validate_scored_gene_reg_nodes(read_scored_gene_reg_nodes(nodes_path))
+}
+
+resolve_plot_diffusion <- function(diffusion = NULL, diffusion_path = NULL, which = "all_genes") {
+  dt <- resolve_bundle_component(diffusion, which)
+  if (!is.null(dt)) {
+    return(data.table::as.data.table(dt))
+  }
+
+  diffusion_path <- diffusion_path %||% resolve_output_path(diffusion, paste0(which, "_path"))
+  diffusion_path <- diffusion_path %||% resolve_output_path(diffusion, "all_genes_path")
+  if (is.null(diffusion_path) || !nzchar(diffusion_path)) {
+    stop("A diffusion bundle or diffusion_path is required for post-diffusion plotting.")
+  }
+
+  read_diffusion_results(diffusion_path)
+}
+
+default_score_table_path <- function(modality = c("germline", "somatic", "epigenomic"), target = c("gene", "reg")) {
+  modality <- match.arg(modality)
+  target <- match.arg(target)
+
+  switch(
+    paste(modality, target, sep = "_"),
+    germline_gene = "data/processed/germline_gene_scores.tsv",
+    germline_reg = "data/processed/germline_reg_scores.tsv",
+    somatic_gene = "data/processed/somatic_gene_scores.tsv",
+    somatic_reg = "data/processed/somatic_reg_scores.tsv",
+    epigenomic_reg = "data/processed/epigenomic_reg_scores.tsv",
+    NULL
+  )
+}
+
+build_prediff_gene_table <- function(score_bundle = NULL, scored_graph = NULL, nodes_path = NULL, modality = c("germline", "somatic", "epigenomic")) {
+  modality <- match.arg(modality)
+
+  preferred_component <- if (identical(modality, "epigenomic")) NULL else "gene_scores"
+  if (!is.null(preferred_component)) {
+    dt <- resolve_bundle_component(score_bundle, preferred_component)
+    if (!is.null(dt)) {
+      return(list(
+        table = data.table::as.data.table(dt),
+        feature_column = intersect(c("gene_name", "gene_id", "feature_id"), names(dt))[[1]],
+        z_column = "zstat",
+        p_value_column = if ("p_value" %in% names(dt)) "p_value" else NULL
+      ))
+    }
+  }
+
+  default_path <- default_score_table_path(modality = modality, target = "gene")
+  if (!is.null(default_path) && file.exists(default_path)) {
+    dt <- data.table::as.data.table(data.table::fread(default_path, showProgress = FALSE))
+    return(list(
+      table = dt,
+      feature_column = intersect(c("gene_name", "gene_id", "feature_id"), names(dt))[[1]],
+      z_column = "zstat",
+      p_value_column = if ("p_value" %in% names(dt)) "p_value" else NULL
+    ))
+  }
+
+  nodes <- resolve_plot_nodes(scored_graph = scored_graph, nodes_path = nodes_path)
+  score_col <- paste0(modality, "_score")
+  if (!score_col %in% names(nodes)) {
+    stop("Scored node table is missing expected column: ", score_col)
+  }
+
+  gene_nodes <- nodes[node_type == "gene"]
+  gene_label_col <- if ("name" %in% names(gene_nodes)) "name" else "node_id"
+  list(
+    table = gene_nodes[, .(
+      gene_name = as.character(get(gene_label_col)),
+      zstat = as.numeric(get(score_col))
+    )],
+    feature_column = "gene_name",
+    z_column = "zstat",
+    p_value_column = NULL
+  )
+}
+
+build_prediff_reg_table <- function(score_bundle = NULL, scored_graph = NULL, nodes_path = NULL, modality = c("germline", "somatic", "epigenomic")) {
+  modality <- match.arg(modality)
+
+  dt <- resolve_bundle_component(score_bundle, "reg_scores")
+  if (!is.null(dt)) {
+    feature_column <- intersect(c("reg_elem_id", "feature_id"), names(dt))[[1]]
+    return(list(
+      table = data.table::as.data.table(dt),
+      feature_column = feature_column,
+      z_column = "zstat",
+      p_value_column = if ("p_value" %in% names(dt)) "p_value" else NULL
+    ))
+  }
+
+  default_path <- default_score_table_path(modality = modality, target = "reg")
+  if (!is.null(default_path) && file.exists(default_path)) {
+    dt <- data.table::as.data.table(data.table::fread(default_path, showProgress = FALSE))
+    feature_column <- intersect(c("reg_elem_id", "feature_id"), names(dt))[[1]]
+    return(list(
+      table = dt,
+      feature_column = feature_column,
+      z_column = "zstat",
+      p_value_column = if ("p_value" %in% names(dt)) "p_value" else NULL
+    ))
+  }
+
+  nodes <- resolve_plot_nodes(scored_graph = scored_graph, nodes_path = nodes_path)
+  score_col <- paste0(modality, "_score")
+  if (!score_col %in% names(nodes)) {
+    stop("Scored node table is missing expected column: ", score_col)
+  }
+
+  reg_nodes <- nodes[node_type == "reg"]
+  list(
+    table = reg_nodes[, .(
+      reg_elem_id = as.character(node_id),
+      zstat = as.numeric(get(score_col))
+    )],
+    feature_column = "reg_elem_id",
+    z_column = "zstat",
+    p_value_column = NULL
+  )
+}
+
+build_postdiff_gene_table <- function(diffusion = NULL, diffusion_path = NULL, modality = c("germline", "somatic", "epigenomic")) {
+  modality <- match.arg(modality)
+  dt <- resolve_plot_diffusion(diffusion = diffusion, diffusion_path = diffusion_path, which = "all_genes")
+  z_column <- paste0("post_", modality)
+  if (!z_column %in% names(dt)) {
+    stop("Diffusion table is missing expected post-diffusion column: ", z_column)
+  }
+
+  feature_column <- if ("gene_name" %in% names(dt)) "gene_name" else "node_id"
+  list(
+    table = data.table::as.data.table(dt),
+    feature_column = feature_column,
+    z_column = z_column,
+    p_value_column = NULL
+  )
+}
+
+run_score_plot_spec <- function(spec, plot_file_path = NULL, test_tail = "one_tailed", label_features = NULL, title = "conseguiR Scores", width = 10, height = 7, dpi = 300, save_plot = !is.null(plot_file_path), verbose = FALSE) {
+  plot_scores(
+    table = spec$table,
+    feature_column = spec$feature_column,
+    z_column = spec$z_column,
+    p_value_column = spec$p_value_column,
+    plot_file_path = plot_file_path,
+    test_tail = test_tail,
+    label_features = label_features,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
+#' Plot germline gene signal before or after diffusion
+plot_germline_gene_scores <- function(
+  germline_scores = NULL,
+  scored_graph = NULL,
   diffusion = NULL,
-  table = NULL,
-  which = "all_genes",
+  nodes_path = NULL,
+  diffusion_path = NULL,
+  stage = c("pre", "post"),
   plot_file_path = NULL,
-  plot_type = "ranked_points",
-  top_n = 50L,
-  gene_column = NULL,
-  score_column = NULL,
-  highlight_genes = NULL,
-  title = "conseguiR Diffusion Scores",
+  label_features = NULL,
+  title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
   verbose = FALSE
 ) {
-  verbose_message(verbose, "Preparing diffusion plot...")
-
-  plot_obj <- create_diffusion_plot(
-    diffusion = diffusion,
-    table = table,
-    which = which,
-    plot_type = plot_type,
-    top_n = top_n,
-    gene_column = gene_column,
-    score_column = score_column,
-    highlight_genes = highlight_genes,
-    title = title
-  )
-
-  if (isTRUE(save_plot)) {
-    if (is.null(plot_file_path) || !nzchar(plot_file_path)) {
-      stop("`plot_file_path` must be provided when `save_plot = TRUE`.")
-    }
-
-    save_diffusion_plot(
-      diffusion = diffusion,
-      table = table,
-      file_path = plot_file_path,
-      which = which,
-      plot_type = plot_type,
-      top_n = top_n,
-      gene_column = gene_column,
-      score_column = score_column,
-      highlight_genes = highlight_genes,
-      title = title,
-      width = width,
-      height = height,
-      dpi = dpi
-    )
+  stage <- match.arg(stage)
+  spec <- if (identical(stage, "pre")) {
+    build_prediff_gene_table(germline_scores, scored_graph, nodes_path, modality = "germline")
+  } else {
+    build_postdiff_gene_table(diffusion, diffusion_path, modality = "germline")
   }
 
-  new_bundle(
-    type = "diffusion_plot",
-    objects = list(plot = plot_obj),
-    output_paths = list(
-      plot_file_path = if (isTRUE(save_plot)) plot_file_path else NULL
-    ),
-    config = list(
-      which = which,
-      plot_type = plot_type,
-      top_n = top_n,
-      gene_column = gene_column,
-      score_column = score_column
-    )
-  )
+  title <- title %||% if (identical(stage, "pre")) "Pre-diffusion Germline Gene Signal" else "Post-diffusion Germline Gene Signal"
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+}
+
+#' Plot germline regulatory signal
+plot_germline_reg_scores <- function(
+  germline_scores = NULL,
+  scored_graph = NULL,
+  nodes_path = NULL,
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  spec <- build_prediff_reg_table(germline_scores, scored_graph, nodes_path, modality = "germline")
+  title <- title %||% "Germline Regulatory Signal"
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+}
+
+#' Plot somatic gene signal before or after diffusion
+plot_somatic_gene_scores <- function(
+  somatic_scores = NULL,
+  scored_graph = NULL,
+  diffusion = NULL,
+  nodes_path = NULL,
+  diffusion_path = NULL,
+  stage = c("pre", "post"),
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  stage <- match.arg(stage)
+  spec <- if (identical(stage, "pre")) {
+    build_prediff_gene_table(somatic_scores, scored_graph, nodes_path, modality = "somatic")
+  } else {
+    build_postdiff_gene_table(diffusion, diffusion_path, modality = "somatic")
+  }
+
+  title <- title %||% if (identical(stage, "pre")) "Pre-diffusion Somatic Gene Signal" else "Post-diffusion Somatic Gene Signal"
+  run_score_plot_spec(spec, plot_file_path, test_tail = "two_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+}
+
+#' Plot somatic regulatory signal
+plot_somatic_reg_scores <- function(
+  somatic_scores = NULL,
+  scored_graph = NULL,
+  nodes_path = NULL,
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  spec <- build_prediff_reg_table(somatic_scores, scored_graph, nodes_path, modality = "somatic")
+  title <- title %||% "Somatic Regulatory Signal"
+  run_score_plot_spec(spec, plot_file_path, test_tail = "two_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+}
+
+#' Plot post-diffusion epigenomic gene signal
+plot_epigenomic_gene_scores <- function(
+  diffusion = NULL,
+  diffusion_path = NULL,
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  spec <- build_postdiff_gene_table(diffusion, diffusion_path, modality = "epigenomic")
+  title <- title %||% "Post-diffusion Epigenomic Gene Signal"
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+}
+
+#' Plot epigenomic regulatory signal
+plot_epigenomic_reg_scores <- function(
+  epigenomic_scores = NULL,
+  scored_graph = NULL,
+  nodes_path = NULL,
+  plot_file_path = NULL,
+  label_features = NULL,
+  title = NULL,
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  spec <- build_prediff_reg_table(epigenomic_scores, scored_graph, nodes_path, modality = "epigenomic")
+  title <- title %||% "Epigenomic Regulatory Signal"
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
 }
 
 #' Run the full conseguiR pipeline end to end
@@ -1417,9 +1627,6 @@ run_conseguiR <- function(
   verbose = FALSE
 ) {
   verbose_message(verbose, "Running end-to-end conseguiR pipeline...")
-  gene_loc_path <- if (exists(".conseguiR_default_gene_loc_path", inherits = TRUE)) .conseguiR_default_gene_loc_path() else "data/raw/NCBI38/NCBI38.gene.loc"
-  reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
-
   validation <- validate_inputs(
     gwas_sumstats = gwas_sumstats,
     somatic_maf = somatic_maf,

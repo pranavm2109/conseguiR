@@ -2,18 +2,18 @@
 % Please edit documentation in R/user_api.R
 \name{plot_scores}
 \alias{plot_scores}
-\title{Plot score tables from germline, somatic, or epigenomic bundles}
+\title{Plot score tables from scoring or diffusion outputs}
 \usage{
 plot_scores(
   scores = NULL,
   table = NULL,
   which = NULL,
   plot_file_path = NULL,
-  plot_type = "ranked_points",
-  top_n = 25L,
+  test_tail = "auto",
   feature_column = NULL,
-  value_column = NULL,
-  highlight_features = NULL,
+  z_column = "zstat",
+  p_value_column = NULL,
+  label_features = NULL,
   title = "conseguiR Scores",
   width = 10,
   height = 7,
@@ -23,26 +23,25 @@ plot_scores(
 )
 }
 \arguments{
-\item{scores}{Optional score bundle returned by a scoring wrapper.}
+\item{scores}{Optional bundle returned by a scoring wrapper or
+\code{run_gene_reg_diffusion()}.}
 
-\item{table}{Optional explicit score table.}
+\item{table}{Optional explicit table.}
 
-\item{which}{Optional bundle component name such as \code{gene_scores} or
-\code{reg_scores}.}
+\item{which}{Optional bundle component name such as \code{gene_scores},
+\code{reg_scores}, \code{all_genes}, or \code{top_genes}.}
 
 \item{plot_file_path}{Optional output path for the saved figure.}
 
-\item{plot_type}{Plot type. Supported values are \code{ranked_points},
-\code{top_bar}, and \code{histogram}.}
-
-\item{top_n}{Number of top-ranked features used by ranked/bar plots.}
+\item{test_tail}{One of \code{auto}, \code{one_tailed}, or \code{two_tailed}.}
 
 \item{feature_column}{Optional explicit feature-label column.}
 
-\item{value_column}{Optional explicit numeric score column.}
+\item{z_column}{Z-score column name.}
 
-\item{highlight_features}{Optional character vector of features to
-highlight.}
+\item{p_value_column}{Optional explicit p-value column for volcano plots.}
+
+\item{label_features}{Optional character vector of features to label.}
 
 \item{title}{Plot title.}
 
@@ -58,11 +57,11 @@ highlight.}
 the plot.}
 }
 \value{
-A plot bundle containing the ggplot object.
+A plot bundle containing the ggplot object and plotting data.
 }
 \description{
-Creates a default score visualization from a score bundle or an explicit
-score table.
+Creates a rank plot for one-tailed outputs and a volcano plot for two-tailed
+outputs.
 }
 \details{
 Exact formatting:
@@ -70,11 +69,13 @@ Exact formatting:
 \item \code{scores}: a bundle returned by \code{run_germline_gene_scoring()},
 \code{run_germline_regulatory_scoring()}, \code{prepare_germline_scores()},
 \code{run_somatic_gene_scoring()}, \code{run_somatic_regulatory_scoring()},
-\code{prepare_somatic_scores()}, or \code{prepare_epigenomic_scores()}
-\item \code{table}: a data frame/data.table containing one feature label column and
-one numeric score column
+\code{prepare_somatic_scores()}, \code{prepare_epigenomic_scores()}, or
+\code{run_gene_reg_diffusion()}
+\item \code{table}: a data frame/data.table containing at least a feature column and
+a \code{zstat}-like numeric column
 \item \code{which}: when \code{scores} contains multiple tables, use values like
-\code{"gene_scores"} or \code{"reg_scores"}
+\code{"gene_scores"}, \code{"reg_scores"}, \code{"all_genes"}, or \code{"top_genes"}
+\item \code{test_tail = "two_tailed"} expects a usable p-value column in the table
 \item \code{plot_file_path}: a single file path such as \code{"scores_plot.pdf"}
 }
 }
@@ -90,8 +91,8 @@ plot_scores(
   scores = germline,
   which = "gene_scores",
   plot_file_path = "germline_gene_scores.pdf",
-  plot_type = "top_bar",
-  top_n = 25L
+  test_tail = "one_tailed",
+  label_features = c("MYC", "BCL2")
 )
 }
 

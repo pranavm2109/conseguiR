@@ -5,14 +5,14 @@ suppressPackageStartupMessages({
 })
 
 conseguiR_runtime_file <- function(relpath) {
-  pkg_path <- system.file(relpath, package = "conseguiR")
-  if (nzchar(pkg_path) && file.exists(pkg_path)) {
-    return(pkg_path)
-  }
-
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
     return(candidate)
+  }
+
+  pkg_path <- system.file(relpath, package = "conseguiR")
+  if (nzchar(pkg_path) && file.exists(pkg_path)) {
+    return(pkg_path)
   }
 
   stop("Could not locate required runtime file: ", relpath)
@@ -165,7 +165,7 @@ read_diffusion_results <- function(path = default_subgraph_config$diffusion_path
     stop("Diffusion results file does not exist: ", path)
   }
 
-  as.data.table(fread(path, sep = "\t", showProgress = FALSE))
+  data.table::as.data.table(data.table::fread(path, sep = "\t", showProgress = FALSE))
 }
 
 read_gene_gene_nodes <- function(path = default_subgraph_config$gg_nodes_path) {

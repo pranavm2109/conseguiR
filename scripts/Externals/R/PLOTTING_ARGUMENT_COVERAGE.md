@@ -3,13 +3,11 @@
 This document describes how `conseguiR` currently exposes arguments for:
 
 - score plotting
-- diffusion plotting
 - selected-subgraph plotting and visualization bundles
 
 The relevant user-facing functions are:
 
 - `plot_scores()`
-- `plot_diffusion()`
 - `plot_selected_subgraph()`
 - `run_conseguiR()`
 
@@ -37,59 +35,40 @@ Common values:
 - `gene_scores`
 - `reg_scores`
 
-### `plot_type`
+### `test_tail`
+
+Controls whether `plot_scores()` produces:
+
+- a rank plot for one-tailed outputs
+- a volcano plot for two-tailed outputs
 
 Supported values:
 
-- `ranked_points`
-- `top_bar`
-- `histogram`
+- `auto`
+- `one_tailed`
+- `two_tailed`
 
 ### `feature_column`
 
 Optional explicit feature-label column. Leave `NULL` to let the plotting helper
 infer the best available label column.
 
-### `value_column`
+### `z_column`
 
-Optional explicit numeric score column. Leave `NULL` to let the plotting helper
-infer the score column.
+Explicit z-score column. Default:
 
-### `highlight_features`
+- `zstat`
 
-Optional character vector of features to highlight in the score plot.
+### `p_value_column`
 
-## Diffusion Plotting
+Optional explicit p-value column used for volcano plots.
 
-### `diffusion`
+### `label_features`
 
-Optional diffusion bundle returned by `run_gene_reg_diffusion()`.
+Optional character vector of features to label in the score plot.
 
-### `table`
-
-Optional explicit in-memory diffusion table.
-
-### `which`
-
-Which diffusion table to plot.
-
-Supported values:
-
-- `all_genes`
-- `top_genes`
-
-### `gene_column`
-
-Optional explicit gene-label column. Leave `NULL` to use the default/inferred
-gene label column.
-
-### `score_column`
-
-Optional explicit numeric diffusion-score column.
-
-### `highlight_genes`
-
-Optional character vector of genes to highlight in the diffusion plot.
+The plotting helper will try to translate backend feature identifiers into more
+readable labels when a backend mapping is available.
 
 ## Selected Subgraph Plotting
 
