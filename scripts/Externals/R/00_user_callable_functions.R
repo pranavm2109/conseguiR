@@ -26,6 +26,7 @@ sys.source(conseguiR_runtime_file("scripts/Internals/R/06_impose_scores_on_gene_
 sys.source(conseguiR_runtime_file("scripts/Internals/R/07_run_diffusion_on_gene_reg_graph.R"), envir = environment())
 sys.source(conseguiR_runtime_file("scripts/Internals/R/08_call_subgraph.R"), envir = environment())
 sys.source(conseguiR_runtime_file("scripts/Internals/R/09_create_selected_subgraph_visualisation_bundle.R"), envir = environment())
+sys.source(conseguiR_runtime_file("scripts/Internals/R/10_plot_stage_outputs.R"), envir = environment())
 
 internal_run_gene_reg_diffusion <- run_gene_reg_diffusion
 
@@ -1172,6 +1173,190 @@ plot_selected_subgraph <- function(
       title = title,
       layout = layout,
       top_n_labels = top_n_labels
+    )
+  )
+}
+
+#' Plot score tables from germline, somatic, or epigenomic bundles
+#'
+#' Creates a default score visualization from an explicit score table or from a
+#' score bundle returned by the package wrappers.
+#'
+#' @param scores Optional score bundle.
+#' @param table Optional explicit score table.
+#' @param which Optional bundle component name such as `gene_scores` or
+#'   `reg_scores`.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param plot_type Plot type. Supported values are `ranked_points`,
+#'   `top_bar`, and `histogram`.
+#' @param top_n Number of top-ranked features used by ranked/bar plots.
+#' @param feature_column Optional explicit feature-label column.
+#' @param value_column Optional explicit score column.
+#' @param highlight_features Optional character vector of feature names to
+#'   highlight.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#'
+#' @return A plot bundle containing the ggplot object.
+plot_scores <- function(
+  scores = NULL,
+  table = NULL,
+  which = NULL,
+  plot_file_path = NULL,
+  plot_type = "ranked_points",
+  top_n = 25L,
+  feature_column = NULL,
+  value_column = NULL,
+  highlight_features = NULL,
+  title = "conseguiR Scores",
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  verbose_message(verbose, "Preparing score plot...")
+
+  plot_obj <- create_scores_plot(
+    bundle = scores,
+    table = table,
+    which = which,
+    plot_type = plot_type,
+    top_n = top_n,
+    feature_column = feature_column,
+    value_column = value_column,
+    highlight_features = highlight_features,
+    title = title
+  )
+
+  if (isTRUE(save_plot)) {
+    if (is.null(plot_file_path) || !nzchar(plot_file_path)) {
+      stop("`plot_file_path` must be provided when `save_plot = TRUE`.")
+    }
+
+    save_scores_plot(
+      bundle = scores,
+      table = table,
+      file_path = plot_file_path,
+      which = which,
+      plot_type = plot_type,
+      top_n = top_n,
+      feature_column = feature_column,
+      value_column = value_column,
+      highlight_features = highlight_features,
+      title = title,
+      width = width,
+      height = height,
+      dpi = dpi
+    )
+  }
+
+  new_bundle(
+    type = "score_plot",
+    objects = list(plot = plot_obj),
+    output_paths = list(
+      plot_file_path = if (isTRUE(save_plot)) plot_file_path else NULL
+    ),
+    config = list(
+      which = which,
+      plot_type = plot_type,
+      top_n = top_n,
+      feature_column = feature_column,
+      value_column = value_column
+    )
+  )
+}
+
+#' Plot diffusion results
+#'
+#' Creates a default diffusion visualization from a diffusion bundle or an
+#' explicit diffusion table.
+#'
+#' @param diffusion Optional diffusion bundle.
+#' @param table Optional explicit diffusion table.
+#' @param which Which diffusion table to use: `all_genes` or `top_genes`.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param plot_type Plot type. Supported values are `ranked_points`,
+#'   `top_bar`, and `histogram`.
+#' @param top_n Number of top-ranked genes used by ranked/bar plots.
+#' @param gene_column Optional explicit gene-label column.
+#' @param score_column Optional explicit diffusion-score column.
+#' @param highlight_genes Optional character vector of genes to highlight.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#'
+#' @return A plot bundle containing the ggplot object.
+plot_diffusion <- function(
+  diffusion = NULL,
+  table = NULL,
+  which = "all_genes",
+  plot_file_path = NULL,
+  plot_type = "ranked_points",
+  top_n = 50L,
+  gene_column = NULL,
+  score_column = NULL,
+  highlight_genes = NULL,
+  title = "conseguiR Diffusion Scores",
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  verbose_message(verbose, "Preparing diffusion plot...")
+
+  plot_obj <- create_diffusion_plot(
+    diffusion = diffusion,
+    table = table,
+    which = which,
+    plot_type = plot_type,
+    top_n = top_n,
+    gene_column = gene_column,
+    score_column = score_column,
+    highlight_genes = highlight_genes,
+    title = title
+  )
+
+  if (isTRUE(save_plot)) {
+    if (is.null(plot_file_path) || !nzchar(plot_file_path)) {
+      stop("`plot_file_path` must be provided when `save_plot = TRUE`.")
+    }
+
+    save_diffusion_plot(
+      diffusion = diffusion,
+      table = table,
+      file_path = plot_file_path,
+      which = which,
+      plot_type = plot_type,
+      top_n = top_n,
+      gene_column = gene_column,
+      score_column = score_column,
+      highlight_genes = highlight_genes,
+      title = title,
+      width = width,
+      height = height,
+      dpi = dpi
+    )
+  }
+
+  new_bundle(
+    type = "diffusion_plot",
+    objects = list(plot = plot_obj),
+    output_paths = list(
+      plot_file_path = if (isTRUE(save_plot)) plot_file_path else NULL
+    ),
+    config = list(
+      which = which,
+      plot_type = plot_type,
+      top_n = top_n,
+      gene_column = gene_column,
+      score_column = score_column
     )
   )
 }

@@ -42,6 +42,8 @@ The package-facing API currently exports:
 - `prepare_epigenomic_scores()`
 - `build_scored_gene_reg_graph()`
 - `run_gene_reg_diffusion()`
+- `plot_scores()`
+- `plot_diffusion()`
 - `call_selected_subgraph()`
 - `plot_selected_subgraph()`
 - `run_conseguiR()`

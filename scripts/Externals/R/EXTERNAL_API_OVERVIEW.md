@@ -324,6 +324,42 @@ For a more detailed argument map, see:
 
 - `scripts/Externals/R/PLOTTING_ARGUMENT_COVERAGE.md`
 
+### `plot_scores()`
+
+Purpose:
+- create a default ranked, bar, or histogram-style plot for score tables
+
+Main inputs:
+- score bundle or explicit score table
+- bundle component selector such as `gene_scores` or `reg_scores`
+- optional score/feature column overrides
+- optional highlighted features
+
+Main outputs:
+- ggplot object
+- optional saved plot file
+
+Returns:
+- plot bundle
+
+### `plot_diffusion()`
+
+Purpose:
+- create a default ranked, bar, or histogram-style plot for diffusion results
+
+Main inputs:
+- diffusion bundle or explicit diffusion table
+- `all_genes` vs `top_genes` selector
+- optional gene/score column overrides
+- optional highlighted genes
+
+Main outputs:
+- ggplot object
+- optional saved plot file
+
+Returns:
+- plot bundle
+
 ### `plot_selected_subgraph()`
 
 Purpose:
@@ -357,8 +393,9 @@ Pipeline:
 4. `prepare_epigenomic_scores()`
 5. `build_scored_gene_reg_graph()`
 6. `run_gene_reg_diffusion()`
-7. `call_selected_subgraph()`
-8. `plot_selected_subgraph()`
+7. `plot_scores()` or `plot_diffusion()` if the user wants intermediate plots
+8. `call_selected_subgraph()`
+9. `plot_selected_subgraph()`
 
 Main outputs:
 - all intermediate bundles
@@ -375,6 +412,8 @@ The intended dependency chain is:
 - `prepare_germline_scores()`, `prepare_somatic_scores()`, and `prepare_epigenomic_scores()` depend only on validated raw inputs
 - `build_scored_gene_reg_graph()` depends on the score bundles
 - `run_gene_reg_diffusion()` depends on the scored graph bundle
+- `plot_scores()` depends on one of the score bundles or a score table
+- `plot_diffusion()` depends on the diffusion bundle or a diffusion table
 - `call_selected_subgraph()` depends on the diffusion bundle
 - `plot_selected_subgraph()` depends on the selected subgraph bundle
 - `run_conseguiR()` orchestrates all of the above

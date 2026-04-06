@@ -8,13 +8,14 @@
 
 #' @keywords internal
 .conseguiR_runtime_file <- function(relpath) {
+  pkg_root <- if (exists(".conseguiR_pkg_root", inherits = FALSE)) .conseguiR_pkg_root else NULL
   candidates <- c(
+    if (!is.null(pkg_root)) file.path(pkg_root, relpath),
+    file.path(getwd(), relpath),
     {
       pkg_path <- system.file(relpath, package = "conseguiR")
       if (nzchar(pkg_path)) pkg_path else NA_character_
-    },
-    if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, relpath),
-    file.path(getwd(), relpath)
+    }
   )
 
   candidates <- unique(candidates[!is.na(candidates)])
@@ -454,20 +455,9 @@ prepare_germline_scores <- function(
   shared_args = list(),
   verbose = FALSE
 ) {
-  gene_loc_path <- .conseguiR_default_gene_loc_path()
-  reg_loc_path <- .conseguiR_default_reg_loc_path()
-  if (is.null(gene_loc_path)) {
-    stop("No gene location resource was provided and no backend gene location resource could be found.")
-  }
-  if (is.null(reg_loc_path)) {
-    stop("No regulatory location resource was provided and no backend regulatory location resource could be found.")
-  }
-
   .conseguiR_external_fun("prepare_germline_scores")(
     gwas_sumstats = gwas_sumstats,
     reference_bfile = reference_bfile,
-    gene_loc_path = gene_loc_path,
-    reg_loc_path = reg_loc_path,
     gene_output_prefix = gene_output_prefix,
     reg_output_prefix = reg_output_prefix,
     magma_gwas_cache_prefix = magma_gwas_cache_prefix,
@@ -1070,6 +1060,183 @@ call_selected_subgraph <- function(
   )
 }
 
+#' Plot score tables from germline, somatic, or epigenomic bundles
+#'
+#' Creates a default score visualization from a score bundle or an explicit
+#' score table.
+#'
+#' @param scores Optional score bundle returned by a scoring wrapper.
+#' @param table Optional explicit score table.
+#' @param which Optional bundle component name such as `gene_scores` or
+#'   `reg_scores`.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param plot_type Plot type. Supported values are `ranked_points`,
+#'   `top_bar`, and `histogram`.
+#' @param top_n Number of top-ranked features used by ranked/bar plots.
+#' @param feature_column Optional explicit feature-label column.
+#' @param value_column Optional explicit numeric score column.
+#' @param highlight_features Optional character vector of features to
+#'   highlight.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages while building
+#'   the plot.
+#'
+#' @details
+#' Exact formatting:
+#' - `scores`: a bundle returned by `run_germline_gene_scoring()`,
+#'   `run_germline_regulatory_scoring()`, `prepare_germline_scores()`,
+#'   `run_somatic_gene_scoring()`, `run_somatic_regulatory_scoring()`,
+#'   `prepare_somatic_scores()`, or `prepare_epigenomic_scores()`
+#' - `table`: a data frame/data.table containing one feature label column and
+#'   one numeric score column
+#' - `which`: when `scores` contains multiple tables, use values like
+#'   `"gene_scores"` or `"reg_scores"`
+#' - `plot_file_path`: a single file path such as `"scores_plot.pdf"`
+#'
+#' @examples
+#' \dontrun{
+#' germline <- prepare_germline_scores(
+#'   gwas_sumstats = "study_gwas.tsv",
+#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
+#'   gene_sample_size = 456348
+#' )
+#'
+#' plot_scores(
+#'   scores = germline,
+#'   which = "gene_scores",
+#'   plot_file_path = "germline_gene_scores.pdf",
+#'   plot_type = "top_bar",
+#'   top_n = 25L
+#' )
+#' }
+#'
+#' @return A plot bundle containing the ggplot object.
+#' @export
+plot_scores <- function(
+  scores = NULL,
+  table = NULL,
+  which = NULL,
+  plot_file_path = NULL,
+  plot_type = "ranked_points",
+  top_n = 25L,
+  feature_column = NULL,
+  value_column = NULL,
+  highlight_features = NULL,
+  title = "conseguiR Scores",
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  .conseguiR_external_fun("plot_scores")(
+    scores = scores,
+    table = table,
+    which = which,
+    plot_file_path = plot_file_path,
+    plot_type = plot_type,
+    top_n = top_n,
+    feature_column = feature_column,
+    value_column = value_column,
+    highlight_features = highlight_features,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
+#' Plot diffusion results
+#'
+#' Creates a default diffusion visualization from a diffusion bundle or an
+#' explicit diffusion table.
+#'
+#' @param diffusion Optional diffusion bundle returned by
+#'   `run_gene_reg_diffusion()`.
+#' @param table Optional explicit diffusion table.
+#' @param which Which diffusion table to use: `all_genes` or `top_genes`.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param plot_type Plot type. Supported values are `ranked_points`,
+#'   `top_bar`, and `histogram`.
+#' @param top_n Number of top-ranked genes used by ranked/bar plots.
+#' @param gene_column Optional explicit gene-label column.
+#' @param score_column Optional explicit numeric diffusion-score column.
+#' @param highlight_genes Optional character vector of genes to highlight.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages while building
+#'   the plot.
+#'
+#' @details
+#' Exact formatting:
+#' - `diffusion`: the bundle returned by `run_gene_reg_diffusion()`
+#' - `table`: a data frame/data.table with a gene-label column and a numeric
+#'   diffusion score column
+#' - `which`: either `"all_genes"` or `"top_genes"`
+#' - `plot_file_path`: a single file path such as `"diffusion_plot.pdf"`
+#'
+#' @examples
+#' \dontrun{
+#' diffusion <- run_gene_reg_diffusion(
+#'   nodes_path = "gene_reg_graph_scored_nodes.tsv.gz",
+#'   edges_path = "gene_reg_graph_scored_edges.tsv.gz"
+#' )
+#'
+#' plot_diffusion(
+#'   diffusion = diffusion,
+#'   which = "top_genes",
+#'   plot_file_path = "diffusion_top_genes.pdf",
+#'   highlight_genes = c("MYC", "PAX5", "BCL2")
+#' )
+#' }
+#'
+#' @return A plot bundle containing the ggplot object.
+#' @export
+plot_diffusion <- function(
+  diffusion = NULL,
+  table = NULL,
+  which = "all_genes",
+  plot_file_path = NULL,
+  plot_type = "ranked_points",
+  top_n = 50L,
+  gene_column = NULL,
+  score_column = NULL,
+  highlight_genes = NULL,
+  title = "conseguiR Diffusion Scores",
+  width = 10,
+  height = 7,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  .conseguiR_external_fun("plot_diffusion")(
+    diffusion = diffusion,
+    table = table,
+    which = which,
+    plot_file_path = plot_file_path,
+    plot_type = plot_type,
+    top_n = top_n,
+    gene_column = gene_column,
+    score_column = score_column,
+    highlight_genes = highlight_genes,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
 #' Plot a selected subgraph and build a visualization bundle
 #'
 #' This wrapper exposes the main input-resolution, saving, layout, labelling,
@@ -1302,14 +1469,6 @@ run_conseguiR <- function(
 ) {
   initialize_backend_graphs(strict = FALSE, quiet = TRUE)
   backend_paths <- .conseguiR_backend_paths()
-  gene_loc_path <- .conseguiR_default_gene_loc_path()
-  reg_loc_path <- .conseguiR_default_reg_loc_path()
-  if (is.null(gene_loc_path)) {
-    stop("No gene location resource was provided and no backend gene location resource could be found.")
-  }
-  if (is.null(reg_loc_path)) {
-    stop("No regulatory location resource was provided and no backend regulatory location resource could be found.")
-  }
   graph_rds_path <- graph_rds_path %||% backend_paths$gene_reg_graph_rds
   gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
   gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
@@ -1322,8 +1481,6 @@ run_conseguiR <- function(
     dndscv_refdb = dndscv_refdb,
     epigenomic_track_dir = epigenomic_track_dir,
     epigenomic_tracks = epigenomic_tracks,
-    gene_loc_path = gene_loc_path,
-    reg_loc_path = reg_loc_path,
     graph_rds_path = graph_rds_path,
     gg_nodes_path = gg_nodes_path,
     gg_edges_path = gg_edges_path,
