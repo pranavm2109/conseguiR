@@ -8,7 +8,7 @@ run_germline_gene_scoring(
   gwas_sumstats,
   gene_loc_path = NULL,
   reference_bfile,
-  output_prefix = "data/processed/germline_gene_scores",
+  output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = "tools/magma_v1/magma",

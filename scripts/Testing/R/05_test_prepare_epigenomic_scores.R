@@ -9,9 +9,14 @@ source("scripts/Internals/R/05_prepare_epigenomic_scores.R")
 
 default_epigenomic_track_dir <- "data/raw/Testing"
 default_reg_ref_path <- "data/raw/Testing/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
-default_exclude_patterns <- c("_BL_", "_FL_", "broken_signal_track")
 default_broken_bigwig_path <- "data/raw/Testing/broken_signal_track.bw"
 default_epigenomic_test_output_dir <- "data/processed/test_outputs/epigenomic"
+
+select_epigenomic_test_bigwigs <- function(track_dir) {
+  bw_files <- list_epigenomic_track_files(track_dir = track_dir)
+  keep <- !grepl("(_BL_|_FL_|broken_signal_track)", basename(bw_files))
+  bw_files[keep]
+}
 
 make_epigenomic_test_path <- function(stem, ext = "") {
   dir.create(default_epigenomic_test_output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -24,9 +29,9 @@ make_epigenomic_test_path <- function(stem, ext = "") {
 make_epigenomic_live_fixture <- function(n_tracks = 3L, n_reg_elements = 500L) {
   bw_files <- list_epigenomic_track_files(
     track_dir = default_epigenomic_track_dir,
-    exclude_patterns = default_exclude_patterns,
     min_tracks = 3L
   )
+  bw_files <- bw_files[!grepl("(_BL_|_FL_|broken_signal_track)", basename(bw_files))]
   bw_files <- bw_files[seq_len(min(n_tracks, length(bw_files)))]
 
   reg_dt <- fread(default_reg_ref_path, header = FALSE)
@@ -58,10 +63,7 @@ test_run_epigenomic_reg_scoring_negative_too_few_tracks <- function() {
 }
 
 test_list_epigenomic_track_files_live <- function() {
-  bw_files <- list_epigenomic_track_files(
-    track_dir = default_epigenomic_track_dir,
-    exclude_patterns = default_exclude_patterns
-  )
+  bw_files <- select_epigenomic_test_bigwigs(default_epigenomic_track_dir)
 
   expect_true(length(bw_files) > 0L)
   expect_true(all(file.exists(bw_files)))

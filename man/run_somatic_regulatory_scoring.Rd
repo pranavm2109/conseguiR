@@ -7,7 +7,7 @@
 run_somatic_regulatory_scoring(
   maf,
   reg_ref_path,
-  output_path = "data/processed/somatic_reg_scores.tsv",
+  output_path = NULL,
   eligible_gr = NULL,
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,

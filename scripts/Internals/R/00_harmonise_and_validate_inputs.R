@@ -312,7 +312,7 @@ validate_epigenomic_tracks <- function(track_paths) {
   out
 }
 
-validate_epigenomic_bigwigs <- function(bw_files, reg_gr, exclude_patterns = c("_BL_", "_FL_")) {
+validate_epigenomic_bigwigs <- function(bw_files, reg_gr, exclude_patterns = NULL) {
   if (length(bw_files) == 1L && dir.exists(bw_files)) {
     bw_files <- list.files(bw_files, pattern = "\\.(bw|bigWig|bigwig)$", full.names = TRUE)
   }
@@ -381,7 +381,7 @@ validate_epigenomic_bigwigs <- function(bw_files, reg_gr, exclude_patterns = c("
   out
 }
 
-validate_epigenomic_inputs <- function(bw_files, reg_ref_path, exclude_patterns = c("_BL_", "_FL_")) {
+validate_epigenomic_inputs <- function(bw_files, reg_ref_path, exclude_patterns = NULL) {
   reg_gr <- validate_regulatory_element_reference(reg_ref_path)
   bw_summary <- validate_epigenomic_bigwigs(
     bw_files = bw_files,

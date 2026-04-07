@@ -16,7 +16,7 @@ build_scored_gene_reg_graph(
   gene_somatic_scores = NULL,
   reg_somatic_scores = NULL,
   reg_epigenomic_scores = NULL,
-  save_outputs = TRUE,
+  save_outputs = FALSE,
   verbose = FALSE
 )
 }

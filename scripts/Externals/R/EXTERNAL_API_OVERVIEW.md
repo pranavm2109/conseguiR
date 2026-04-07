@@ -232,7 +232,6 @@ Purpose:
 Main inputs:
 - `reg_ref_path`
 - `bw_files` or `track_dir`
-- `exclude_patterns`
 - `min_tracks`
 - `transform`
 
@@ -361,6 +360,39 @@ Main outputs:
 Returns:
 - plot bundle
 
+### `plot_locus_context()`
+
+Purpose:
+- create an exploratory locus-centered panel that combines regulatory-element
+  z-score tracks, a combined regulatory score track, post-diffusion gene
+  scores, regulatory links, and optional SNP labels
+
+Main inputs:
+- a merged post-diffusion gene-reg graph object, or a scored graph plus
+  diffusion bundle/path
+- locus coordinates (`chromosome`, `start`, `end`)
+- optional selected-subgraph inputs for highlighting/filtering
+- optional GWAS summary statistics for SNP labeling
+- optional cached `rsid_pmid` table or a disease term such as `"DLBCL"` or
+  `"lymphoma"` for LitVar-backed SNP labeling
+
+Behavior:
+- the top three tracks show regulatory-element somatic, epigenomic, and
+  germline z-scores
+- the `Reg elements` track colors regulatory elements by their combined
+  pre-diffusion norm
+- the bottom gene track colors genes by post-diffusion `conseguiR` score
+- SNP labels prefer literature-backed SNPs and otherwise fall back to top GWAS
+  SNPs in the top germline regulatory elements
+
+Main outputs:
+- ggplot object
+- locus plotting bundle with feature/link tables
+- optional SNP-label metadata and optional saved plot file
+
+Returns:
+- plot bundle
+
 ## Full Pipeline
 
 ### `run_conseguiR()`
@@ -378,6 +410,7 @@ Pipeline:
 7. `plot_scores()` if the user wants intermediate score/diffusion plots
 8. `call_selected_subgraph()`
 9. `plot_selected_subgraph()`
+10. `plot_locus_context()` if the user wants an exploratory locus-level panel
 
 Main outputs:
 - all intermediate bundles
@@ -397,6 +430,8 @@ The intended dependency chain is:
 - `plot_scores()` depends on one of the score/diffusion bundles or a tabular score object
 - `call_selected_subgraph()` depends on the diffusion bundle
 - `plot_selected_subgraph()` depends on the selected subgraph bundle
+- `plot_locus_context()` depends on a post-diffusion gene-reg graph view, plus
+  optional GWAS/literature inputs for SNP labeling
 - `run_conseguiR()` orchestrates all of the above
 
 ## Design Notes

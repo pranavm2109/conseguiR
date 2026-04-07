@@ -77,7 +77,7 @@ zscore_vec <- function(x) {
 list_epigenomic_track_files <- function(
   track_dir,
   pattern = "\\.bw$",
-  exclude_patterns = c("_BL_", "_FL_"),
+  exclude_patterns = NULL,
   min_tracks = 3L
 ) {
   if (!dir.exists(track_dir)) {
@@ -274,7 +274,7 @@ run_epigenomic_reg_scoring <- function(
   track_dir = NULL,
   reg_ref_path,
   bw_files = NULL,
-  exclude_patterns = c("_BL_", "_FL_"),
+  exclude_patterns = NULL,
   min_tracks = 3L,
   drop_mhc = TRUE,
   transform = c("log1p", "none"),

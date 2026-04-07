@@ -7,7 +7,7 @@
 run_somatic_gene_scoring(
   maf,
   refdb,
-  output_path = "data/processed/somatic_gene_scores.tsv",
+  output_path = NULL,
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,

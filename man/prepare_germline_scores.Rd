@@ -7,9 +7,9 @@
 prepare_germline_scores(
   gwas_sumstats,
   reference_bfile,
-  gene_output_prefix = "data/processed/germline_gene_scores",
-  reg_output_prefix = "data/processed/germline_reg_scores",
-  magma_gwas_cache_prefix = "data/processed/magma_shared_gwas_cache",
+  gene_output_prefix = NULL,
+  reg_output_prefix = NULL,
+  magma_gwas_cache_prefix = NULL,
   gene_sample_size = NULL,
   gene_sample_size_col = NULL,
   reg_sample_size = NULL,

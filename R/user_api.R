@@ -56,14 +56,11 @@
 #' Validates raw GWAS, somatic, regulatory-reference, and epigenomic inputs
 #' using the package's internal validation layer.
 #'
-#' @inheritParams .conseguiR_external_fun
 #' @param gwas_sumstats GWAS summary statistics path or table.
 #' @param somatic_maf Somatic MAF path or table.
 #' @param reg_ref_path Regulatory-element reference path.
 #' @param epigenomic_tracks Optional vector of bigWig paths.
 #' @param epigenomic_track_dir Optional directory containing bigWig tracks.
-#' @param epigenomic_exclude_patterns Patterns used to exclude bigWigs when
-#'   discovering tracks from `epigenomic_track_dir`.
 #' @param verbose Logical scalar. If `TRUE`, show progress bars and stage
 #'   messages when available.
 #'
@@ -108,7 +105,6 @@ validate_inputs <- function(
   reg_ref_path = NULL,
   epigenomic_tracks = NULL,
   epigenomic_track_dir = NULL,
-  epigenomic_exclude_patterns = c("_BL_", "_FL_"),
   verbose = FALSE
 ) {
   .conseguiR_external_fun("validate_inputs")(
@@ -117,7 +113,6 @@ validate_inputs <- function(
     reg_ref_path = reg_ref_path,
     epigenomic_tracks = epigenomic_tracks,
     epigenomic_track_dir = epigenomic_track_dir,
-    epigenomic_exclude_patterns = epigenomic_exclude_patterns,
     verbose = verbose
   )
 }
@@ -245,7 +240,7 @@ run_germline_gene_scoring <- function(
   gwas_sumstats,
   gene_loc_path = NULL,
   reference_bfile,
-  output_prefix = "data/processed/germline_gene_scores",
+  output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = "tools/magma_v1/magma",
@@ -328,7 +323,7 @@ run_germline_regulatory_scoring <- function(
   gwas_sumstats,
   reg_loc_path = NULL,
   reference_bfile,
-  output_prefix = "data/processed/germline_reg_scores",
+  output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = "tools/magma_v1/magma",
@@ -441,9 +436,9 @@ run_germline_regulatory_scoring <- function(
 prepare_germline_scores <- function(
   gwas_sumstats,
   reference_bfile,
-  gene_output_prefix = "data/processed/germline_gene_scores",
-  reg_output_prefix = "data/processed/germline_reg_scores",
-  magma_gwas_cache_prefix = "data/processed/magma_shared_gwas_cache",
+  gene_output_prefix = NULL,
+  reg_output_prefix = NULL,
+  magma_gwas_cache_prefix = NULL,
   gene_sample_size = NULL,
   gene_sample_size_col = NULL,
   reg_sample_size = NULL,
@@ -515,7 +510,7 @@ prepare_germline_scores <- function(
 run_somatic_gene_scoring <- function(
   maf,
   refdb,
-  output_path = "data/processed/somatic_gene_scores.tsv",
+  output_path = NULL,
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
@@ -582,7 +577,7 @@ run_somatic_gene_scoring <- function(
 run_somatic_regulatory_scoring <- function(
   maf,
   reg_ref_path,
-  output_path = "data/processed/somatic_reg_scores.tsv",
+  output_path = NULL,
   eligible_gr = NULL,
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
@@ -674,8 +669,8 @@ prepare_somatic_scores <- function(
   maf,
   refdb,
   reg_ref_path,
-  gene_output_path = "data/processed/somatic_gene_scores.tsv",
-  reg_output_path = "data/processed/somatic_reg_scores.tsv",
+  gene_output_path = NULL,
+  reg_output_path = NULL,
   gene_cv = NULL,
   gene_max_muts_per_gene_per_sample = 6L,
   gene_max_coding_muts_per_sample = 5000L,
@@ -712,8 +707,6 @@ prepare_somatic_scores <- function(
 #' @param track_dir Optional directory containing bigWig tracks.
 #' @param bw_files Optional explicit vector of bigWig paths.
 #' @param output_path Optional output path for saved scores.
-#' @param exclude_patterns Patterns used to exclude tracks discovered from a
-#'   directory.
 #' @param min_tracks Minimum number of tracks required.
 #' @param drop_mhc Whether to exclude extended MHC elements.
 #' @param transform Signal transformation method.
@@ -731,8 +724,6 @@ prepare_somatic_scores <- function(
 #' - `bw_files`: a character vector of bigWig paths. Supply at least three
 #'   tracks, for example
 #'   `c(\"sample1.bw\", \"sample2.bw\", \"sample3.bw\")`.
-#' - `exclude_patterns`: a character vector of regex fragments used to exclude
-#'   files discovered from `track_dir`.
 #' - `summary_fun`: a function object such as `mean` or `max`.
 #'
 #' @examples
@@ -751,8 +742,7 @@ prepare_epigenomic_scores <- function(
   reg_ref_path,
   track_dir = NULL,
   bw_files = NULL,
-  output_path = "data/processed/epigenomic_reg_scores.tsv",
-  exclude_patterns = c("_BL_", "_FL_"),
+  output_path = NULL,
   min_tracks = 3L,
   drop_mhc = TRUE,
   transform = "log1p",
@@ -765,7 +755,6 @@ prepare_epigenomic_scores <- function(
     track_dir = track_dir,
     bw_files = bw_files,
     output_path = output_path,
-    exclude_patterns = exclude_patterns,
     min_tracks = min_tracks,
     drop_mhc = drop_mhc,
     transform = transform,
@@ -831,7 +820,7 @@ build_scored_gene_reg_graph <- function(
   gene_somatic_scores = NULL,
   reg_somatic_scores = NULL,
   reg_epigenomic_scores = NULL,
-  save_outputs = TRUE,
+  save_outputs = FALSE,
   verbose = FALSE
 ) {
   if (is.null(graph_rds_path)) {
@@ -911,8 +900,8 @@ run_gene_reg_diffusion <- function(
   scored_graph = NULL,
   nodes_path = NULL,
   edges_path = NULL,
-  output_dir = "data/processed",
-  output_stem = "gene_reg_graph_diffusion",
+  output_dir = NULL,
+  output_stem = NULL,
   top_k = 3L,
   confidence_power = 2.0,
   beta_germline = 0.5,
@@ -1006,8 +995,8 @@ call_selected_subgraph <- function(
   diffusion_path = NULL,
   gg_nodes_path = NULL,
   gg_edges_path = NULL,
-  output_dir = "data/processed",
-  output_stem = "gene_gene_selected_subgraph",
+  output_dir = NULL,
+  output_stem = NULL,
   target_genes = 50L,
   candidate_pool_size = 400L,
   min_confidence = 0,
@@ -1432,6 +1421,157 @@ plot_epigenomic_reg_scores <- function(
   )
 }
 
+#' Plot a locus-centered multimodal context panel
+#'
+#' Creates a genome-track-style panel over a user-specified locus. Genes are
+#' drawn as rectangles, regulatory elements as circles, and regulatory links as
+#' arcs. The panel combines post-diffusion gene scores with locus-matched
+#' regulatory scores from the scored graph.
+#'
+#' @param chromosome Locus chromosome, for example `"8"` or `"chr8"`.
+#' @param start Locus start coordinate.
+#' @param end Locus end coordinate.
+#' @param postdiff_gene_reg_graph Optional merged post-diffusion gene-reg graph
+#'   object or `.rds` path containing node and edge tables.
+#' @param scored_graph Optional scored gene-reg graph bundle.
+#' @param diffusion Optional diffusion bundle.
+#' @param selected_subgraph Optional selected-subgraph bundle used to highlight
+#'   genes and filter displayed regulatory arcs.
+#' @param nodes_path Optional explicit scored node-table path.
+#' @param edges_path Optional explicit scored edge-table path.
+#' @param diffusion_path Optional explicit diffusion table path.
+#' @param selected_nodes_path Optional explicit selected-subgraph node-table
+#'   path.
+#' @param label_features Optional gene symbols to label. For regulatory-element
+#'   labels, the plot uses the top-scoring regulatory element for each requested
+#'   gene label within the locus.
+#' @param gwas_sumstats Optional GWAS summary statistics path or table used for
+#'   locus SNP labeling.
+#' @param label_top_gwas_snp Logical scalar. If `TRUE`, label the top GWAS SNP
+#'   inside the top germline regulatory element in the locus.
+#' @param rsid_pmid Optional cached rsID-to-PMID evidence table with at least
+#'   `rsid` and `pmid` columns.
+#' @param label_top_lit_snps Integer count of literature-backed SNPs to label.
+#'   SNPs are restricted to regulatory elements in the locus. If no
+#'   literature-backed SNPs survive the lookup/filtering steps, `conseguiR`
+#'   falls back to top GWAS SNPs from the top germline regulatory elements.
+#' @param pmid_query Optional disease term such as `"DLBCL"` or `"lymphoma"`
+#'   used to filter LitVar-backed PMIDs.
+#' @param pmid_page_size Maximum number of PMIDs per rsID retained from LitVar,
+#'   and the Europe PMC page size used when filtering by `pmid_query`.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @details
+#' Exact formatting:
+#' - `chromosome`: a single chromosome string such as `"8"` or `"chr8"`
+#' - `start`, `end`: scalar genomic coordinates defining the locus
+#' - `postdiff_gene_reg_graph`: an optional merged post-diffusion graph object
+#'   containing node and edge tables
+#' - `scored_graph`: the bundle returned by `build_scored_gene_reg_graph()`
+#' - `diffusion`: the bundle returned by `run_gene_reg_diffusion()`
+#' - `selected_subgraph`: the bundle returned by `call_selected_subgraph()`
+#' - `label_features`: a character vector of gene symbols such as
+#'   `c("MYC", "BCL2", "BCL6")`
+#' - `rsid_pmid`: an optional cached literature-support table with at least
+#'   `rsid` and `pmid` columns
+#' - `pmid_query`: an optional disease term such as `"DLBCL"` or
+#'   `"lymphoma"` used to filter LitVar-backed PMIDs in memory
+#' - `label_top_lit_snps`: number of literature-backed SNPs to label before
+#'   falling back to top GWAS SNPs in the top germline regulatory elements
+#'
+#' Track semantics:
+#' - the top three rows show regulatory-element somatic, epigenomic, and
+#'   germline z-scores
+#' - the `Reg elements` row shows regulatory elements colored by their combined
+#'   pre-diffusion norm
+#' - the bottom gene row shows post-diffusion `conseguiR` scores for genes in
+#'   the locus
+#' - thin black diagonal curves connect regulatory elements to genes
+#' - locus SNP labels prefer literature-backed SNPs when available and
+#'   otherwise fall back to top GWAS SNPs in the top germline regulatory
+#'   elements
+#'
+#' @examples
+#' \dontrun{
+#' plot_locus_context(
+#'   chromosome = "8",
+#'   start = 127200000,
+#'   end = 128200000,
+#'   scored_graph = scored_graph,
+#'   diffusion = diffusion,
+#'   selected_subgraph = selected_subgraph,
+#'   label_features = c("MYC"),
+#'   gwas_sumstats = gwas_sumstats,
+#'   pmid_query = "lymphoma",
+#'   label_top_lit_snps = 3L,
+#'   plot_file_path = "MYC_locus_context.pdf"
+#' )
+#' }
+#'
+#' @return A plot bundle containing the ggplot object and locus plotting data.
+#' @export
+plot_locus_context <- function(
+  chromosome,
+  start,
+  end,
+  postdiff_gene_reg_graph = NULL,
+  scored_graph = NULL,
+  diffusion = NULL,
+  selected_subgraph = NULL,
+  nodes_path = NULL,
+  edges_path = NULL,
+  diffusion_path = NULL,
+  selected_nodes_path = NULL,
+  label_features = NULL,
+  gwas_sumstats = NULL,
+  label_top_gwas_snp = FALSE,
+  rsid_pmid = NULL,
+  label_top_lit_snps = 0L,
+  pmid_query = NULL,
+  pmid_page_size = 1000L,
+  plot_file_path = NULL,
+  title = NULL,
+  width = 14,
+  height = 9,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  .conseguiR_external_fun("plot_locus_context")(
+    chromosome = chromosome,
+    start = start,
+    end = end,
+    postdiff_gene_reg_graph = postdiff_gene_reg_graph,
+    scored_graph = scored_graph,
+    diffusion = diffusion,
+    selected_subgraph = selected_subgraph,
+    nodes_path = nodes_path,
+    edges_path = edges_path,
+    diffusion_path = diffusion_path,
+    selected_nodes_path = selected_nodes_path,
+    label_features = label_features,
+    gwas_sumstats = gwas_sumstats,
+    label_top_gwas_snp = label_top_gwas_snp,
+    rsid_pmid = rsid_pmid,
+    label_top_lit_snps = label_top_lit_snps,
+    pmid_query = pmid_query,
+    pmid_page_size = pmid_page_size,
+    plot_file_path = plot_file_path,
+    title = title,
+    width = width,
+    height = height,
+    dpi = dpi,
+    save_plot = save_plot,
+    verbose = verbose
+  )
+}
+
 #' Plot a selected subgraph and build a visualization bundle
 #'
 #' This wrapper exposes the main input-resolution, saving, layout, labelling,
@@ -1539,7 +1679,9 @@ plot_selected_subgraph <- function(
 #' @param graph_rds_path Backend no-score gene-reg graph path.
 #' @param gg_nodes_path Gene-gene node table path.
 #' @param gg_edges_path Gene-gene edge table path.
-#' @param output_dir Output directory for pipeline artifacts.
+#' @param output_dir Optional output directory for saved pipeline artifacts.
+#'   When `NULL`, `run_conseguiR()` runs in object-first mode and returns the
+#'   stage bundles without treating disk output as the default interface.
 #' @param target_genes Requested selected-subgraph size.
 #' @param germline_args Named list of overrides passed to
 #'   `prepare_germline_scores()`. This list may contain both gene- and
@@ -1555,7 +1697,7 @@ plot_selected_subgraph <- function(
 #'   `fishhook_args`.
 #' @param epigenomic_args Named list of overrides passed to
 #'   `prepare_epigenomic_scores()`. Typical entries include `track_dir`,
-#'   `bw_files`, `exclude_patterns`, `min_tracks`, `drop_mhc`, `transform`,
+#'   `bw_files`, `min_tracks`, `drop_mhc`, `transform`,
 #'   `return_diagnostics`, and `summary_fun`.
 #' @param scored_graph_args Named list of overrides passed to
 #'   `build_scored_gene_reg_graph()`.
@@ -1583,6 +1725,13 @@ plot_selected_subgraph <- function(
 #' The gene and regulatory location resources are backend-managed by the
 #' package and are not user-facing arguments in this high-level wrapper.
 #'
+#' `conseguiR` now uses an object-first design. In plain terms, that means the
+#' compute stages return R objects/bundles by default, and file writing is
+#' optional rather than being the main API. If you supply `output_dir`,
+#' `run_conseguiR()` will save stage artifacts there; if you leave
+#' `output_dir = NULL`, it will still run the full workflow and return the
+#' resulting objects in memory.
+#'
 #' Exact list formatting:
 #'
 #' `germline_args = list(
@@ -1604,7 +1753,6 @@ plot_selected_subgraph <- function(
 #'
 #' `epigenomic_args = list(
 #'   bw_files = c(\"track1.bw\", \"track2.bw\", \"track3.bw\"),
-#'   exclude_patterns = c(\"_BL_\", \"_FL_\"),
 #'   min_tracks = 3L,
 #'   transform = \"log1p\"
 #' )`
@@ -1651,7 +1799,7 @@ run_conseguiR <- function(
   graph_rds_path = NULL,
   gg_nodes_path = NULL,
   gg_edges_path = NULL,
-  output_dir = "data/processed",
+  output_dir = NULL,
   target_genes = 50L,
   germline_args = list(),
   somatic_args = list(),

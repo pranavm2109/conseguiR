@@ -73,6 +73,47 @@ write_bundle_table <- function(table, path = NULL) {
   path
 }
 
+make_temp_output_prefix <- function(stem) {
+  file.path(
+    tempdir(),
+    paste0(
+      "conseguiR_",
+      stem,
+      "_",
+      format(Sys.time(), "%Y%m%d%H%M%S"),
+      "_",
+      sprintf("%06d", sample.int(999999L, 1L))
+    )
+  )
+}
+
+make_temp_output_dir <- function(stem) {
+  path <- file.path(
+    tempdir(),
+    paste0(
+      "conseguiR_",
+      stem,
+      "_",
+      format(Sys.time(), "%Y%m%d%H%M%S"),
+      "_",
+      sprintf("%06d", sample.int(999999L, 1L))
+    )
+  )
+  dir.create(path, recursive = TRUE, showWarnings = FALSE)
+  path
+}
+
+materialize_table_path <- function(table, path = NULL, stem = "table") {
+  if (is.null(table)) {
+    return(path)
+  }
+
+  path <- path %||% paste0(make_temp_output_prefix(stem), ".tsv")
+  ensure_output_parent(path)
+  fwrite(as.data.table(table), path, sep = "\t")
+  path
+}
+
 new_bundle <- function(type, objects = list(), output_paths = list(), config = list()) {
   structure(
     c(
@@ -151,9 +192,6 @@ verbose_message <- function(verbose, ...) {
 #' @param reg_ref_path Regulatory-element reference path.
 #' @param epigenomic_tracks Optional vector of bigWig paths.
 #' @param epigenomic_track_dir Optional directory containing bigWig tracks.
-#' @param epigenomic_exclude_patterns Patterns used to exclude bigWigs when
-#'   discovering tracks from `epigenomic_track_dir`.
-#'
 #' @return A validation bundle containing validated objects and config.
 validate_inputs <- function(
   gwas_sumstats = NULL,
@@ -161,7 +199,6 @@ validate_inputs <- function(
   reg_ref_path = NULL,
   epigenomic_tracks = NULL,
   epigenomic_track_dir = NULL,
-  epigenomic_exclude_patterns = c("_BL_", "_FL_"),
   verbose = FALSE
 ) {
   verbose_message(verbose, "Validating inputs...")
@@ -182,10 +219,7 @@ validate_inputs <- function(
   if (!is.null(epigenomic_tracks) || !is.null(epigenomic_track_dir)) {
     bw_files <- epigenomic_tracks
     if (is.null(bw_files)) {
-      bw_files <- list_epigenomic_track_files(
-        track_dir = epigenomic_track_dir,
-        exclude_patterns = epigenomic_exclude_patterns
-      )
+      bw_files <- list_epigenomic_track_files(track_dir = epigenomic_track_dir)
     }
 
     if (is.null(reg_ref_path)) {
@@ -194,8 +228,7 @@ validate_inputs <- function(
 
     objects$epigenomic <- validate_epigenomic_inputs(
       bw_files = bw_files,
-      reg_ref_path = reg_ref_path,
-      exclude_patterns = epigenomic_exclude_patterns
+      reg_ref_path = reg_ref_path
     )
   }
 
@@ -248,7 +281,7 @@ run_germline_gene_scoring <- function(
   gwas_sumstats,
   gene_loc_path,
   reference_bfile,
-  output_prefix = "data/processed/germline_gene_scores",
+  output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = "tools/magma_v1/magma",
@@ -263,6 +296,9 @@ run_germline_gene_scoring <- function(
 ) {
   step1_args <- as_list_or_empty(step1_args)
   step2_args <- as_list_or_empty(step2_args)
+  requested_output_prefix <- output_prefix
+  output_prefix <- output_prefix %||% make_temp_output_prefix("germline_gene_scores")
+  zstat_output_path <- if (is.null(requested_output_prefix)) NULL else paste0(output_prefix, ".zstat.tsv")
 
   result <- run_with_args(
     run_magma_feature_scoring_pipeline,
@@ -292,7 +328,8 @@ run_germline_gene_scoring <- function(
       pval_duplicate = step2_args$pval_duplicate %||% NULL,
       bfile_synonyms = step2_args$bfile_synonyms %||% NULL,
       bfile_synonym_dup = step2_args$bfile_synonym_dup %||% NULL,
-      step2_extra_args = step2_args$extra_args %||% character()
+      step2_extra_args = step2_args$extra_args %||% character(),
+      zstat_output_path = zstat_output_path
     )
   )
 
@@ -303,10 +340,10 @@ run_germline_gene_scoring <- function(
       pipeline = result
     ),
     output_paths = list(
-      gene_scores_path = result$zstat_output_path
+      gene_scores_path = zstat_output_path
     ),
     config = list(
-      output_prefix = output_prefix,
+      output_prefix = requested_output_prefix,
       sample_size = sample_size,
       sample_size_col = sample_size_col,
       step1_args = step1_args,
@@ -348,7 +385,7 @@ run_germline_regulatory_scoring <- function(
   gwas_sumstats,
   reg_loc_path,
   reference_bfile,
-  output_prefix = "data/processed/germline_reg_scores",
+  output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = "tools/magma_v1/magma",
@@ -363,6 +400,9 @@ run_germline_regulatory_scoring <- function(
 ) {
   step1_args <- as_list_or_empty(step1_args)
   step2_args <- as_list_or_empty(step2_args)
+  requested_output_prefix <- output_prefix
+  output_prefix <- output_prefix %||% make_temp_output_prefix("germline_reg_scores")
+  zstat_output_path <- if (is.null(requested_output_prefix)) NULL else paste0(output_prefix, ".zstat.tsv")
 
   result <- run_with_args(
     run_magma_feature_scoring_pipeline,
@@ -392,7 +432,8 @@ run_germline_regulatory_scoring <- function(
       pval_duplicate = step2_args$pval_duplicate %||% NULL,
       bfile_synonyms = step2_args$bfile_synonyms %||% NULL,
       bfile_synonym_dup = step2_args$bfile_synonym_dup %||% NULL,
-      step2_extra_args = step2_args$extra_args %||% character()
+      step2_extra_args = step2_args$extra_args %||% character(),
+      zstat_output_path = zstat_output_path
     )
   )
 
@@ -403,10 +444,10 @@ run_germline_regulatory_scoring <- function(
       pipeline = result
     ),
     output_paths = list(
-      reg_scores_path = result$zstat_output_path
+      reg_scores_path = zstat_output_path
     ),
     config = list(
-      output_prefix = output_prefix,
+      output_prefix = requested_output_prefix,
       sample_size = sample_size,
       sample_size_col = sample_size_col,
       step1_args = step1_args,
@@ -449,9 +490,9 @@ run_germline_regulatory_scoring <- function(
 prepare_germline_scores <- function(
   gwas_sumstats,
   reference_bfile,
-  gene_output_prefix = "data/processed/germline_gene_scores",
-  reg_output_prefix = "data/processed/germline_reg_scores",
-  magma_gwas_cache_prefix = "data/processed/magma_shared_gwas_cache",
+  gene_output_prefix = NULL,
+  reg_output_prefix = NULL,
+  magma_gwas_cache_prefix = NULL,
   gene_sample_size = NULL,
   gene_sample_size_col = NULL,
   reg_sample_size = NULL,
@@ -545,7 +586,7 @@ prepare_germline_scores <- function(
 run_somatic_gene_scoring <- function(
   maf,
   refdb,
-  output_path = "data/processed/somatic_gene_scores.tsv",
+  output_path = NULL,
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
@@ -606,7 +647,7 @@ run_somatic_gene_scoring <- function(
 run_somatic_regulatory_scoring <- function(
   maf,
   reg_ref_path,
-  output_path = "data/processed/somatic_reg_scores.tsv",
+  output_path = NULL,
   eligible_gr = NULL,
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
@@ -678,8 +719,8 @@ prepare_somatic_scores <- function(
   maf,
   refdb,
   reg_ref_path,
-  gene_output_path = "data/processed/somatic_gene_scores.tsv",
-  reg_output_path = "data/processed/somatic_reg_scores.tsv",
+  gene_output_path = NULL,
+  reg_output_path = NULL,
   gene_cv = NULL,
   gene_max_muts_per_gene_per_sample = 6L,
   gene_max_coding_muts_per_sample = 5000L,
@@ -743,8 +784,6 @@ prepare_somatic_scores <- function(
 #' @param track_dir Optional directory containing bigWig tracks.
 #' @param bw_files Optional explicit vector of bigWig paths.
 #' @param output_path Optional output path for saved scores.
-#' @param exclude_patterns Patterns used to exclude tracks discovered from a
-#'   directory.
 #' @param min_tracks Minimum number of tracks required.
 #' @param drop_mhc Whether to exclude extended MHC elements.
 #' @param transform Signal transformation method.
@@ -758,8 +797,7 @@ prepare_epigenomic_scores <- function(
   reg_ref_path,
   track_dir = NULL,
   bw_files = NULL,
-  output_path = "data/processed/epigenomic_reg_scores.tsv",
-  exclude_patterns = c("_BL_", "_FL_"),
+  output_path = NULL,
   min_tracks = 3L,
   drop_mhc = TRUE,
   transform = "log1p",
@@ -772,7 +810,6 @@ prepare_epigenomic_scores <- function(
     track_dir = track_dir,
     reg_ref_path = reg_ref_path,
     bw_files = bw_files,
-    exclude_patterns = exclude_patterns,
     min_tracks = min_tracks,
     drop_mhc = drop_mhc,
     transform = transform,
@@ -805,7 +842,6 @@ prepare_epigenomic_scores <- function(
       reg_ref_path = reg_ref_path,
       track_dir = track_dir,
       bw_files = bw_files,
-      exclude_patterns = exclude_patterns,
       min_tracks = min_tracks,
       transform = transform
     )
@@ -845,7 +881,7 @@ build_scored_gene_reg_graph <- function(
   gene_somatic_scores = NULL,
   reg_somatic_scores = NULL,
   reg_epigenomic_scores = NULL,
-  save_outputs = TRUE,
+  save_outputs = FALSE,
   verbose = FALSE
 ) {
   verbose_message(verbose, "Building scored gene-regulatory graph...")
@@ -913,8 +949,8 @@ run_gene_reg_diffusion <- function(
   scored_graph = NULL,
   nodes_path = NULL,
   edges_path = NULL,
-  output_dir = "data/processed",
-  output_stem = "gene_reg_graph_diffusion",
+  output_dir = NULL,
+  output_stem = NULL,
   top_k = 3L,
   confidence_power = 2.0,
   beta_germline = 0.5,
@@ -927,8 +963,22 @@ run_gene_reg_diffusion <- function(
   verbose = FALSE
 ) {
   verbose_message(verbose, "Running gene-regulatory diffusion...")
-  nodes_path <- nodes_path %||% resolve_output_path(scored_graph, "nodes_path")
-  edges_path <- edges_path %||% resolve_output_path(scored_graph, "edges_path")
+  requested_output_dir <- output_dir
+  requested_output_stem <- output_stem
+  nodes <- resolve_bundle_component(scored_graph, "nodes")
+  edges <- resolve_bundle_component(scored_graph, "edges")
+  nodes_path <- materialize_table_path(
+    table = nodes,
+    path = nodes_path %||% resolve_output_path(scored_graph, "nodes_path"),
+    stem = "gene_reg_graph_scored_nodes"
+  )
+  edges_path <- materialize_table_path(
+    table = edges,
+    path = edges_path %||% resolve_output_path(scored_graph, "edges_path"),
+    stem = "gene_reg_graph_scored_edges"
+  )
+  output_dir <- output_dir %||% make_temp_output_dir("gene_reg_diffusion")
+  output_stem <- output_stem %||% "gene_reg_graph_diffusion"
 
   validate_scored_gene_reg_nodes(read_scored_gene_reg_nodes(nodes_path %||% default_diffusion_config$nodes_path))
   validate_scored_gene_reg_edges(read_scored_gene_reg_edges(edges_path %||% default_diffusion_config$edges_path))
@@ -955,8 +1005,17 @@ run_gene_reg_diffusion <- function(
       all_genes = read_diffusion_results(result$output_paths$all_genes_path),
       top_genes = read_diffusion_results(result$output_paths$top_genes_path)
     ),
-    output_paths = as.list(result$output_paths),
-    config = result$config
+    output_paths = if (!is.null(requested_output_dir) || !is.null(requested_output_stem)) as.list(result$output_paths) else list(
+      all_genes_path = NULL,
+      top_genes_path = NULL
+    ),
+    config = c(
+      result$config,
+      list(
+        output_dir = requested_output_dir,
+        output_stem = requested_output_stem
+      )
+    )
   )
 }
 
@@ -995,10 +1054,10 @@ run_gene_reg_diffusion <- function(
 call_selected_subgraph <- function(
   diffusion = NULL,
   diffusion_path = NULL,
-  gg_nodes_path = "data/processed/gene_gene_graph_nodes.tsv.gz",
-  gg_edges_path = "data/processed/gene_gene_graph_edges.tsv.gz",
-  output_dir = "data/processed",
-  output_stem = "gene_gene_selected_subgraph",
+  gg_nodes_path = NULL,
+  gg_edges_path = NULL,
+  output_dir = NULL,
+  output_stem = NULL,
   target_genes = 50L,
   candidate_pool_size = 400L,
   min_confidence = 0,
@@ -1018,7 +1077,22 @@ call_selected_subgraph <- function(
   verbose = FALSE
 ) {
   verbose_message(verbose, "Calling selected subgraph...")
-  diffusion_path <- diffusion_path %||% resolve_output_path(diffusion, "all_genes_path")
+  requested_output_dir <- output_dir
+  requested_output_stem <- output_stem
+  diffusion_table <- resolve_bundle_component(diffusion, "all_genes")
+  diffusion_path <- materialize_table_path(
+    table = diffusion_table,
+    path = diffusion_path %||% resolve_output_path(diffusion, "all_genes_path"),
+    stem = "gene_reg_graph_diffusion_all_genes"
+  )
+  if (is.null(gg_nodes_path) || is.null(gg_edges_path)) {
+    initialize_backend_graphs(strict = FALSE, quiet = TRUE)
+    backend_paths <- .conseguiR_backend_paths()
+    gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
+    gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
+  }
+  output_dir <- output_dir %||% make_temp_output_dir("selected_subgraph")
+  output_stem <- output_stem %||% "gene_gene_selected_subgraph"
 
   validate_diffusion_results(read_diffusion_results(diffusion_path %||% default_subgraph_config$diffusion_path), prize_column = prize_column)
   validate_gene_gene_nodes(read_gene_gene_nodes(gg_nodes_path))
@@ -1059,8 +1133,19 @@ call_selected_subgraph <- function(
       edges = read_selected_subgraph_edges(result$output_paths$edges_path),
       summary = read_selected_subgraph_summary(result$output_paths$summary_path)
     ),
-    output_paths = as.list(result$output_paths),
-    config = result$config
+    output_paths = if (!is.null(requested_output_dir) || !is.null(requested_output_stem)) as.list(result$output_paths) else list(
+      nodes_path = NULL,
+      edges_path = NULL,
+      summary_path = NULL,
+      graphml_path = NULL
+    ),
+    config = c(
+      result$config,
+      list(
+        output_dir = requested_output_dir,
+        output_stem = requested_output_stem
+      )
+    )
   )
 }
 
@@ -1298,6 +1383,82 @@ resolve_plot_diffusion <- function(diffusion = NULL, diffusion_path = NULL, whic
   }
 
   read_diffusion_results(diffusion_path)
+}
+
+resolve_plot_edges <- function(scored_graph = NULL, edges_path = NULL) {
+  edges <- resolve_bundle_component(scored_graph, "edges")
+  if (!is.null(edges)) {
+    return(as.data.table(edges))
+  }
+
+  edges_path <- edges_path %||% resolve_output_path(scored_graph, "edges_path")
+  edges_path <- edges_path %||% default_diffusion_config$edges_path
+  validate_scored_gene_reg_edges(read_scored_gene_reg_edges(edges_path))
+}
+
+merge_postdiff_scores_into_nodes <- function(nodes_dt, diffusion_dt = NULL) {
+  nodes_dt <- as.data.table(copy(nodes_dt))
+
+  for (col in c("post_germline", "post_somatic", "post_epigenomic", "post_norm")) {
+    if (!col %in% names(nodes_dt)) {
+      nodes_dt[, (col) := NA_real_]
+    }
+  }
+
+  if (is.null(diffusion_dt) || nrow(diffusion_dt) == 0L) {
+    return(nodes_dt)
+  }
+
+  diffusion_dt <- as.data.table(copy(diffusion_dt))
+  diffusion_dt[, gene_name := as.character(gene_name)]
+  keep_cols <- intersect(c("gene_name", "post_germline", "post_somatic", "post_epigenomic", "post_norm"), names(diffusion_dt))
+  if (!"gene_name" %in% keep_cols) {
+    return(nodes_dt)
+  }
+
+  gene_map <- nodes_dt[node_type == "gene", .(node_id = as.character(node_id), gene_name = as.character(name))]
+  gene_map <- merge(gene_map, diffusion_dt[, ..keep_cols], by = "gene_name", all.x = TRUE)
+
+  for (col in setdiff(keep_cols, "gene_name")) {
+    nodes_dt[match(gene_map$node_id, as.character(node_id)), (col) := safe_numeric(gene_map[[col]])]
+  }
+
+  nodes_dt
+}
+
+resolve_postdiff_gene_reg_graph <- function(
+  postdiff_gene_reg_graph = NULL,
+  scored_graph = NULL,
+  diffusion = NULL,
+  nodes_path = NULL,
+  edges_path = NULL,
+  diffusion_path = NULL
+) {
+  if (is.character(postdiff_gene_reg_graph) && length(postdiff_gene_reg_graph) == 1L && file.exists(postdiff_gene_reg_graph)) {
+    postdiff_gene_reg_graph <- readRDS(postdiff_gene_reg_graph)
+  }
+
+  nodes_dt <- resolve_bundle_component(postdiff_gene_reg_graph, "nodes")
+  edges_dt <- resolve_bundle_component(postdiff_gene_reg_graph, "edges")
+
+  if (!is.null(nodes_dt) && !is.null(edges_dt)) {
+    nodes_dt <- as.data.table(nodes_dt)
+    edges_dt <- as.data.table(edges_dt)
+    if (!"post_norm" %in% names(nodes_dt)) {
+      diffusion_dt <- resolve_bundle_component(postdiff_gene_reg_graph, "all_genes")
+      nodes_dt <- merge_postdiff_scores_into_nodes(nodes_dt, diffusion_dt)
+    }
+    return(list(nodes = nodes_dt, edges = edges_dt))
+  }
+
+  nodes_dt <- resolve_plot_nodes(scored_graph = scored_graph, nodes_path = nodes_path)
+  edges_dt <- resolve_plot_edges(scored_graph = scored_graph, edges_path = edges_path)
+  diffusion_dt <- resolve_plot_diffusion(diffusion = diffusion, diffusion_path = diffusion_path, which = "all_genes")
+
+  list(
+    nodes = merge_postdiff_scores_into_nodes(nodes_dt, diffusion_dt),
+    edges = edges_dt
+  )
 }
 
 default_score_table_path <- function(modality = c("germline", "somatic", "epigenomic"), target = c("gene", "reg")) {
@@ -1612,10 +1773,10 @@ run_conseguiR <- function(
   dndscv_refdb,
   epigenomic_track_dir = NULL,
   epigenomic_tracks = NULL,
-  graph_rds_path = "data/processed/gene_reg_graph_no_scores.rds",
-  gg_nodes_path = "data/processed/gene_gene_graph_nodes.tsv.gz",
-  gg_edges_path = "data/processed/gene_gene_graph_edges.tsv.gz",
-  output_dir = "data/processed",
+  graph_rds_path = NULL,
+  gg_nodes_path = NULL,
+  gg_edges_path = NULL,
+  output_dir = NULL,
   target_genes = 50L,
   germline_args = list(),
   somatic_args = list(),
@@ -1627,6 +1788,14 @@ run_conseguiR <- function(
   verbose = FALSE
 ) {
   verbose_message(verbose, "Running end-to-end conseguiR pipeline...")
+  requested_output_dir <- output_dir
+  if (is.null(graph_rds_path) || is.null(gg_nodes_path) || is.null(gg_edges_path)) {
+    initialize_backend_graphs(strict = FALSE, quiet = TRUE)
+    backend_paths <- .conseguiR_backend_paths()
+    graph_rds_path <- graph_rds_path %||% backend_paths$gene_reg_graph_rds
+    gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
+    gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
+  }
   validation <- validate_inputs(
     gwas_sumstats = gwas_sumstats,
     somatic_maf = somatic_maf,
@@ -1642,9 +1811,9 @@ run_conseguiR <- function(
       list(
         gwas_sumstats = gwas_sumstats,
         reference_bfile = reference_bfile,
-        gene_output_prefix = file.path(output_dir, "germline_gene_scores"),
-        reg_output_prefix = file.path(output_dir, "germline_reg_scores"),
-        magma_gwas_cache_prefix = file.path(output_dir, "magma_shared_gwas_cache"),
+        gene_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "germline_gene_scores") else NULL,
+        reg_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "germline_reg_scores") else NULL,
+        magma_gwas_cache_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "magma_shared_gwas_cache") else NULL,
         verbose = verbose
       ),
       as_list_or_empty(germline_args)
@@ -1658,8 +1827,8 @@ run_conseguiR <- function(
         maf = somatic_maf,
         refdb = dndscv_refdb,
         reg_ref_path = reg_ref_path,
-        gene_output_path = file.path(output_dir, "somatic_gene_scores.tsv"),
-        reg_output_path = file.path(output_dir, "somatic_reg_scores.tsv"),
+        gene_output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "somatic_gene_scores.tsv") else NULL,
+        reg_output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "somatic_reg_scores.tsv") else NULL,
         verbose = verbose
       ),
       as_list_or_empty(somatic_args)
@@ -1673,7 +1842,7 @@ run_conseguiR <- function(
         reg_ref_path = reg_ref_path,
         track_dir = epigenomic_track_dir,
         bw_files = epigenomic_tracks,
-        output_path = file.path(output_dir, "epigenomic_reg_scores.tsv"),
+        output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "epigenomic_reg_scores.tsv") else NULL,
         verbose = verbose
       ),
       as_list_or_empty(epigenomic_args)
@@ -1685,11 +1854,11 @@ run_conseguiR <- function(
     base_args = c(
       list(
         graph_rds_path = graph_rds_path,
-        output_prefix = file.path(output_dir, "gene_reg_graph_scored"),
+        output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "gene_reg_graph_scored") else "data/processed/gene_reg_graph_scored",
         germline_scores = germline,
         somatic_scores = somatic,
         epigenomic_scores = epigenomic,
-        save_outputs = TRUE,
+        save_outputs = !is.null(requested_output_dir),
         verbose = verbose
       ),
       as_list_or_empty(scored_graph_args)
@@ -1701,8 +1870,8 @@ run_conseguiR <- function(
     base_args = c(
       list(
         scored_graph = scored_graph,
-        output_dir = output_dir,
-        output_stem = "gene_reg_graph_diffusion",
+        output_dir = requested_output_dir,
+        output_stem = if (!is.null(requested_output_dir)) "gene_reg_graph_diffusion" else NULL,
         verbose = verbose
       ),
       as_list_or_empty(diffusion_args)
@@ -1716,8 +1885,8 @@ run_conseguiR <- function(
         diffusion = diffusion,
         gg_nodes_path = gg_nodes_path,
         gg_edges_path = gg_edges_path,
-        output_dir = output_dir,
-        output_stem = "gene_gene_selected_subgraph",
+        output_dir = requested_output_dir,
+        output_stem = if (!is.null(requested_output_dir)) "gene_gene_selected_subgraph" else NULL,
         target_genes = target_genes,
         verbose = verbose
       ),
@@ -1730,8 +1899,10 @@ run_conseguiR <- function(
     base_args = c(
       list(
         selected_subgraph = selected_subgraph,
-        bundle_output_prefix = file.path(output_dir, "gene_gene_selected_subgraph_plot_bundle"),
-        plot_file_path = file.path(output_dir, "gene_gene_selected_subgraph_plot.pdf"),
+        bundle_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "gene_gene_selected_subgraph_plot_bundle") else "data/processed/gene_gene_selected_subgraph_plot_bundle",
+        plot_file_path = NULL,
+        save_bundle = FALSE,
+        save_plot = FALSE,
         verbose = verbose
       ),
       as_list_or_empty(plot_args)
@@ -1751,10 +1922,163 @@ run_conseguiR <- function(
       plot = plot_bundle
     ),
     output_paths = list(
-      output_dir = output_dir
+      output_dir = requested_output_dir
     ),
     config = list(
       target_genes = target_genes
+    )
+  )
+}
+
+#' Plot a locus-centered multimodal context panel
+#'
+#' @param chromosome Locus chromosome, for example `"8"` or `"chr8"`.
+#' @param start Locus start coordinate.
+#' @param end Locus end coordinate.
+#' @param scored_graph Optional scored gene-reg graph bundle.
+#' @param diffusion Optional diffusion bundle.
+#' @param selected_subgraph Optional selected-subgraph bundle used to highlight
+#'   genes and filter the arc layer.
+#' @param nodes_path Optional explicit scored node-table path.
+#' @param edges_path Optional explicit scored edge-table path.
+#' @param diffusion_path Optional explicit diffusion table path.
+#' @param selected_nodes_path Optional explicit selected-subgraph node-table
+#'   path.
+#' @param label_features Optional gene symbols to label.
+#' @param gwas_sumstats Optional GWAS summary statistics path or table used to
+#'   label the top SNP in the locus.
+#' @param label_top_gwas_snp Logical scalar. If `TRUE`, label the top GWAS SNP
+#'   in the window by rsID/variant ID.
+#' @param rsid_pmid Optional rsID-to-PMID evidence table or path. Must contain
+#'   at least `rsid` and `pmid` columns. When omitted, `conseguiR` queries
+#'   LitVar in memory for SNP literature support.
+#' @param label_top_lit_snps Integer count of literature-backed SNPs to label.
+#'   SNPs are restricted to regulatory elements in the locus and ranked by GWAS
+#'   significance, with PMID support used as an additional prioritization field.
+#' @param pmid_query Optional disease query term such as `"DLBCL"` or
+#'   `"lymphoma"`. When supplied, `conseguiR` first queries LitVar for rsID to
+#'   PMID links and then filters those PMIDs using Europe PMC query results. If
+#'   no literature-backed SNPs are found, the plot falls back to top GWAS SNPs
+#'   inside the top regulatory elements by germline z-score.
+#' @param pmid_page_size Maximum number of PMIDs per rsID retained from LitVar,
+#'   and the Europe PMC page size used when filtering by `pmid_query`.
+#' @param plot_file_path Optional output path for the saved figure.
+#' @param title Plot title.
+#' @param width Plot width in inches.
+#' @param height Plot height in inches.
+#' @param dpi Plot DPI.
+#' @param save_plot Whether to save the figure.
+#' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @return A plot bundle containing the ggplot object and locus plotting data.
+plot_locus_context <- function(
+  chromosome,
+  start,
+  end,
+  postdiff_gene_reg_graph = NULL,
+  scored_graph = NULL,
+  diffusion = NULL,
+  selected_subgraph = NULL,
+  nodes_path = NULL,
+  edges_path = NULL,
+  diffusion_path = NULL,
+  selected_nodes_path = NULL,
+  label_features = NULL,
+  gwas_sumstats = NULL,
+  label_top_gwas_snp = FALSE,
+  rsid_pmid = NULL,
+  label_top_lit_snps = 0L,
+  pmid_query = NULL,
+  pmid_page_size = 1000L,
+  plot_file_path = NULL,
+  title = NULL,
+  width = 14,
+  height = 9,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = FALSE
+) {
+  verbose_message(verbose, "Preparing locus context plot...")
+
+  graph_dt <- resolve_postdiff_gene_reg_graph(
+    postdiff_gene_reg_graph = postdiff_gene_reg_graph,
+    scored_graph = scored_graph,
+    diffusion = diffusion,
+    nodes_path = nodes_path,
+    edges_path = edges_path,
+    diffusion_path = diffusion_path
+  )
+  nodes_dt <- graph_dt$nodes
+  edges_dt <- graph_dt$edges
+  selected_genes <- resolve_locus_selected_genes(
+    selected_subgraph = selected_subgraph,
+    nodes_path = selected_nodes_path
+  )
+
+  plot_obj <- create_locus_context_plot(
+    nodes = nodes_dt,
+    edges = edges_dt,
+    selected_genes = selected_genes,
+    chromosome = chromosome,
+    start = start,
+    end = end,
+    label_features = label_features,
+    title = title,
+    gwas_sumstats = gwas_sumstats,
+    label_top_gwas_snp = label_top_gwas_snp,
+    rsid_pmid = rsid_pmid,
+    label_top_lit_snps = label_top_lit_snps,
+    pmid_query = pmid_query,
+    pmid_page_size = pmid_page_size,
+    verbose = verbose
+  )
+
+  if (isTRUE(verbose) && identical(plot_obj$plot_data$snp_label_mode, "fallback")) {
+    message("No literature-backed SNPs remained after LitVar lookup and optional disease filtering; falling back to top GWAS SNPs inside the top regulatory elements by germline score.")
+  }
+
+  if (isTRUE(save_plot)) {
+    if (is.null(plot_file_path) || !nzchar(plot_file_path)) {
+      stop("`plot_file_path` must be provided when `save_plot = TRUE`.")
+    }
+
+    save_locus_context_plot(
+      nodes = nodes_dt,
+      edges = edges_dt,
+      selected_genes = selected_genes,
+      chromosome = chromosome,
+      start = start,
+      end = end,
+      file_path = plot_file_path,
+      label_features = label_features,
+      title = title,
+      gwas_sumstats = gwas_sumstats,
+      label_top_gwas_snp = label_top_gwas_snp,
+      rsid_pmid = rsid_pmid,
+      label_top_lit_snps = label_top_lit_snps,
+      pmid_query = pmid_query,
+      pmid_page_size = pmid_page_size,
+      width = width,
+      height = height,
+      dpi = dpi
+    )
+  }
+
+  new_bundle(
+    type = "locus_plot",
+    objects = list(
+      plot = plot_obj$plot,
+      plot_data = plot_obj$plot_data
+    ),
+    output_paths = list(
+      plot_file_path = if (isTRUE(save_plot)) plot_file_path else NULL
+    ),
+    config = list(
+      chromosome = chromosome,
+      start = start,
+      end = end,
+      title = title,
+      label_top_lit_snps = label_top_lit_snps
     )
   )
 }

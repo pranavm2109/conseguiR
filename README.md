@@ -2,7 +2,14 @@
 
 `conseguiR` is an R package for integrating germline, somatic, and epigenomic
 signals on gene-regulatory graphs, running diffusion, selecting a compact
-gene-gene subgraph, and exporting a final visualization bundle.
+gene-gene subgraph, and generating both summary and exploratory plots.
+
+The package is designed to be object-first:
+
+- compute functions return R objects and bundles by default
+- file writing is optional and should happen only when the user explicitly asks
+  for saved outputs
+- plotting functions are the natural place to save figures
 
 This repository contains a first-draft end-to-end implementation of that
 workflow, including exported user-facing wrappers, internal pipeline stages,
@@ -20,6 +27,7 @@ The current package workflow is:
 6. run diffusion on the scored gene-regulatory graph
 7. call a cardinality-constrained gene-gene subgraph
 8. build a visualization bundle and save a plotted graph
+9. optionally inspect intermediate score outputs and specific genomic loci
 
 The package ships prebuilt unscored backend graphs for:
 
@@ -44,6 +52,7 @@ The package-facing API currently exports:
 - `run_gene_reg_diffusion()`
 - `plot_scores()`
 - `call_selected_subgraph()`
+- `plot_locus_context()`
 - `plot_selected_subgraph()`
 - `run_conseguiR()`
 
@@ -53,7 +62,7 @@ Detailed API notes are in:
 
 ## Quickstart
 
-The intended public workflow is through the exported wrappers, for example:
+The highest-level workflow is through `run_conseguiR()`:
 
 ```r
 result <- run_conseguiR(
@@ -67,9 +76,92 @@ result <- run_conseguiR(
 )
 ```
 
-The final plot path is then available from:
+By default, this returns a master pipeline bundle in memory. If you want the
+pipeline to also save artifacts to disk, pass an explicit `output_dir`.
 
-- `result$plot$output_paths$plot_file_path`
+If you want a staged workflow instead of the one-shot wrapper, the intended
+sequence is:
+
+```r
+germline <- prepare_germline_scores(...)
+somatic <- prepare_somatic_scores(...)
+epigenomic <- prepare_epigenomic_scores(...)
+
+scored_graph <- build_scored_gene_reg_graph(
+  germline_scores = germline,
+  somatic_scores = somatic,
+  epigenomic_scores = epigenomic
+)
+
+diffusion <- run_gene_reg_diffusion(scored_graph = scored_graph)
+selected_subgraph <- call_selected_subgraph(diffusion = diffusion)
+```
+
+## Plotting
+
+`conseguiR` currently supports three complementary plotting modes:
+
+1. score-stage plots
+2. selected-subgraph plots
+3. exploratory locus plots
+
+Intermediate score plots:
+
+```r
+plot_germline_gene_scores(germline_scores = germline, stage = "pre")
+plot_germline_gene_scores(
+  germline_scores = germline,
+  diffusion = diffusion,
+  stage = "post"
+)
+
+plot_somatic_gene_scores(somatic_scores = somatic, stage = "pre")
+plot_somatic_gene_scores(
+  somatic_scores = somatic,
+  diffusion = diffusion,
+  stage = "post"
+)
+
+plot_epigenomic_gene_scores(diffusion = diffusion)
+plot_germline_reg_scores(germline_scores = germline)
+plot_somatic_reg_scores(somatic_scores = somatic)
+plot_epigenomic_reg_scores(epigenomic_scores = epigenomic)
+```
+
+Selected-subgraph plot:
+
+```r
+plot_selected_subgraph(
+  selected_subgraph = selected_subgraph,
+  plot_file_path = "selected_subgraph.pdf"
+)
+```
+
+Exploratory locus plot:
+
+```r
+plot_locus_context(
+  chromosome = "8",
+  start = 127200000,
+  end = 128200000,
+  scored_graph = scored_graph,
+  diffusion = diffusion,
+  selected_subgraph = selected_subgraph,
+  gwas_sumstats = "<path-or-table>",
+  pmid_query = "lymphoma",
+  label_top_lit_snps = 3L,
+  plot_file_path = "MYC_locus_context.pdf"
+)
+```
+
+`plot_locus_context()` shows:
+
+- regulatory-element somatic, epigenomic, and germline z-score tracks
+- a combined regulatory score track
+- a post-diffusion gene score track
+- regulatory-element to gene links within the locus
+- optional SNP labels, preferring literature-backed SNPs when available and
+  falling back to top GWAS SNPs in the top germline regulatory elements
 
 ## Installation
 
@@ -79,11 +171,11 @@ For installation and setup notes, see:
 
 ## Current status
 
-This is a strong first draft rather than a polished release.
+This is a strong research-grade draft rather than a polished release.
 
 The main remaining rough edges are:
 
 - some package-facing wrappers still delegate into `scripts/...`
 - Python and MAGMA setup still matter for a smooth first run
-- the package still needs some final packaging polish around installation and
+- the package still needs some final polish around fresh-clone validation and
   resource discovery

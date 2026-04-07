@@ -10,7 +10,6 @@ validate_inputs(
   reg_ref_path = NULL,
   epigenomic_tracks = NULL,
   epigenomic_track_dir = NULL,
-  epigenomic_exclude_patterns = c("_BL_", "_FL_"),
   verbose = FALSE
 )
 }
@@ -24,9 +23,6 @@ validate_inputs(
 \item{epigenomic_tracks}{Optional vector of bigWig paths.}
 
 \item{epigenomic_track_dir}{Optional directory containing bigWig tracks.}
-
-\item{epigenomic_exclude_patterns}{Patterns used to exclude bigWigs when
-discovering tracks from \code{epigenomic_track_dir}.}
 
 \item{verbose}{Logical scalar. If \code{TRUE}, show progress bars and stage
 messages when available.}

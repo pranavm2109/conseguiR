@@ -15,7 +15,7 @@ run_conseguiR(
   graph_rds_path = NULL,
   gg_nodes_path = NULL,
   gg_edges_path = NULL,
-  output_dir = "data/processed",
+  output_dir = NULL,
   target_genes = 50L,
   germline_args = list(),
   somatic_args = list(),
@@ -48,7 +48,9 @@ run_conseguiR(
 
 \item{gg_edges_path}{Gene-gene edge table path.}
 
-\item{output_dir}{Output directory for pipeline artifacts.}
+\item{output_dir}{Optional output directory for saved pipeline artifacts.
+When \code{NULL}, \code{run_conseguiR()} runs in object-first mode and returns the
+stage bundles without treating disk output as the default interface.}
 
 \item{target_genes}{Requested selected-subgraph size.}
 
@@ -68,7 +70,7 @@ settings, for example \code{gene_cv},
 
 \item{epigenomic_args}{Named list of overrides passed to
 \code{prepare_epigenomic_scores()}. Typical entries include \code{track_dir},
-\code{bw_files}, \code{exclude_patterns}, \code{min_tracks}, \code{drop_mhc}, \code{transform},
+\code{bw_files}, \code{min_tracks}, \code{drop_mhc}, \code{transform},
 \code{return_diagnostics}, and \code{summary_fun}.}
 
 \item{scored_graph_args}{Named list of overrides passed to
@@ -108,13 +110,20 @@ are forwarded to their corresponding downstream stages
 The gene and regulatory location resources are backend-managed by the
 package and are not user-facing arguments in this high-level wrapper.
 
+\code{conseguiR} now uses an object-first design. In plain terms, that means the
+compute stages return R objects/bundles by default, and file writing is
+optional rather than being the main API. If you supply \code{output_dir},
+\code{run_conseguiR()} will save stage artifacts there; if you leave
+\code{output_dir = NULL}, it will still run the full workflow and return the
+resulting objects in memory.
+
 Exact list formatting:
 
 \verb{germline_args = list( gene_sample_size = 456348, reg_sample_size = 456348, gene_step1_args = list(annotation_window = c(35, 10)), gene_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")) )}
 
 \verb{somatic_args = list( gene_cv = NULL, dndscv_args = list(sm = \\"192r_3w\\"), eligible_gr = NULL, fishhook_covariate_data = covariate_dt, fishhook_args = list() )}
 
-\verb{epigenomic_args = list( bw_files = c(\\"track1.bw\\", \\"track2.bw\\", \\"track3.bw\\"), exclude_patterns = c(\\"_BL_\\", \\"_FL_\\"), min_tracks = 3L, transform = \\"log1p\\" )}
+\verb{epigenomic_args = list( bw_files = c(\\"track1.bw\\", \\"track2.bw\\", \\"track3.bw\\"), min_tracks = 3L, transform = \\"log1p\\" )}
 }
 \examples{
 \dontrun{

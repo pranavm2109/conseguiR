@@ -8,8 +8,7 @@ prepare_epigenomic_scores(
   reg_ref_path,
   track_dir = NULL,
   bw_files = NULL,
-  output_path = "data/processed/epigenomic_reg_scores.tsv",
-  exclude_patterns = c("_BL_", "_FL_"),
+  output_path = NULL,
   min_tracks = 3L,
   drop_mhc = TRUE,
   transform = "log1p",
@@ -26,9 +25,6 @@ prepare_epigenomic_scores(
 \item{bw_files}{Optional explicit vector of bigWig paths.}
 
 \item{output_path}{Optional output path for saved scores.}
-
-\item{exclude_patterns}{Patterns used to exclude tracks discovered from a
-directory.}
 
 \item{min_tracks}{Minimum number of tracks required.}
 
@@ -58,8 +54,6 @@ Exact formatting:
 \item \code{bw_files}: a character vector of bigWig paths. Supply at least three
 tracks, for example
 \verb{c(\\"sample1.bw\\", \\"sample2.bw\\", \\"sample3.bw\\")}.
-\item \code{exclude_patterns}: a character vector of regex fragments used to exclude
-files discovered from \code{track_dir}.
 \item \code{summary_fun}: a function object such as \code{mean} or \code{max}.
 }
 }
