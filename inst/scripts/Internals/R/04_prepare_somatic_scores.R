@@ -34,18 +34,26 @@ conseguiR_verbose_message <- function(verbose, ...) {
 # - regulatory-element-level scores come from fishHook
 # - final output should be a simple score table with identifier and zstat
 
+cap_extreme_z <- function(zstat, min_p = 1e-300) {
+  zstat <- as.numeric(zstat)
+  z_cap <- stats::qnorm(min_p / 2, lower.tail = FALSE)
+  zstat[is.infinite(zstat) & zstat > 0] <- z_cap
+  zstat[is.infinite(zstat) & zstat < 0] <- -z_cap
+  zstat
+}
+
 compute_signed_z_from_p <- function(p_value, effect_direction = NULL, min_p = 1e-300) {
   p_value <- as.numeric(p_value)
   p_value[p_value <= 0] <- min_p
   p_value[p_value > 1] <- NA_real_
 
-  zstat <- stats::qnorm(1 - (p_value / 2))
+  zstat <- stats::qnorm(p_value / 2, lower.tail = FALSE)
 
   if (!is.null(effect_direction)) {
     zstat <- zstat * sign(as.numeric(effect_direction))
   }
 
-  zstat
+  cap_extreme_z(zstat, min_p = min_p)
 }
 
 detect_dndscv_refdb_chr_style <- function(refdb) {
@@ -93,7 +101,7 @@ harmonize_dndscv_chr_style <- function(mutation_dt, refdb) {
     return(mutation_dt)
   }
 
-  out <- copy(mutation_dt)
+  out <- data.table::copy(mutation_dt)
 
   if (identical(style, "UCSC")) {
     out[, chr := ifelse(grepl("^chr", chr), chr, paste0("chr", chr))]
@@ -148,7 +156,7 @@ extract_fishhook_reg_scores <- function(
     reg_elem_id = as.character(get(reg_col)),
     p_value = as.numeric(get(p_col)),
     zstat = if (!is.null(effect_col) && effect_col %in% c("zscore", "z")) {
-      as.numeric(get(effect_col))
+      cap_extreme_z(get(effect_col))
     } else {
       compute_signed_z_from_p(
         p_value = get(p_col),

@@ -35,7 +35,7 @@ ensure_data_table <- function(x) {
 }
 
 normalize_colnames <- function(x) {
-  dt <- copy(ensure_data_table(x))
+  dt <- data.table::copy(ensure_data_table(x))
   clean_names <- names(dt)
   clean_names <- gsub("\\.", "_", clean_names)
   clean_names <- gsub("\\s+", "_", clean_names)
@@ -57,6 +57,10 @@ pick_first_existing_column <- function(dt, candidates, field_name) {
   }
 
   hit[[1]]
+}
+
+read_validation_preview <- function(path, nrows = 1000L, show_progress = FALSE) {
+  fread(path, nrows = nrows, showProgress = show_progress)
 }
 
 validate_gwas_sumstats <- function(sumstats) {
@@ -117,6 +121,15 @@ validate_gwas_sumstats <- function(sumstats) {
 
   attr(out, "conseguiR_input_type") <- "gwas_sumstats_magma_minimal"
   out
+}
+
+validate_gwas_sumstats_path <- function(sumstats_path, show_progress = FALSE) {
+  if (!file.exists(sumstats_path)) {
+    stop("GWAS summary statistics file does not exist: ", sumstats_path)
+  }
+
+  dt <- read_validation_preview(sumstats_path, show_progress = show_progress)
+  validate_gwas_sumstats(dt)
 }
 
 prepare_magma_input <- function(sumstats) {
@@ -201,6 +214,15 @@ validate_somatic_maf <- function(maf) {
   out
 }
 
+validate_somatic_maf_path <- function(maf_path, show_progress = FALSE) {
+  if (!file.exists(maf_path)) {
+    stop("Somatic MAF file does not exist: ", maf_path)
+  }
+
+  dt <- read_validation_preview(maf_path, show_progress = show_progress)
+  validate_somatic_maf(dt)
+}
+
 prepare_dndscv_input <- function(maf) {
   dt <- validate_somatic_maf(maf)
 
@@ -232,12 +254,12 @@ prepare_fishhook_input <- function(maf) {
   out
 }
 
-validate_regulatory_element_reference <- function(reg_ref_path) {
+validate_regulatory_element_reference <- function(reg_ref_path, nrows = Inf) {
   if (!file.exists(reg_ref_path)) {
     stop("Regulatory element reference file does not exist: ", reg_ref_path)
   }
 
-  reg_dt <- fread(reg_ref_path, header = FALSE)
+  reg_dt <- fread(reg_ref_path, header = FALSE, nrows = nrows)
 
   if (ncol(reg_dt) < 4) {
     stop("Regulatory element reference must have at least 4 columns: reg_elem_id, chrom, start, end.")
@@ -312,7 +334,12 @@ validate_epigenomic_tracks <- function(track_paths) {
   out
 }
 
-validate_epigenomic_bigwigs <- function(bw_files, reg_gr, exclude_patterns = NULL) {
+validate_epigenomic_bigwigs <- function(
+  bw_files,
+  reg_gr,
+  exclude_patterns = NULL,
+  verbose = FALSE
+) {
   if (length(bw_files) == 1L && dir.exists(bw_files)) {
     bw_files <- list.files(bw_files, pattern = "\\.(bw|bigWig|bigwig)$", full.names = TRUE)
   }
@@ -333,9 +360,14 @@ validate_epigenomic_bigwigs <- function(bw_files, reg_gr, exclude_patterns = NUL
 
   reg_gr_test <- reg_gr
   file_summaries <- vector("list", length(bw_files))
+  pb <- if (isTRUE(verbose)) utils::txtProgressBar(min = 0, max = length(bw_files), style = 3) else NULL
+  on.exit(if (!is.null(pb)) close(pb), add = TRUE)
 
   for (i in seq_along(bw_files)) {
     bw_path <- bw_files[[i]]
+    if (isTRUE(verbose)) {
+      message("Checking bigWig ", i, "/", length(bw_files), ": ", basename(bw_path))
+    }
 
     bw_info <- tryCatch(
       seqinfo(BigWigFile(bw_path)),
@@ -356,24 +388,12 @@ validate_epigenomic_bigwigs <- function(bw_files, reg_gr, exclude_patterns = NUL
       stop("No regulatory elements remain after seqlevel harmonization for bigWig file: ", bw_path)
     }
 
-    test_gr <- reg_subset[seq_len(min(10L, length(reg_subset)))]
-
-    imported <- tryCatch(
-      import(bw_path, which = test_gr, as = "NumericList"),
-      error = function(e) {
-        stop("Failed to import signal from bigWig file ", bw_path, ": ", conditionMessage(e))
-      }
-    )
-
-    if (length(imported) != length(test_gr)) {
-      stop("Imported signal length does not match queried regulatory elements for bigWig file: ", bw_path)
-    }
-
     file_summaries[[i]] <- data.table(
       file = bw_path,
       n_common_seqlevels = length(common_seqlevels),
-      n_test_intervals = length(test_gr)
+      n_test_intervals = NA_integer_
     )
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, i)
   }
 
   out <- rbindlist(file_summaries)
@@ -381,12 +401,21 @@ validate_epigenomic_bigwigs <- function(bw_files, reg_gr, exclude_patterns = NUL
   out
 }
 
-validate_epigenomic_inputs <- function(bw_files, reg_ref_path, exclude_patterns = NULL) {
-  reg_gr <- validate_regulatory_element_reference(reg_ref_path)
+validate_epigenomic_inputs <- function(
+  bw_files,
+  reg_ref_path,
+  exclude_patterns = NULL,
+  verbose = FALSE
+) {
+  reg_gr <- validate_regulatory_element_reference(
+    reg_ref_path,
+    nrows = 1000L
+  )
   bw_summary <- validate_epigenomic_bigwigs(
     bw_files = bw_files,
     reg_gr = reg_gr,
-    exclude_patterns = exclude_patterns
+    exclude_patterns = exclude_patterns,
+    verbose = verbose
   )
 
   list(

@@ -72,21 +72,41 @@
 }
 
 #' @keywords internal
+.conseguiR_prefer_repo_relative_path <- function(relpath) {
+  candidate <- file.path(getwd(), relpath)
+  if (file.exists(candidate)) {
+    return(relpath)
+  }
+
+  NULL
+}
+
+#' @keywords internal
 .conseguiR_default_gene_loc_path <- function() {
-  path <- .conseguiR_backend_resource_path("NCBI38.gene.loc")
+  path <- .conseguiR_prefer_repo_relative_path("data/raw/NCBI38/NCBI38.gene.loc")
   if (!is.null(path)) {
     return(path)
   }
-  .conseguiR_find_data_path("data/raw/NCBI38/NCBI38.gene.loc")
+  path <- .conseguiR_find_data_path("data/raw/NCBI38/NCBI38.gene.loc")
+  if (!is.null(path)) {
+    return(path)
+  }
+
+  .conseguiR_backend_resource_path("NCBI38.gene.loc")
 }
 
 #' @keywords internal
 .conseguiR_default_reg_loc_path <- function() {
-  path <- .conseguiR_backend_resource_path("2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
+  path <- .conseguiR_prefer_repo_relative_path("data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
   if (!is.null(path)) {
     return(path)
   }
-  .conseguiR_find_data_path("data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
+  path <- .conseguiR_find_data_path("data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
+  if (!is.null(path)) {
+    return(path)
+  }
+
+  .conseguiR_backend_resource_path("2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
 }
 
 #' @keywords internal

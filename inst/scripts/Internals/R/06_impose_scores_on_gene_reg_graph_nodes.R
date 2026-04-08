@@ -146,7 +146,7 @@ standardize_reg_score_table <- function(scores, modality_name) {
 }
 
 merge_gene_modality_scores <- function(nodes, scores, score_col, modality_name) {
-  dt <- copy(nodes)
+  dt <- data.table::copy(nodes)
   gene_nodes <- dt[node_type == "gene"]
 
   if (is.null(scores)) {
@@ -170,7 +170,7 @@ merge_gene_modality_scores <- function(nodes, scores, score_col, modality_name) 
 }
 
 merge_reg_modality_scores <- function(nodes, scores, score_col, modality_name) {
-  dt <- copy(nodes)
+  dt <- data.table::copy(nodes)
   reg_nodes <- dt[node_type == "reg"]
 
   if (is.null(scores)) {

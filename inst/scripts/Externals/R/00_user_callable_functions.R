@@ -205,18 +205,39 @@ validate_inputs <- function(
   objects <- list()
 
   if (!is.null(gwas_sumstats)) {
-    objects$gwas <- validate_gwas_sumstats(read_table_if_path(gwas_sumstats, showProgress = FALSE))
+    verbose_message(verbose, "Validating GWAS summary statistics...")
+    objects$gwas <- if (is.character(gwas_sumstats) && length(gwas_sumstats) == 1L) {
+      validate_gwas_sumstats_path(
+        sumstats_path = gwas_sumstats,
+        show_progress = isTRUE(verbose)
+      )
+    } else {
+      validate_gwas_sumstats(gwas_sumstats)
+    }
   }
 
   if (!is.null(somatic_maf)) {
-    objects$somatic_maf <- validate_somatic_maf(read_table_if_path(somatic_maf, showProgress = FALSE))
+    verbose_message(verbose, "Validating somatic MAF...")
+    objects$somatic_maf <- if (is.character(somatic_maf) && length(somatic_maf) == 1L) {
+      validate_somatic_maf_path(
+        maf_path = somatic_maf,
+        show_progress = isTRUE(verbose)
+      )
+    } else {
+      validate_somatic_maf(somatic_maf)
+    }
   }
 
   if (!is.null(reg_ref_path)) {
-    objects$regulatory_elements <- validate_regulatory_element_reference(reg_ref_path)
+    verbose_message(verbose, "Validating regulatory-element reference...")
+    objects$regulatory_elements <- validate_regulatory_element_reference(
+      reg_ref_path,
+      nrows = 1000L
+    )
   }
 
   if (!is.null(epigenomic_tracks) || !is.null(epigenomic_track_dir)) {
+    verbose_message(verbose, "Validating epigenomic tracks...")
     bw_files <- epigenomic_tracks
     if (is.null(bw_files)) {
       bw_files <- list_epigenomic_track_files(track_dir = epigenomic_track_dir)
@@ -228,7 +249,8 @@ validate_inputs <- function(
 
     objects$epigenomic <- validate_epigenomic_inputs(
       bw_files = bw_files,
-      reg_ref_path = reg_ref_path
+      reg_ref_path = reg_ref_path,
+      verbose = verbose
     )
   }
 

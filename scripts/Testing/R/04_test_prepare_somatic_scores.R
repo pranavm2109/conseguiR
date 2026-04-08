@@ -205,6 +205,20 @@ test_extract_fishhook_reg_scores <- function() {
   invisible(scores)
 }
 
+test_somatic_extreme_scores_are_capped <- function() {
+  capped_from_p <- compute_signed_z_from_p(c(0, 1e-400, 1e-20))
+  expect_true(all(is.finite(capped_from_p)))
+
+  fishhook_mock <- data.table(
+    reg_elem_id = c("GH01J000013", "GH01J000021"),
+    p = c(1e-4, 0.03),
+    zscore = c(Inf, -Inf)
+  )
+
+  scores <- extract_fishhook_reg_scores(fishhook_mock)
+  expect_true(all(is.finite(scores$zstat)))
+}
+
 test_run_somatic_scoring_pipeline_with_mock_outputs <- function(print_scores = TRUE) {
   maf <- fread(default_somatic_path, nrows = 1000L)
 
@@ -345,6 +359,10 @@ main <- function() {
 
   test_that("somatic score extraction works for fishHook regulatory elements", {
     test_extract_fishhook_reg_scores()
+  })
+
+  test_that("somatic extreme z-scores are capped to finite values", {
+    test_somatic_extreme_scores_are_capped()
   })
 
   test_that("somatic scoring pipeline combines mocked gene and regulatory scores", {

@@ -704,6 +704,80 @@ fetch_litvar_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = 
   unique(out)
 }
 
+fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = FALSE) {
+  rsids <- unique(tolower(as.character(rsids %||% character())))
+  rsids <- rsids[grepl("^rs[0-9]+$", rsids)]
+  if (length(rsids) == 0L) {
+    return(NULL)
+  }
+
+  max_pmids_per_rsid <- suppressWarnings(as.integer(max_pmids_per_rsid[[1]]))
+  if (is.na(max_pmids_per_rsid) || max_pmids_per_rsid <= 0L) {
+    max_pmids_per_rsid <- 200L
+  }
+
+  if (isTRUE(verbose)) {
+    message("Querying dbSNP publication pages for PMID-backed SNP evidence across ", length(rsids), " rsID(s).")
+  }
+
+  out_list <- vector("list", length(rsids))
+  for (i in seq_along(rsids)) {
+    rsid <- rsids[[i]]
+    endpoint <- paste0("https://www.ncbi.nlm.nih.gov/snp/", rsid, "#publications")
+    page_lines <- tryCatch(
+      readLines(endpoint, warn = FALSE),
+      error = function(e) NULL
+    )
+    if (is.null(page_lines) || length(page_lines) == 0L) {
+      next
+    }
+
+    page_text <- paste(page_lines, collapse = "\n")
+    pmid_hits <- unique(c(
+      unlist(regmatches(page_text, gregexpr("(?<=/pubmed/)\\d+", page_text, perl = TRUE))),
+      unlist(regmatches(page_text, gregexpr("(?<=term=)\\d+(?=\\[uid\\])", page_text, perl = TRUE))),
+      unlist(regmatches(page_text, gregexpr("(?<=PMID:)\\d+", page_text, perl = TRUE)))
+    ))
+    pmid_hits <- pmid_hits[!is.na(pmid_hits) & nzchar(pmid_hits)]
+    if (length(pmid_hits) == 0L) {
+      next
+    }
+
+    if (length(pmid_hits) > max_pmids_per_rsid) {
+      pmid_hits <- pmid_hits[seq_len(max_pmids_per_rsid)]
+    }
+
+    out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
+  }
+
+  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
+  if (nrow(out) == 0L) {
+    return(NULL)
+  }
+
+  unique(out)
+}
+
+fetch_variant_literature_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = FALSE) {
+  litvar_dt <- fetch_litvar_rsid_pmids(
+    rsids = rsids,
+    max_pmids_per_rsid = max_pmids_per_rsid,
+    verbose = verbose
+  )
+  dbsnp_dt <- fetch_dbsnp_rsid_pmids(
+    rsids = rsids,
+    max_pmids_per_rsid = max_pmids_per_rsid,
+    verbose = verbose
+  )
+
+  out <- data.table::rbindlist(list(litvar_dt, dbsnp_dt), use.names = TRUE, fill = TRUE)
+  if (nrow(out) == 0L) {
+    return(NULL)
+  }
+
+  unique(out)
+}
+
 limit_candidate_rsids_for_litvar <- function(overlaps, top_n, verbose = FALSE) {
   candidate_target <- max(12L, min(40L, as.integer(top_n) * 8L))
   ranked <- data.table::copy(overlaps)
@@ -839,7 +913,7 @@ prepare_locus_lit_snp_labels <- function(
       top_n = top_n,
       verbose = verbose
     )
-    pmid_dt <- fetch_litvar_rsid_pmids(
+    pmid_dt <- fetch_variant_literature_pmids(
       rsids = candidate_rsids,
       max_pmids_per_rsid = pmid_page_size,
       verbose = verbose
@@ -1032,6 +1106,24 @@ prepare_locus_plot_bundle <- function(
     verbose = verbose
   )
 
+  gwas_hits_dt <- read_locus_gwas_hits(
+    gwas_sumstats = gwas_sumstats,
+    chromosome = locus_chr,
+    start = locus_start,
+    end = locus_end
+  )
+  gwas_logp_limits <- c(0, 1)
+  if (!is.null(gwas_hits_dt) && nrow(gwas_hits_dt) > 0L) {
+    gwas_hits_dt[, logp := -log10(pmax(p_value, 1e-300))]
+    finite_logp <- gwas_hits_dt$logp[is.finite(gwas_hits_dt$logp)]
+    if (length(finite_logp) > 0L) {
+      gwas_logp_limits <- c(0, max(finite_logp))
+      if (diff(gwas_logp_limits) <= 0) {
+        gwas_logp_limits[[2]] <- gwas_logp_limits[[1]] + 1
+      }
+    }
+  }
+
   reg_nodes[, current_norm := sqrt(
     fifelse(is.na(germline_score), 0, germline_score)^2 +
       fifelse(is.na(somatic_score), 0, somatic_score)^2 +
@@ -1056,10 +1148,11 @@ prepare_locus_plot_bundle <- function(
       "Reg element somatic z",
       "Reg element epigenomic z",
       "Reg element germline z",
+      "GWAS locus SNPs",
       "Reg elements",
       "Genes (post-diffusion)"
     ),
-    track_id = 5:1
+    track_id = 6:1
   )
 
   gene_long <- data.table::rbindlist(list(
@@ -1073,7 +1166,23 @@ prepare_locus_plot_bundle <- function(
     reg_nodes[, .(feature_type = "reg", feature_id, feature_label, feature_start, feature_end, track_name = "Reg elements", score = current_norm, linked_label, highlighted = FALSE)]
   ), use.names = TRUE)
 
-  plot_dt <- data.table::rbindlist(list(gene_long, reg_long), use.names = TRUE, fill = TRUE)
+  gwas_long <- if (!is.null(gwas_hits_dt) && nrow(gwas_hits_dt) > 0L) {
+    gwas_hits_dt[, .(
+      feature_type = "snp",
+      feature_id = rsid,
+      feature_label = rsid,
+      feature_start = as.integer(position),
+      feature_end = as.integer(position),
+      track_name = "GWAS locus SNPs",
+      score = logp,
+      linked_label = rsid,
+      highlighted = FALSE
+    )]
+  } else {
+    NULL
+  }
+
+  plot_dt <- data.table::rbindlist(list(gene_long, reg_long, gwas_long), use.names = TRUE, fill = TRUE)
   plot_dt <- merge(plot_dt, track_defs, by = "track_name", all.x = TRUE)
   plot_dt[, feature_mid := (feature_start + feature_end) / 2]
   plot_dt <- plot_dt[feature_end >= locus_start & feature_start <= locus_end]
@@ -1087,7 +1196,11 @@ prepare_locus_plot_bundle <- function(
   plot_dt[, y := fifelse(
     feature_type == "gene",
     track_id - 0.05 - 0.18 * gene_lane,
-    track_id - 0.02 - 0.18 * reg_lane
+    fifelse(
+      feature_type == "reg",
+      track_id - 0.02 - 0.18 * reg_lane,
+      track_id + 0.02 + 0.56 * (score / max(gwas_logp_limits[[2]], 1))
+    )
   )]
 
   reg_score_limits <- range(plot_dt[feature_type == "reg" & track_name != "Reg elements", score], na.rm = TRUE)
@@ -1167,7 +1280,8 @@ prepare_locus_plot_bundle <- function(
     locus = list(chromosome = locus_chr, start = locus_start, end = locus_end),
     gene_score_limits = gene_score_limits,
     reg_score_limits = reg_score_limits,
-    reg_norm_limits = reg_norm_limits
+    reg_norm_limits = reg_norm_limits,
+    gwas_logp_limits = gwas_logp_limits
   )
 }
 
@@ -1233,6 +1347,7 @@ create_locus_context_plot <- function(
   )]
   features_dt[feature_type == "gene", xmid := (feature_start + feature_end) / 2]
   features_dt[feature_type == "reg", xmid := (feature_start + feature_end) / 2]
+  features_dt[feature_type == "snp", xmid := feature_start]
   reg_track_id <- bundle$tracks[track_name == "Reg elements", track_id][[1]]
   gene_track_id <- bundle$tracks[track_name == "Genes (post-diffusion)", track_id][[1]]
   links_dt[, reg_y := reg_track_id - 0.02]
@@ -1245,6 +1360,19 @@ create_locus_context_plot <- function(
       colour = "#e5e7eb",
       linewidth = 0.4
     )
+
+  if (nrow(features_dt[feature_type == "snp"]) > 0L) {
+    p <- p + ggplot2::geom_point(
+      data = features_dt[feature_type == "snp"],
+      ggplot2::aes(x = xmid, y = y),
+      inherit.aes = FALSE,
+      shape = 16,
+      colour = "#334155",
+      alpha = 0.85,
+      size = 1.7,
+      show.legend = FALSE
+    )
+  }
 
   if (nrow(links_dt) > 0L) {
     p <- p + ggplot2::geom_curve(

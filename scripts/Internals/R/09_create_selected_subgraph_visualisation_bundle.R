@@ -96,7 +96,7 @@ validate_selected_subgraph_summary <- function(summary) {
 }
 
 sanitize_nonfinite_numeric_columns <- function(dt) {
-  out <- copy(as.data.table(dt))
+  out <- data.table::copy(as.data.table(dt))
   numeric_cols <- names(out)[vapply(out, is.numeric, logical(1))]
 
   for (col in numeric_cols) {
@@ -124,7 +124,7 @@ prepare_subgraph_plot_nodes <- function(nodes, sanitize_nonfinite = TRUE) {
     dt <- sanitize_nonfinite_numeric_columns(dt)
   }
 
-  dt <- copy(dt)
+  dt <- data.table::copy(dt)
   dt[, label := gene_name]
   dt[, node_class := "selected_gene"]
   dt
@@ -169,14 +169,14 @@ prepare_cytoscape_data_frames <- function(nodes, edges) {
   node_dt <- prepare_subgraph_plot_nodes(nodes)
   edge_dt <- prepare_subgraph_plot_edges(edges, node_dt)
 
-  cy_nodes <- copy(node_dt)
+  cy_nodes <- data.table::copy(node_dt)
   if (!"id" %in% names(cy_nodes)) {
     cy_nodes[, id := node_id]
   }
   cy_nodes[, shared.name := gene_name]
   cy_nodes[, name := gene_name]
 
-  cy_edges <- copy(edge_dt)
+  cy_edges <- data.table::copy(edge_dt)
   cy_edges[, source := from]
   cy_edges[, target := to]
   cy_edges[, interaction := "selected_subgraph_edge"]
@@ -253,7 +253,7 @@ create_selected_subgraph_plot <- function(
   coords_dt <- as.data.table(coords)
   setnames(coords_dt, c("x", "y"))
 
-  plot_nodes <- cbind(copy(node_dt), coords_dt)
+  plot_nodes <- cbind(data.table::copy(node_dt), coords_dt)
   plot_nodes[, plot_label := ifelse(node_id %in% label_ids, gene_name, NA_character_)]
   plot_nodes[, plot_post_norm := post_norm]
 

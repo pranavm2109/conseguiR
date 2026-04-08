@@ -82,7 +82,8 @@ prepare_magma_input_files <- function(
   output_prefix,
   snp_loc_path = paste0(output_prefix, ".snp_loc.tsv"),
   pval_path = paste0(output_prefix, ".pval.tsv"),
-  reuse_existing = TRUE
+  reuse_existing = TRUE,
+  verbose = FALSE
 ) {
   dir.create(dirname(output_prefix), recursive = TRUE, showWarnings = FALSE)
   dir.create(dirname(snp_loc_path), recursive = TRUE, showWarnings = FALSE)
@@ -93,6 +94,7 @@ prepare_magma_input_files <- function(
     file.info(pval_path)$size > 0
 
   if (isTRUE(reuse_existing) && existing_ready) {
+    conseguiR_verbose_message(verbose, "Reusing existing MAGMA GWAS cache.")
     return(list(
       snp_loc_path = snp_loc_path,
       pval_path = pval_path,
@@ -100,8 +102,11 @@ prepare_magma_input_files <- function(
     ))
   }
 
+  conseguiR_verbose_message(verbose, "Reading GWAS summary statistics for MAGMA preprocessing...")
   gwas_loaded <- read_gwas_sumstats_for_magma(gwas_sumstats)
+  conseguiR_verbose_message(verbose, "Validating GWAS columns required for MAGMA...")
   gwas_validated <- validate_gwas_sumstats(gwas_loaded)
+  conseguiR_verbose_message(verbose, "Constructing MAGMA SNP-location and p-value tables...")
   magma_inputs <- prepare_magma_input(gwas_validated)
 
   if (nrow(magma_inputs$snp_loc) == 0L) {
@@ -126,7 +131,9 @@ prepare_magma_input_files <- function(
     stop("Prepared MAGMA pval table contains missing p-values.")
   }
 
+  conseguiR_verbose_message(verbose, "Writing MAGMA SNP-location cache...")
   fwrite(magma_inputs$snp_loc, snp_loc_path, sep = "\t", col.names = FALSE)
+  conseguiR_verbose_message(verbose, "Writing MAGMA p-value cache...")
   fwrite(magma_inputs$pval, pval_path, sep = "\t", col.names = TRUE)
 
   if (!file.exists(snp_loc_path) || file.info(snp_loc_path)$size <= 0) {
@@ -148,14 +155,16 @@ prepare_magma_gwas_cache <- function(
   cache_prefix,
   snp_loc_path = paste0(cache_prefix, ".snp_loc.tsv"),
   pval_path = paste0(cache_prefix, ".pval.tsv"),
-  reuse_existing = TRUE
+  reuse_existing = TRUE,
+  verbose = FALSE
 ) {
   prepare_magma_input_files(
     gwas_sumstats = gwas_sumstats,
     output_prefix = cache_prefix,
     snp_loc_path = snp_loc_path,
     pval_path = pval_path,
-    reuse_existing = reuse_existing
+    reuse_existing = reuse_existing,
+    verbose = verbose
   )
 }
 
@@ -563,7 +572,8 @@ run_magma_feature_scoring_pipeline <- function(
     gwas_cache <- prepare_magma_gwas_cache(
       gwas_sumstats = gwas_sumstats,
       cache_prefix = magma_gwas_cache_prefix,
-      reuse_existing = reuse_existing_gwas_cache
+      reuse_existing = reuse_existing_gwas_cache,
+      verbose = verbose
     )
     shared_snp_loc_path <- gwas_cache$snp_loc_path
     shared_pval_path <- gwas_cache$pval_path
@@ -574,6 +584,11 @@ run_magma_feature_scoring_pipeline <- function(
   }
   if (is.null(shared_pval_path)) {
     shared_pval_path <- paste0(step1_prefix, ".pval.tsv")
+  }
+
+  if (is.null(magma_gwas_cache_prefix)) {
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, 1)
+    conseguiR_verbose_message(verbose, "Preparing MAGMA inputs for step 1...")
   }
 
   step1 <- run_magma_step1_annotation(
