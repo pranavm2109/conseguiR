@@ -759,18 +759,64 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
 }
 
 fetch_variant_literature_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = FALSE) {
-  litvar_dt <- fetch_litvar_rsid_pmids(
-    rsids = rsids,
-    max_pmids_per_rsid = max_pmids_per_rsid,
-    verbose = verbose
-  )
   dbsnp_dt <- fetch_dbsnp_rsid_pmids(
     rsids = rsids,
     max_pmids_per_rsid = max_pmids_per_rsid,
     verbose = verbose
   )
 
-  out <- data.table::rbindlist(list(litvar_dt, dbsnp_dt), use.names = TRUE, fill = TRUE)
+  # Use dbSNP-confirmed publication links for plotting labels by default.
+  # LitVar can surface broader text-mined associations, but for this panel we
+  # want a stricter, mentor-checkable definition of "literature-backed".
+  if (is.null(dbsnp_dt) || nrow(dbsnp_dt) == 0L) {
+    return(NULL)
+  }
+
+  unique(dbsnp_dt)
+}
+
+fetch_pubmed_query_rsid_pmids <- function(rsids, query_term, max_pmids_per_rsid = 200L, verbose = FALSE) {
+  rsids <- unique(tolower(as.character(rsids %||% character())))
+  rsids <- rsids[grepl("^rs[0-9]+$", rsids)]
+  query_term <- trimws(as.character(query_term %||% "")[[1]])
+  if (length(rsids) == 0L || !nzchar(query_term)) {
+    return(NULL)
+  }
+
+  max_pmids_per_rsid <- suppressWarnings(as.integer(max_pmids_per_rsid[[1]]))
+  if (is.na(max_pmids_per_rsid) || max_pmids_per_rsid <= 0L) {
+    max_pmids_per_rsid <- 200L
+  }
+
+  if (isTRUE(verbose)) {
+    message("Querying PubMed for disease-specific SNP evidence using term: ", query_term)
+  }
+
+  out_list <- vector("list", length(rsids))
+  for (i in seq_along(rsids)) {
+    rsid <- rsids[[i]]
+    term <- paste0("\"", rsid, "\" AND (", query_term, ")")
+    endpoint <- paste0(
+      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=",
+      max_pmids_per_rsid,
+      "&term=",
+      utils::URLencode(term, reserved = TRUE)
+    )
+    payload <- tryCatch(jsonlite::fromJSON(endpoint), error = function(e) NULL)
+    pmids <- payload$esearchresult$idlist %||% NULL
+    if (is.null(pmids)) {
+      next
+    }
+    pmids <- as.character(pmids)
+    pmids <- pmids[!is.na(pmids) & nzchar(pmids)]
+    if (length(pmids) == 0L) {
+      next
+    }
+
+    out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmids, source = "pubmed_query")
+  }
+
+  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
   if (nrow(out) == 0L) {
     return(NULL)
   }
@@ -918,17 +964,18 @@ prepare_locus_lit_snp_labels <- function(
       max_pmids_per_rsid = pmid_page_size,
       verbose = verbose
     )
-    if (!is.null(pmid_dt) && nrow(pmid_dt) > 0L &&
-        !is.null(pmid_query) && nzchar(trimws(as.character(pmid_query)[[1]]))) {
-      disease_pmids <- fetch_europepmc_query_pmids(
+    if (!is.null(pmid_query) && nzchar(trimws(as.character(pmid_query)[[1]]))) {
+      query_pmid_dt <- fetch_pubmed_query_rsid_pmids(
+        rsids = candidate_rsids,
         query_term = pmid_query,
-        page_size = pmid_page_size,
+        max_pmids_per_rsid = pmid_page_size,
         verbose = verbose
       )
-      if (!is.null(disease_pmids) && length(disease_pmids) > 0L) {
-        pmid_dt <- pmid_dt[pmid %in% disease_pmids]
-      } else {
-        pmid_dt <- pmid_dt[0]
+      if (!is.null(query_pmid_dt) && nrow(query_pmid_dt) > 0L) {
+        pmid_dt <- data.table::rbindlist(list(pmid_dt, query_pmid_dt), use.names = TRUE, fill = TRUE)
+        pmid_dt <- unique(pmid_dt)
+      } else if (isTRUE(verbose) && !is.null(pmid_dt) && nrow(pmid_dt) > 0L) {
+        message("No disease-specific SNP PMID hits were found; retaining general literature-backed SNP evidence.")
       }
     }
   }
@@ -1240,6 +1287,32 @@ prepare_locus_plot_bundle <- function(
   edges_locus <- merge(edges_locus, reg_lookup, by = "reg_id", all.x = TRUE)
   edges_locus[, gene_mid := (gene_start + gene_end) / 2]
   edges_locus[, reg_mid := (reg_start + reg_end) / 2]
+  edges_locus[, interaction_strength := fifelse(
+    is.finite(confidence),
+    confidence,
+    fifelse(is.finite(link_score), link_score, NA_real_)
+  )]
+  finite_strength <- edges_locus$interaction_strength[is.finite(edges_locus$interaction_strength)]
+  if (length(finite_strength) > 0L) {
+    strength_min <- min(finite_strength, na.rm = TRUE)
+    strength_cap <- as.numeric(stats::quantile(finite_strength, probs = 0.95, na.rm = TRUE, names = FALSE, type = 7))
+    if (!is.finite(strength_cap)) {
+      strength_cap <- max(finite_strength, na.rm = TRUE)
+    }
+    strength_max <- max(strength_min, strength_cap)
+    if (isTRUE(all.equal(strength_min, strength_max))) {
+      edges_locus[, link_alpha := 0.65]
+    } else {
+      edges_locus[, strength_scaled := log1p(pmin(interaction_strength, strength_max))]
+      scaled_min <- min(edges_locus$strength_scaled[is.finite(edges_locus$strength_scaled)], na.rm = TRUE)
+      scaled_max <- max(edges_locus$strength_scaled[is.finite(edges_locus$strength_scaled)], na.rm = TRUE)
+      edges_locus[, link_alpha := 0.15 + 0.75 * ((strength_scaled - scaled_min) / max(scaled_max - scaled_min, 1e-8))]
+      edges_locus[!is.finite(link_alpha), link_alpha := 0.15]
+      edges_locus[, strength_scaled := NULL]
+    }
+  } else {
+    edges_locus[, link_alpha := 0.25]
+  }
 
   if (length(selected_gene_set) > 0L) {
     edges_locus <- edges_locus[gene_label %in% selected_gene_set | vapply(
@@ -1385,7 +1458,7 @@ create_locus_context_plot <- function(
       ),
       curvature = -0.18,
       colour = "#111111",
-      alpha = 0.55,
+      alpha = links_dt$link_alpha,
       linewidth = 0.25,
       show.legend = FALSE,
       inherit.aes = FALSE
@@ -1426,7 +1499,8 @@ create_locus_context_plot <- function(
       midpoint = 0,
       limits = bundle$reg_score_limits,
       name = "Reg element\nz-score",
-      oob = scales::squish
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
     ) +
     ggnewscale::new_scale_fill() +
     ggplot2::geom_point(
@@ -1446,7 +1520,8 @@ create_locus_context_plot <- function(
       colours = c("#fee2e2", "#ef4444", "#b91c1c", "#7f1d1d"),
       limits = bundle$reg_norm_limits,
       name = "Reg element\ncombined score",
-      oob = scales::squish
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 2)
     ) +
     ggnewscale::new_scale_fill() +
     ggplot2::geom_rect(
@@ -1527,7 +1602,8 @@ create_locus_context_plot <- function(
       colours = c("#fee2e2", "#ef4444", "#b91c1c", "#7f1d1d"),
       limits = bundle$gene_score_limits,
       name = "Post-diffusion\nconseguiR score",
-      oob = scales::squish
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 3)
     ) +
     ggplot2::scale_y_continuous(
       breaks = bundle$tracks$track_id,

@@ -1339,6 +1339,13 @@ plot_scores <- function(
     title = title
   )
 
+  export_width <- width
+  export_height <- height
+  if (identical(plot_obj$plot_mode, "rank") && nrow(plot_obj$plot_data) > 100000L) {
+    export_width <- max(export_width, 12)
+    export_height <- max(export_height, 8)
+  }
+
   if (isTRUE(save_plot)) {
     if (is.null(plot_file_path) || !nzchar(plot_file_path)) {
       stop("`plot_file_path` must be provided when `save_plot = TRUE`.")
@@ -1355,13 +1362,13 @@ plot_scores <- function(
       p_value_column = p_value_column,
       label_features = label_features,
       title = title,
-      width = width,
-      height = height,
+      width = export_width,
+      height = export_height,
       dpi = dpi
     )
   }
 
-  new_bundle(
+  invisible(new_bundle(
     type = "score_plot",
     objects = list(
       plot = plot_obj$plot,
@@ -1376,9 +1383,11 @@ plot_scores <- function(
       feature_column = feature_column,
       z_column = z_column,
       p_value_column = p_value_column,
-      plot_mode = plot_obj$plot_mode
+      plot_mode = plot_obj$plot_mode,
+      export_width = export_width,
+      export_height = export_height
     )
-  )
+  ))
 }
 
 resolve_plot_nodes <- function(scored_graph = NULL, nodes_path = NULL) {
@@ -2056,7 +2065,7 @@ plot_locus_context <- function(
   )
 
   if (isTRUE(verbose) && identical(plot_obj$plot_data$snp_label_mode, "fallback")) {
-    message("No literature-backed SNPs remained after LitVar lookup and optional disease filtering; falling back to top GWAS SNPs inside the top regulatory elements by germline score.")
+    message("No dbSNP-backed SNPs remained after optional disease filtering; falling back to top GWAS SNPs inside the top regulatory elements by germline score.")
   }
 
   if (isTRUE(save_plot)) {
@@ -2086,7 +2095,7 @@ plot_locus_context <- function(
     )
   }
 
-  new_bundle(
+  invisible(new_bundle(
     type = "locus_plot",
     objects = list(
       plot = plot_obj$plot,
@@ -2102,5 +2111,5 @@ plot_locus_context <- function(
       title = title,
       label_top_lit_snps = label_top_lit_snps
     )
-  )
+  ))
 }
