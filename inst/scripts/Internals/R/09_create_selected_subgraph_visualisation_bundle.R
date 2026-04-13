@@ -241,6 +241,11 @@ create_selected_subgraph_plot <- function(
     label_ids <- node_dt[order(-prize, gene_name)][1:label_count, node_id]
   }
 
+  label_text_size <- if (label_count > 35L) 2.8 else 3.4
+  label_box_padding <- if (label_count > 35L) 0.22 else 0.35
+  label_point_padding <- if (label_count > 35L) 0.08 else 0.15
+  label_force <- if (label_count > 35L) 1.8 else 1.2
+
   coords <- switch(
     layout,
     fr = igraph::layout_with_fr(graph_obj),
@@ -311,21 +316,24 @@ create_selected_subgraph_plot <- function(
     ggrepel::geom_label_repel(
       data = plot_nodes[!is.na(plot_label)],
       ggplot2::aes(x = x, y = y, label = plot_label),
-      size = 3.4,
+      size = label_text_size,
       family = "Helvetica",
       fontface = "bold",
-      label.size = 0.2,
+      label.size = 0.15,
       label.r = grid::unit(0.12, "lines"),
-      label.padding = grid::unit(0.12, "lines"),
+      label.padding = grid::unit(0.1, "lines"),
       fill = scales::alpha("white", 0.9),
       colour = "#111827",
-      box.padding = 0.35,
-      point.padding = 0.15,
+      box.padding = label_box_padding,
+      point.padding = label_point_padding,
       min.segment.length = 0,
       seed = 42,
       max.overlaps = Inf,
-      segment.alpha = 0.5,
-      segment.size = 0.25
+      force = label_force,
+      max.time = 5,
+      max.iter = 20000,
+      segment.alpha = 0.35,
+      segment.size = 0.2
     ) +
     ggplot2::scale_fill_gradient(
       low = "#d9e6f2",
@@ -347,7 +355,7 @@ create_selected_subgraph_plot <- function(
       plot.subtitle = ggplot2::element_text(size = 10, colour = "#4b5563"),
       legend.title = ggplot2::element_text(face = "bold"),
       legend.position = "right",
-      plot.margin = grid::unit(c(14, 32, 14, 32), "pt")
+      plot.margin = grid::unit(c(18, 40, 18, 40), "pt")
     )
 }
 

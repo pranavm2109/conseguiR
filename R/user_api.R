@@ -1455,10 +1455,10 @@ plot_epigenomic_reg_scores <- function(
 #'   SNPs are restricted to regulatory elements in the locus. If no
 #'   literature-backed SNPs survive the lookup/filtering steps, `conseguiR`
 #'   falls back to top GWAS SNPs from the top germline regulatory elements.
-#' @param pmid_query Optional disease term such as `"DLBCL"` or `"lymphoma"`
-#'   used to filter LitVar-backed PMIDs.
-#' @param pmid_page_size Maximum number of PMIDs per rsID retained from LitVar,
-#'   and the Europe PMC page size used when filtering by `pmid_query`.
+#' @param pmid_query Deprecated. This argument is currently ignored; locus SNP
+#'   labeling now uses dbSNP citation support directly.
+#' @param pmid_page_size Maximum number of PMIDs per rsID retained from the
+#'   dbSNP citation lookup.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param title Plot title.
 #' @param width Plot width in inches.
@@ -1480,8 +1480,6 @@ plot_epigenomic_reg_scores <- function(
 #'   `c("MYC", "BCL2", "BCL6")`
 #' - `rsid_pmid`: an optional cached literature-support table with at least
 #'   `rsid` and `pmid` columns
-#' - `pmid_query`: an optional disease term such as `"DLBCL"` or
-#'   `"lymphoma"` used to filter LitVar-backed PMIDs in memory
 #' - `label_top_lit_snps`: number of literature-backed SNPs to label before
 #'   falling back to top GWAS SNPs in the top germline regulatory elements
 #'
@@ -1508,7 +1506,6 @@ plot_epigenomic_reg_scores <- function(
 #'   selected_subgraph = selected_subgraph,
 #'   label_features = c("MYC"),
 #'   gwas_sumstats = gwas_sumstats,
-#'   pmid_query = "lymphoma",
 #'   label_top_lit_snps = 3L,
 #'   plot_file_path = "MYC_locus_context.pdf"
 #' )

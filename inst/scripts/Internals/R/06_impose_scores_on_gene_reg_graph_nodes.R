@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 default_gene_reg_scoring_config <- list(
   graph_rds_path = "data/processed/gene_reg_graph_no_scores.rds",
   output_prefix = "data/processed/gene_reg_graph_scored",
-  filter_to_supported_universe = TRUE
+  filter_to_supported_universe = FALSE
 )
 
 ensure_parent_dir <- function(path) {

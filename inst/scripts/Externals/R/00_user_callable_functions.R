@@ -1265,7 +1265,7 @@ plot_selected_subgraph <- function(
     )
   }
 
-  new_bundle(
+  invisible(new_bundle(
     type = "plot",
     objects = list(
       plot = plot_obj,
@@ -1283,7 +1283,7 @@ plot_selected_subgraph <- function(
       layout = layout,
       top_n_labels = top_n_labels
     )
-  )
+  ))
 }
 
 #' Plot score tables from germline, somatic, epigenomic, or diffusion bundles
@@ -1982,17 +1982,14 @@ run_conseguiR <- function(
 #'   in the window by rsID/variant ID.
 #' @param rsid_pmid Optional rsID-to-PMID evidence table or path. Must contain
 #'   at least `rsid` and `pmid` columns. When omitted, `conseguiR` queries
-#'   LitVar in memory for SNP literature support.
+#'   dbSNP in memory for SNP literature support.
 #' @param label_top_lit_snps Integer count of literature-backed SNPs to label.
 #'   SNPs are restricted to regulatory elements in the locus and ranked by GWAS
 #'   significance, with PMID support used as an additional prioritization field.
-#' @param pmid_query Optional disease query term such as `"DLBCL"` or
-#'   `"lymphoma"`. When supplied, `conseguiR` first queries LitVar for rsID to
-#'   PMID links and then filters those PMIDs using Europe PMC query results. If
-#'   no literature-backed SNPs are found, the plot falls back to top GWAS SNPs
-#'   inside the top regulatory elements by germline z-score.
-#' @param pmid_page_size Maximum number of PMIDs per rsID retained from LitVar,
-#'   and the Europe PMC page size used when filtering by `pmid_query`.
+#' @param pmid_query Deprecated. This argument is currently ignored; locus SNP
+#'   labeling now uses dbSNP citation support directly.
+#' @param pmid_page_size Maximum number of PMIDs per rsID retained from the
+#'   dbSNP citation lookup.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param title Plot title.
 #' @param width Plot width in inches.
@@ -2030,6 +2027,14 @@ plot_locus_context <- function(
   verbose = FALSE
 ) {
   verbose_message(verbose, "Preparing locus context plot...")
+
+  if (!is.null(pmid_query) && nzchar(trimws(as.character(pmid_query[[1]])))) {
+    warning(
+      "`pmid_query` is deprecated and currently ignored in `plot_locus_context()`; ",
+      "locus SNP labeling now uses dbSNP citation support directly.",
+      call. = FALSE
+    )
+  }
 
   graph_dt <- resolve_postdiff_gene_reg_graph(
     postdiff_gene_reg_graph = postdiff_gene_reg_graph,

@@ -208,6 +208,51 @@ infer_plot_mode <- function(dt, test_tail = c("auto", "one_tailed", "two_tailed"
   }
 }
 
+prepare_volcano_display_axes <- function(dt) {
+  dt <- data.table::copy(dt)
+
+  finite_abs_z <- abs(dt$z_plot[is.finite(dt$z_plot)])
+  finite_logp <- dt$neglog10_p[is.finite(dt$neglog10_p)]
+
+  z_cap <- if (length(finite_abs_z) > 0L) {
+    min(12, max(8, as.numeric(stats::quantile(
+      finite_abs_z,
+      probs = 0.995,
+      names = FALSE,
+      na.rm = TRUE
+    ))))
+  } else {
+    8
+  }
+
+  logp_cap <- if (length(finite_logp) > 0L) {
+    min(30, max(10, as.numeric(stats::quantile(
+      finite_logp,
+      probs = 0.995,
+      names = FALSE,
+      na.rm = TRUE
+    ))))
+  } else {
+    10
+  }
+
+  if (!is.finite(z_cap) || z_cap <= 0) {
+    z_cap <- 8
+  }
+  if (!is.finite(logp_cap) || logp_cap <= 0) {
+    logp_cap <- 10
+  }
+
+  dt[, z_display := pmax(pmin(z_plot, z_cap), -z_cap)]
+  dt[, neglog10_p_display := pmin(neglog10_p, logp_cap)]
+
+  list(
+    table = dt,
+    z_cap = z_cap,
+    logp_cap = logp_cap
+  )
+}
+
 create_score_plot <- function(
   bundle = NULL,
   table = NULL,
@@ -265,7 +310,9 @@ create_score_plot <- function(
     )
 
   if (identical(plot_mode, "volcano")) {
-    p <- ggplot2::ggplot(dt, ggplot2::aes(x = z_plot, y = neglog10_p)) +
+    volcano_display <- prepare_volcano_display_axes(dt)
+    dt <- volcano_display$table
+    p <- ggplot2::ggplot(dt, ggplot2::aes(x = z_display, y = neglog10_p_display)) +
       ggplot2::geom_point(
         data = dt[highlighted == FALSE],
         colour = "#b3b3b3",
@@ -292,6 +339,10 @@ create_score_plot <- function(
         title = title,
         x = "Z-score",
         y = expression(-log[10](p-value))
+      ) +
+      ggplot2::coord_cartesian(
+        xlim = c(-volcano_display$z_cap, volcano_display$z_cap),
+        ylim = c(0, volcano_display$logp_cap)
       )
   } else {
     data.table::setorder(dt, -z_plot, feature_label)
@@ -611,99 +662,6 @@ read_locus_gwas_hits <- function(gwas_sumstats = NULL, chromosome, start, end) {
   unique(gwas_dt, by = c("rsid", "position", "p_value"))
 }
 
-fetch_europepmc_query_pmids <- function(query_term, page_size = 1000L, verbose = FALSE) {
-  query_term <- trimws(as.character(query_term %||% "")[[1]])
-  if (!nzchar(query_term)) {
-    return(NULL)
-  }
-  if (!requireNamespace("jsonlite", quietly = TRUE)) {
-    stop("Package `jsonlite` is required to query Europe PMC.")
-  }
-
-  url <- paste0(
-    "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=",
-    utils::URLencode(query_term, reserved = TRUE),
-    "&format=json&pageSize=",
-    as.integer(page_size[[1]]),
-    "&resultType=core"
-  )
-
-  payload <- tryCatch(jsonlite::fromJSON(url), error = function(e) NULL)
-  if (is.null(payload) || is.null(payload$resultList$result)) {
-    return(NULL)
-  }
-
-  res <- data.table::as.data.table(payload$resultList$result)
-  if (!"pmid" %in% names(res)) {
-    return(NULL)
-  }
-  res <- res[, .(pmid = as.character(pmid))]
-  res <- res[!is.na(pmid) & nzchar(pmid)]
-  if (nrow(res) == 0L) {
-    return(NULL)
-  }
-
-  if (isTRUE(verbose)) {
-    message("Querying Europe PMC for disease-specific PMID filtering using term: ", query_term)
-  }
-
-  unique(res$pmid)
-}
-
-build_litvar_variant_id <- function(rsid) {
-  sprintf("litvar@%s##", tolower(as.character(rsid)))
-}
-
-fetch_litvar_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = FALSE) {
-  rsids <- unique(tolower(as.character(rsids %||% character())))
-  rsids <- rsids[grepl("^rs[0-9]+$", rsids)]
-  if (length(rsids) == 0L) {
-    return(NULL)
-  }
-  if (!requireNamespace("jsonlite", quietly = TRUE)) {
-    stop("Package `jsonlite` is required to query LitVar.")
-  }
-
-  max_pmids_per_rsid <- suppressWarnings(as.integer(max_pmids_per_rsid[[1]]))
-  if (is.na(max_pmids_per_rsid) || max_pmids_per_rsid <= 0L) {
-    max_pmids_per_rsid <- 200L
-  }
-
-  if (isTRUE(verbose)) {
-    message("Querying LitVar for PMID-backed SNP evidence across ", length(rsids), " rsID(s).")
-  }
-
-  out_list <- vector("list", length(rsids))
-  for (i in seq_along(rsids)) {
-    rsid <- rsids[[i]]
-    endpoint <- paste0(
-      "https://www.ncbi.nlm.nih.gov/research/litvar2-api/variant/get/",
-      utils::URLencode(build_litvar_variant_id(rsid), reserved = TRUE),
-      "/publications"
-    )
-    payload <- tryCatch(jsonlite::fromJSON(endpoint), error = function(e) NULL)
-    pmids <- payload$pmids %||% NULL
-    if (is.null(pmids)) {
-      next
-    }
-    pmids <- as.character(pmids)
-    pmids <- pmids[!is.na(pmids) & nzchar(pmids)]
-    if (length(pmids) == 0L) {
-      next
-    }
-    if (length(pmids) > max_pmids_per_rsid) {
-      pmids <- pmids[seq_len(max_pmids_per_rsid)]
-    }
-    out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmids)
-  }
-
-  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
-  if (nrow(out) == 0L) {
-    return(NULL)
-  }
-  unique(out)
-}
-
 fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = FALSE) {
   rsids <- unique(tolower(as.character(rsids %||% character())))
   rsids <- rsids[grepl("^rs[0-9]+$", rsids)]
@@ -760,6 +718,9 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     }
     pmid_hits <- unique(gsub("\\D", "", pmid_hits))
     pmid_hits <- pmid_hits[!is.na(pmid_hits) & nzchar(pmid_hits)]
+    if (!is.null(pb)) {
+      utils::setTxtProgressBar(pb, i)
+    }
     if (length(pmid_hits) == 0L) {
       next
     }
@@ -769,9 +730,6 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     }
 
     out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
-    if (!is.null(pb)) {
-      utils::setTxtProgressBar(pb, i)
-    }
   }
 
   if (!is.null(pb) && length(rsids) > 0L) {
@@ -790,54 +748,26 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
   unique(out)
 }
 
-fetch_pubmed_exact_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = FALSE) {
-  rsids <- unique(tolower(as.character(rsids %||% character())))
-  rsids <- rsids[grepl("^rs[0-9]+$", rsids)]
-  if (length(rsids) == 0L) {
-    return(NULL)
-  }
-  if (!requireNamespace("jsonlite", quietly = TRUE)) {
-    stop("Package `jsonlite` is required to query PubMed.")
+prepare_staggered_snp_label_positions <- function(label_dt, locus_start, locus_end, base_y, lane_step = 0.28) {
+  if (is.null(label_dt) || nrow(label_dt) == 0L) {
+    return(label_dt)
   }
 
-  max_pmids_per_rsid <- suppressWarnings(as.integer(max_pmids_per_rsid[[1]]))
-  if (is.na(max_pmids_per_rsid) || max_pmids_per_rsid <= 0L) {
-    max_pmids_per_rsid <- 200L
-  }
-
-  if (isTRUE(verbose)) {
-    message("Querying PubMed for exact rsID citation support across ", length(rsids), " rsID(s).")
-  }
-
-  out_list <- vector("list", length(rsids))
-  for (i in seq_along(rsids)) {
-    rsid <- rsids[[i]]
-    term <- paste0("\"", rsid, "\"")
-    endpoint <- paste0(
-      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=",
-      max_pmids_per_rsid,
-      "&term=",
-      utils::URLencode(term, reserved = TRUE)
-    )
-    payload <- tryCatch(jsonlite::fromJSON(endpoint), error = function(e) NULL)
-    pmids <- payload$esearchresult$idlist %||% NULL
-    if (is.null(pmids)) {
-      next
-    }
-    pmids <- as.character(pmids)
-    pmids <- pmids[!is.na(pmids) & nzchar(pmids)]
-    if (length(pmids) == 0L) {
-      next
-    }
-    out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmids, source = "pubmed_exact")
-  }
-
-  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
-  if (nrow(out) == 0L) {
-    return(NULL)
-  }
-
-  unique(out)
+  out <- data.table::copy(label_dt)
+  locus_width <- max(as.numeric(locus_end) - as.numeric(locus_start), 1)
+  label_half_width <- max(25000, ceiling(locus_width * 0.018))
+  out[, label_start := pmax(as.integer(position - label_half_width), as.integer(locus_start))]
+  out[, label_end := pmin(as.integer(position + label_half_width), as.integer(locus_end))]
+  lanes <- assign_interval_lanes(out[, .(position, label_start, label_end)], "label_start", "label_end")
+  out[, label_lane := lanes$lane]
+  out[, label_y := base_y + lane_step * label_lane]
+  out[, label_x := as.numeric(position)]
+  left_threshold <- as.numeric(locus_start) + label_half_width
+  right_threshold <- as.numeric(locus_end) - label_half_width
+  out[label_x < left_threshold, label_x := left_threshold]
+  out[label_x > right_threshold, label_x := right_threshold]
+  out[, c("label_start", "label_end") := NULL]
+  out
 }
 
 fetch_variant_literature_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = FALSE) {
@@ -868,71 +798,6 @@ normalize_requested_label_count <- function(top_n) {
   }
 
   top_n
-}
-
-fetch_pubmed_query_rsid_pmids <- function(rsids, query_term, max_pmids_per_rsid = 200L, verbose = FALSE) {
-  rsids <- unique(tolower(as.character(rsids %||% character())))
-  rsids <- rsids[grepl("^rs[0-9]+$", rsids)]
-  query_term <- trimws(as.character(query_term %||% "")[[1]])
-  if (length(rsids) == 0L || !nzchar(query_term)) {
-    return(NULL)
-  }
-
-  max_pmids_per_rsid <- suppressWarnings(as.integer(max_pmids_per_rsid[[1]]))
-  if (is.na(max_pmids_per_rsid) || max_pmids_per_rsid <= 0L) {
-    max_pmids_per_rsid <- 200L
-  }
-
-  if (isTRUE(verbose)) {
-    message("Querying PubMed for disease-specific SNP evidence using term: ", query_term)
-  }
-
-  out_list <- vector("list", length(rsids))
-  for (i in seq_along(rsids)) {
-    rsid <- rsids[[i]]
-    term <- paste0("\"", rsid, "\" AND (", query_term, ")")
-    endpoint <- paste0(
-      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=",
-      max_pmids_per_rsid,
-      "&term=",
-      utils::URLencode(term, reserved = TRUE)
-    )
-    payload <- tryCatch(jsonlite::fromJSON(endpoint), error = function(e) NULL)
-    pmids <- payload$esearchresult$idlist %||% NULL
-    if (is.null(pmids)) {
-      next
-    }
-    pmids <- as.character(pmids)
-    pmids <- pmids[!is.na(pmids) & nzchar(pmids)]
-    if (length(pmids) == 0L) {
-      next
-    }
-
-    out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmids, source = "pubmed_query")
-  }
-
-  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
-  if (nrow(out) == 0L) {
-    return(NULL)
-  }
-
-  unique(out)
-}
-
-limit_candidate_rsids_for_litvar <- function(overlaps, top_n, verbose = FALSE) {
-  candidate_target <- max(12L, min(40L, as.integer(top_n) * 8L))
-  ranked <- data.table::copy(overlaps)
-  data.table::setorderv(ranked, c("p_value", "reg_germline_score", "position"), c(1L, -1L, 1L))
-  ranked <- unique(ranked[, .(rsid, p_value, reg_germline_score, position)], by = "rsid")
-  ranked <- ranked[seq_len(min(.N, candidate_target))]
-  if (isTRUE(verbose)) {
-    message(
-      "Selecting ", nrow(ranked),
-      " candidate rsID(s) for LitVar lookup from ", data.table::uniqueN(overlaps$rsid),
-      " locus SNP(s) based on GWAS significance and regulatory support."
-    )
-  }
-  ranked$rsid
 }
 
 prepare_fallback_reg_snp_labels <- function(gwas_dt = NULL, reg_nodes = NULL, top_n = 3L) {
@@ -1654,9 +1519,15 @@ create_locus_context_plot <- function(
 
   if (!is.null(bundle$lit_snp_labels) && nrow(bundle$lit_snp_labels) > 0L) {
     snp_y <- max(bundle$tracks$track_id, na.rm = TRUE) + 0.42
+    lit_label_dt <- prepare_staggered_snp_label_positions(
+      label_dt = bundle$lit_snp_labels,
+      locus_start = locus$start,
+      locus_end = locus$end,
+      base_y = snp_y
+    )
     p <- p +
       ggplot2::geom_vline(
-        data = bundle$lit_snp_labels,
+        data = lit_label_dt,
         ggplot2::aes(xintercept = position),
         colour = "#0f172a",
         linewidth = 0.35,
@@ -1666,8 +1537,8 @@ create_locus_context_plot <- function(
         show.legend = FALSE
       ) +
       ggplot2::geom_label(
-        data = bundle$lit_snp_labels,
-        ggplot2::aes(x = position, y = snp_y, label = rsid),
+        data = lit_label_dt,
+        ggplot2::aes(x = label_x, y = label_y, label = rsid),
         inherit.aes = FALSE,
         size = 2.8,
         linewidth = 0.2,
@@ -1677,9 +1548,15 @@ create_locus_context_plot <- function(
       )
   } else if (!is.null(bundle$gwas_label) && nrow(bundle$gwas_label) > 0L) {
     snp_y <- max(bundle$tracks$track_id, na.rm = TRUE) + 0.42
+    gwas_label_dt <- prepare_staggered_snp_label_positions(
+      label_dt = bundle$gwas_label[, .(position, rsid = snp_id)],
+      locus_start = locus$start,
+      locus_end = locus$end,
+      base_y = snp_y
+    )
     p <- p +
       ggplot2::geom_vline(
-        data = bundle$gwas_label,
+        data = gwas_label_dt,
         ggplot2::aes(xintercept = position),
         colour = "#0f172a",
         linewidth = 0.35,
@@ -1689,8 +1566,8 @@ create_locus_context_plot <- function(
         show.legend = FALSE
       ) +
       ggplot2::geom_label(
-        data = bundle$gwas_label,
-        ggplot2::aes(x = position, y = snp_y, label = snp_id),
+        data = gwas_label_dt,
+        ggplot2::aes(x = label_x, y = label_y, label = rsid),
         inherit.aes = FALSE,
         size = 2.8,
         linewidth = 0.2,
@@ -1698,6 +1575,18 @@ create_locus_context_plot <- function(
         fill = "#ffffff",
         colour = "#111111"
       )
+  }
+
+  snp_label_top_y <- NULL
+  if (exists("lit_label_dt", inherits = FALSE) && !is.null(lit_label_dt) && nrow(lit_label_dt) > 0L) {
+    snp_label_top_y <- max(lit_label_dt$label_y, na.rm = TRUE)
+  } else if (exists("gwas_label_dt", inherits = FALSE) && !is.null(gwas_label_dt) && nrow(gwas_label_dt) > 0L) {
+    snp_label_top_y <- max(gwas_label_dt$label_y, na.rm = TRUE)
+  }
+
+  top_ylim <- max(bundle$tracks$track_id) + 0.8
+  if (!is.null(snp_label_top_y) && is.finite(snp_label_top_y)) {
+    top_ylim <- max(top_ylim, snp_label_top_y + 0.35)
   }
 
   p <- p +
@@ -1715,8 +1604,9 @@ create_locus_context_plot <- function(
     ) +
     ggplot2::coord_cartesian(
       xlim = c(locus$start, locus$end),
-      ylim = c(min(bundle$tracks$track_id) - 1.4, max(bundle$tracks$track_id) + 0.8),
-      expand = FALSE
+      ylim = c(min(bundle$tracks$track_id) - 1.4, top_ylim),
+      expand = FALSE,
+      clip = "off"
     ) +
     ggplot2::labs(
       title = title,
@@ -1732,7 +1622,8 @@ create_locus_context_plot <- function(
       legend.title = ggplot2::element_text(face = "bold"),
       panel.grid.major = ggplot2::element_blank(),
       panel.grid.minor = ggplot2::element_blank(),
-      legend.position = "right"
+      legend.position = "right",
+      plot.margin = grid::unit(c(10, 18, 10, 10), "pt")
     )
 
   list(
