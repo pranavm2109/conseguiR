@@ -2065,7 +2065,11 @@ plot_locus_context <- function(
   )
 
   if (isTRUE(verbose) && identical(plot_obj$plot_data$snp_label_mode, "fallback")) {
-    message("No dbSNP-backed SNPs remained after optional disease filtering; falling back to top GWAS SNPs inside the top regulatory elements by germline score.")
+    message(
+      "No citation-backed SNPs were found among regulatory-element-overlapping SNPs in this locus; ",
+      "labeling up to ", plot_obj$plot_data$snp_label_labeled_n %||% 0L,
+      " top GWAS SNP(s) from the highest-germline-scoring regulatory elements instead."
+    )
   }
 
   if (isTRUE(save_plot)) {

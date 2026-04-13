@@ -710,6 +710,9 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
   if (length(rsids) == 0L) {
     return(NULL)
   }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Package `jsonlite` is required to query NCBI E-utilities.")
+  }
 
   max_pmids_per_rsid <- suppressWarnings(as.integer(max_pmids_per_rsid[[1]]))
   if (is.na(max_pmids_per_rsid) || max_pmids_per_rsid <= 0L) {
@@ -721,23 +724,41 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
   }
 
   out_list <- vector("list", length(rsids))
+  pb <- NULL
+  if (isTRUE(verbose)) {
+    pb <- utils::txtProgressBar(min = 0, max = length(rsids), style = 3)
+    on.exit({
+      if (!is.null(pb)) {
+        close(pb)
+      }
+    }, add = TRUE)
+  }
   for (i in seq_along(rsids)) {
     rsid <- rsids[[i]]
-    endpoint <- paste0("https://www.ncbi.nlm.nih.gov/snp/", rsid, "#publications")
-    page_lines <- tryCatch(
-      readLines(endpoint, warn = FALSE),
-      error = function(e) NULL
+    snp_id <- sub("^rs", "", rsid)
+    endpoint <- paste0(
+      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=snp&db=pubmed&id=",
+      snp_id,
+      "&retmode=json"
     )
-    if (is.null(page_lines) || length(page_lines) == 0L) {
-      next
+    payload <- tryCatch(jsonlite::fromJSON(endpoint, simplifyVector = FALSE), error = function(e) NULL)
+    linksets <- payload$linksets %||% NULL
+    pmid_hits <- character()
+    if (!is.null(linksets) && length(linksets) > 0L) {
+      for (j in seq_along(linksets)) {
+        linkdbs <- linksets[[j]]$linksetdbs %||% NULL
+        if (is.null(linkdbs) || length(linkdbs) == 0L) {
+          next
+        }
+        for (k in seq_along(linkdbs)) {
+          links <- linkdbs[[k]]$links %||% NULL
+          if (!is.null(links)) {
+            pmid_hits <- c(pmid_hits, as.character(links))
+          }
+        }
+      }
     }
-
-    page_text <- paste(page_lines, collapse = "\n")
-    pmid_hits <- unique(c(
-      unlist(regmatches(page_text, gregexpr("(?<=/pubmed/)\\d+", page_text, perl = TRUE))),
-      unlist(regmatches(page_text, gregexpr("(?<=term=)\\d+(?=\\[uid\\])", page_text, perl = TRUE))),
-      unlist(regmatches(page_text, gregexpr("(?<=PMID:)\\d+", page_text, perl = TRUE)))
-    ))
+    pmid_hits <- unique(gsub("\\D", "", pmid_hits))
     pmid_hits <- pmid_hits[!is.na(pmid_hits) & nzchar(pmid_hits)]
     if (length(pmid_hits) == 0L) {
       next
@@ -748,6 +769,67 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     }
 
     out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
+    if (!is.null(pb)) {
+      utils::setTxtProgressBar(pb, i)
+    }
+  }
+
+  if (!is.null(pb) && length(rsids) > 0L) {
+    utils::setTxtProgressBar(pb, length(rsids))
+  }
+
+  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
+  if (nrow(out) == 0L) {
+    return(NULL)
+  }
+
+  if (isTRUE(verbose)) {
+    message("Found citation-backed evidence for ", data.table::uniqueN(out$rsid), " of ", length(rsids), " queried rsID(s).")
+  }
+
+  unique(out)
+}
+
+fetch_pubmed_exact_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = FALSE) {
+  rsids <- unique(tolower(as.character(rsids %||% character())))
+  rsids <- rsids[grepl("^rs[0-9]+$", rsids)]
+  if (length(rsids) == 0L) {
+    return(NULL)
+  }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Package `jsonlite` is required to query PubMed.")
+  }
+
+  max_pmids_per_rsid <- suppressWarnings(as.integer(max_pmids_per_rsid[[1]]))
+  if (is.na(max_pmids_per_rsid) || max_pmids_per_rsid <= 0L) {
+    max_pmids_per_rsid <- 200L
+  }
+
+  if (isTRUE(verbose)) {
+    message("Querying PubMed for exact rsID citation support across ", length(rsids), " rsID(s).")
+  }
+
+  out_list <- vector("list", length(rsids))
+  for (i in seq_along(rsids)) {
+    rsid <- rsids[[i]]
+    term <- paste0("\"", rsid, "\"")
+    endpoint <- paste0(
+      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&retmax=",
+      max_pmids_per_rsid,
+      "&term=",
+      utils::URLencode(term, reserved = TRUE)
+    )
+    payload <- tryCatch(jsonlite::fromJSON(endpoint), error = function(e) NULL)
+    pmids <- payload$esearchresult$idlist %||% NULL
+    if (is.null(pmids)) {
+      next
+    }
+    pmids <- as.character(pmids)
+    pmids <- pmids[!is.na(pmids) & nzchar(pmids)]
+    if (length(pmids) == 0L) {
+      next
+    }
+    out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmids, source = "pubmed_exact")
   }
 
   out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
@@ -764,15 +846,28 @@ fetch_variant_literature_pmids <- function(rsids, max_pmids_per_rsid = 200L, ver
     max_pmids_per_rsid = max_pmids_per_rsid,
     verbose = verbose
   )
-
-  # Use dbSNP-confirmed publication links for plotting labels by default.
-  # LitVar can surface broader text-mined associations, but for this panel we
-  # want a stricter, mentor-checkable definition of "literature-backed".
   if (is.null(dbsnp_dt) || nrow(dbsnp_dt) == 0L) {
     return(NULL)
   }
 
   unique(dbsnp_dt)
+}
+
+normalize_requested_label_count <- function(top_n) {
+  if (is.null(top_n) || length(top_n) == 0L) {
+    return(0L)
+  }
+
+  if (is.infinite(top_n[[1]])) {
+    return(.Machine$integer.max %/% 2L)
+  }
+
+  top_n <- suppressWarnings(as.integer(top_n[[1]]))
+  if (is.na(top_n) || top_n <= 0L) {
+    return(0L)
+  }
+
+  top_n
 }
 
 fetch_pubmed_query_rsid_pmids <- function(rsids, query_term, max_pmids_per_rsid = 200L, verbose = FALSE) {
@@ -841,8 +936,8 @@ limit_candidate_rsids_for_litvar <- function(overlaps, top_n, verbose = FALSE) {
 }
 
 prepare_fallback_reg_snp_labels <- function(gwas_dt = NULL, reg_nodes = NULL, top_n = 3L) {
-  top_n <- suppressWarnings(as.integer(top_n[[1]]))
-  if (is.na(top_n) || top_n <= 0L || is.null(gwas_dt) || is.null(reg_nodes)) {
+  top_n <- normalize_requested_label_count(top_n)
+  if (top_n <= 0L || is.null(gwas_dt) || is.null(reg_nodes)) {
     return(NULL)
   }
 
@@ -898,9 +993,9 @@ prepare_locus_lit_snp_labels <- function(
   pmid_page_size = 1000L,
   verbose = FALSE
 ) {
-  top_n <- suppressWarnings(as.integer(top_n[[1]]))
-  if (is.na(top_n) || top_n <= 0L || is.null(gwas_sumstats) || is.null(reg_nodes)) {
-    return(list(labels = NULL, mapping = NULL, mode = "none"))
+  top_n <- normalize_requested_label_count(top_n)
+  if (top_n <= 0L || is.null(gwas_sumstats) || is.null(reg_nodes)) {
+    return(list(labels = NULL, mapping = NULL, mode = "none", requested_n = top_n, available_n = 0L))
   }
 
   gwas_dt <- read_locus_gwas_hits(
@@ -910,7 +1005,7 @@ prepare_locus_lit_snp_labels <- function(
     end = end
   )
   if (is.null(gwas_dt) || nrow(gwas_dt) == 0L) {
-    return(list(labels = NULL, mapping = NULL, mode = "none"))
+    return(list(labels = NULL, mapping = NULL, mode = "none", requested_n = top_n, available_n = 0L))
   }
 
   reg_dt <- data.table::as.data.table(data.table::copy(reg_nodes))[
@@ -923,7 +1018,7 @@ prepare_locus_lit_snp_labels <- function(
     )
   ]
   if (nrow(reg_dt) == 0L) {
-    return(list(labels = NULL, mapping = NULL, mode = "none"))
+    return(list(labels = NULL, mapping = NULL, mode = "none", requested_n = top_n, available_n = 0L))
   }
 
   gwas_dt[, snp_start := position]
@@ -942,8 +1037,19 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
-      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback"
+      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
+      requested_n = top_n,
+      available_n = if (is.null(fallback)) 0L else nrow(fallback)
     ))
+  }
+
+  all_overlap_rsids <- sort(unique(overlaps$rsid))
+  if (isTRUE(verbose)) {
+    message(
+      "Querying citation support across ",
+      length(all_overlap_rsids),
+      " rsID(s) overlapping regulatory elements in this locus."
+    )
   }
 
   pmid_dt <- NULL
@@ -954,30 +1060,11 @@ prepare_locus_lit_snp_labels <- function(
       pmid_dt <- data.table::as.data.table(data.table::copy(rsid_pmid))
     }
   } else {
-    candidate_rsids <- limit_candidate_rsids_for_litvar(
-      overlaps = overlaps,
-      top_n = top_n,
-      verbose = verbose
-    )
     pmid_dt <- fetch_variant_literature_pmids(
-      rsids = candidate_rsids,
+      rsids = all_overlap_rsids,
       max_pmids_per_rsid = pmid_page_size,
       verbose = verbose
     )
-    if (!is.null(pmid_query) && nzchar(trimws(as.character(pmid_query)[[1]]))) {
-      query_pmid_dt <- fetch_pubmed_query_rsid_pmids(
-        rsids = candidate_rsids,
-        query_term = pmid_query,
-        max_pmids_per_rsid = pmid_page_size,
-        verbose = verbose
-      )
-      if (!is.null(query_pmid_dt) && nrow(query_pmid_dt) > 0L) {
-        pmid_dt <- data.table::rbindlist(list(pmid_dt, query_pmid_dt), use.names = TRUE, fill = TRUE)
-        pmid_dt <- unique(pmid_dt)
-      } else if (isTRUE(verbose) && !is.null(pmid_dt) && nrow(pmid_dt) > 0L) {
-        message("No disease-specific SNP PMID hits were found; retaining general literature-backed SNP evidence.")
-      }
-    }
   }
 
   if (is.null(pmid_dt) || nrow(pmid_dt) == 0L) {
@@ -985,7 +1072,9 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
-      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback"
+      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
+      requested_n = top_n,
+      available_n = if (is.null(fallback)) 0L else nrow(fallback)
     ))
   }
 
@@ -996,7 +1085,9 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
-      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback"
+      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
+      requested_n = top_n,
+      available_n = if (is.null(fallback)) 0L else nrow(fallback)
     ))
   }
 
@@ -1010,7 +1101,9 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
-      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback"
+      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
+      requested_n = top_n,
+      available_n = if (is.null(fallback)) 0L else nrow(fallback)
     ))
   }
 
@@ -1020,7 +1113,9 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
-      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback"
+      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
+      requested_n = top_n,
+      available_n = if (is.null(fallback)) 0L else nrow(fallback)
     ))
   }
 
@@ -1042,20 +1137,25 @@ prepare_locus_lit_snp_labels <- function(
 
   label_dt <- merge(top_reg_per_snp, pmid_summary, by = "rsid", all.x = TRUE)
   data.table::setorderv(label_dt, c("p_value", "n_pmids", "reg_germline_score", "position"), c(1L, -1L, -1L, 1L))
+  available_lit_n <- nrow(label_dt)
   label_dt <- label_dt[seq_len(min(.N, top_n))]
   if (nrow(label_dt) == 0L) {
     fallback <- prepare_fallback_reg_snp_labels(gwas_dt = gwas_dt, reg_nodes = reg_nodes, top_n = top_n)
     return(list(
       labels = fallback,
       mapping = NULL,
-      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback"
+      mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
+      requested_n = top_n,
+      available_n = if (is.null(fallback)) 0L else nrow(fallback)
     ))
   }
 
   list(
     labels = data.table::copy(label_dt),
     mapping = data.table::copy(label_dt[, .(rsid, pmids, n_pmids, p_value, position, reg_feature_id, reg_start, reg_end, reg_germline_score)]),
-    mode = "literature"
+    mode = "literature",
+    requested_n = top_n,
+    available_n = available_lit_n
   )
 }
 
@@ -1349,6 +1449,9 @@ prepare_locus_plot_bundle <- function(
     lit_snp_labels = lit_snp_info$labels,
     lit_snp_mapping = lit_snp_info$mapping,
     snp_label_mode = lit_snp_info$mode,
+    snp_label_requested_n = lit_snp_info$requested_n %||% 0L,
+    snp_label_available_n = lit_snp_info$available_n %||% 0L,
+    snp_label_labeled_n = if (is.null(lit_snp_info$labels)) 0L else nrow(lit_snp_info$labels),
     selected_gene_set = selected_gene_set,
     locus = list(chromosome = locus_chr, start = locus_start, end = locus_end),
     gene_score_limits = gene_score_limits,
