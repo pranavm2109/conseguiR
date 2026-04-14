@@ -9,6 +9,8 @@ suppressPackageStartupMessages({
   library(matrixStats)
 })
 
+.conseguiR_epigenomic_cache <- new.env(parent = emptyenv())
+
 conseguiR_runtime_file <- function(relpath) {
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
@@ -72,6 +74,17 @@ zscore_vec <- function(x) {
   }
 
   (x - mu) / sig
+}
+
+deep_copy_object <- function(x) {
+  unserialize(serialize(x, NULL))
+}
+
+make_epigenomic_cache_key <- function(reg_ref_path, bw_files, drop_mhc, summary_fun) {
+  reg_ref_key <- normalizePath(reg_ref_path, winslash = "/", mustWork = FALSE)
+  bw_key <- paste(normalizePath(bw_files, winslash = "/", mustWork = FALSE), collapse = "|")
+  summary_key <- paste(capture.output(print(summary_fun)), collapse = " ")
+  paste(reg_ref_key, bw_key, as.character(isTRUE(drop_mhc)), summary_key, sep = "::")
 }
 
 list_epigenomic_track_files <- function(
@@ -302,26 +315,53 @@ run_epigenomic_reg_scoring <- function(
   }
   if (!is.null(pb)) utils::setTxtProgressBar(pb, 1)
 
-  conseguiR_verbose_message(verbose, "Loading regulatory elements for epigenomic scoring...")
-  reg_gr <- load_regulatory_elements_for_epigenomic_scores(
+  cache_key <- make_epigenomic_cache_key(
     reg_ref_path = reg_ref_path,
-    drop_mhc = drop_mhc
-  )
-  if (!is.null(pb)) utils::setTxtProgressBar(pb, 2)
-
-  conseguiR_verbose_message(verbose, "Harmonizing regulatory elements to track seqlevels...")
-  reg_gr <- harmonize_regulatory_seqlevels_to_track(
-    reg_gr = reg_gr,
-    bw_file = bw_files[[1]]
-  )
-  if (!is.null(pb)) utils::setTxtProgressBar(pb, 3)
-
-  conseguiR_verbose_message(verbose, "Quantifying bigWig signal over regulatory elements...")
-  signal_mat <- quantify_epigenomic_signal_matrix(
     bw_files = bw_files,
-    reg_gr = reg_gr,
+    drop_mhc = drop_mhc,
     summary_fun = summary_fun
   )
+
+  if (exists(cache_key, envir = .conseguiR_epigenomic_cache, inherits = FALSE)) {
+    cached <- deep_copy_object(get(cache_key, envir = .conseguiR_epigenomic_cache, inherits = FALSE))
+    reg_gr <- cached$reg_gr
+    signal_mat <- cached$signal_mat
+    bw_files <- cached$bw_files
+    if (isTRUE(verbose)) {
+      message("Reusing cached epigenomic signal matrix for this track set and regulatory reference.")
+    }
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, 4)
+  } else {
+    conseguiR_verbose_message(verbose, "Loading regulatory elements for epigenomic scoring...")
+    reg_gr <- load_regulatory_elements_for_epigenomic_scores(
+      reg_ref_path = reg_ref_path,
+      drop_mhc = drop_mhc
+    )
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, 2)
+
+    conseguiR_verbose_message(verbose, "Harmonizing regulatory elements to track seqlevels...")
+    reg_gr <- harmonize_regulatory_seqlevels_to_track(
+      reg_gr = reg_gr,
+      bw_file = bw_files[[1]]
+    )
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, 3)
+
+    conseguiR_verbose_message(verbose, "Quantifying bigWig signal over regulatory elements...")
+    signal_mat <- quantify_epigenomic_signal_matrix(
+      bw_files = bw_files,
+      reg_gr = reg_gr,
+      summary_fun = summary_fun
+    )
+    assign(
+      cache_key,
+      list(
+        reg_gr = reg_gr,
+        signal_mat = signal_mat,
+        bw_files = bw_files
+      ),
+      envir = .conseguiR_epigenomic_cache
+    )
+  }
   if (!is.null(pb)) utils::setTxtProgressBar(pb, 4)
 
   conseguiR_verbose_message(verbose, "Computing epigenomic z-scores...")
@@ -345,8 +385,8 @@ run_epigenomic_reg_scoring <- function(
   list(
     zscores = zscores,
     diagnostics = diagnostics,
-    signal_matrix = signal_mat,
-    reg_gr = reg_gr,
+    signal_matrix = deep_copy_object(signal_mat),
+    reg_gr = deep_copy_object(reg_gr),
     bw_files = bw_files
   )
 }

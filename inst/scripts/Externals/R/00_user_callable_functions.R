@@ -4,6 +4,8 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
+.conseguiR_external_cache <- new.env(parent = emptyenv())
+
 conseguiR_runtime_file <- function(relpath) {
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
@@ -108,6 +110,37 @@ materialize_table_path <- function(table, path = NULL, stem = "table") {
     return(path)
   }
 
+  if (!is.null(path) && nzchar(path) && file.exists(path)) {
+    return(path)
+  }
+
+  if (is.null(path)) {
+    if (!requireNamespace("digest", quietly = TRUE)) {
+      stop("Package `digest` is required for cached table materialization.")
+    }
+
+    table_dt <- as.data.table(table)
+    cache_key <- paste0(
+      "materialized::",
+      stem,
+      "::",
+      digest::digest(table_dt, algo = "xxhash64")
+    )
+
+    if (exists(cache_key, envir = .conseguiR_external_cache, inherits = FALSE)) {
+      cached_path <- get(cache_key, envir = .conseguiR_external_cache, inherits = FALSE)
+      if (!is.null(cached_path) && nzchar(cached_path) && file.exists(cached_path)) {
+        return(cached_path)
+      }
+    }
+
+    path <- paste0(make_temp_output_prefix(stem), ".tsv")
+    ensure_output_parent(path)
+    fwrite(table_dt, path, sep = "\t")
+    assign(cache_key, path, envir = .conseguiR_external_cache)
+    return(path)
+  }
+
   path <- path %||% paste0(make_temp_output_prefix(stem), ".tsv")
   ensure_output_parent(path)
   fwrite(as.data.table(table), path, sep = "\t")
@@ -127,6 +160,67 @@ new_bundle <- function(type, objects = list(), output_paths = list(), config = l
     ),
     class = c(paste0("conseguiR_", type, "_bundle"), "conseguiR_bundle", "list")
   )
+}
+
+cache_digest <- function(x) {
+  if (!requireNamespace("digest", quietly = TRUE)) {
+    stop("Package `digest` is required for session-level caching.")
+  }
+
+  digest::digest(x, algo = "xxhash64")
+}
+
+cache_get <- function(key) {
+  if (exists(key, envir = .conseguiR_external_cache, inherits = FALSE)) {
+    return(get(key, envir = .conseguiR_external_cache, inherits = FALSE))
+  }
+
+  NULL
+}
+
+cache_set <- function(key, value) {
+  assign(key, value, envir = .conseguiR_external_cache)
+  invisible(value)
+}
+
+normalize_cache_path <- function(path) {
+  if (is.null(path) || !nzchar(path)) {
+    return(NULL)
+  }
+
+  normalizePath(path, winslash = "/", mustWork = FALSE)
+}
+
+validation_cache_key <- function(prefix, payload) {
+  paste0("validation::", prefix, "::", cache_digest(payload))
+}
+
+get_or_compute_validation <- function(prefix, payload, compute) {
+  key <- validation_cache_key(prefix, payload)
+  cached_value <- cache_get(key)
+  if (!is.null(cached_value)) {
+    return(cached_value)
+  }
+
+  value <- compute()
+  cache_set(key, value)
+  value
+}
+
+read_cached_path <- function(path, reader, cache_prefix = "path_read") {
+  if (is.null(path) || !nzchar(path)) {
+    return(NULL)
+  }
+
+  cache_key <- paste0(cache_prefix, "::", normalizePath(path, winslash = "/", mustWork = FALSE))
+  cached_value <- cache_get(cache_key)
+  if (!is.null(cached_value)) {
+    return(cached_value)
+  }
+
+  value <- reader(path)
+  cache_set(cache_key, value)
+  value
 }
 
 resolve_bundle_component <- function(x, preferred_name) {
@@ -207,9 +301,13 @@ validate_inputs <- function(
   if (!is.null(gwas_sumstats)) {
     verbose_message(verbose, "Validating GWAS summary statistics...")
     objects$gwas <- if (is.character(gwas_sumstats) && length(gwas_sumstats) == 1L) {
-      validate_gwas_sumstats_path(
-        sumstats_path = gwas_sumstats,
-        show_progress = isTRUE(verbose)
+      get_or_compute_validation(
+        prefix = "gwas",
+        payload = list(sumstats_path = normalize_cache_path(gwas_sumstats)),
+        compute = function() validate_gwas_sumstats_path(
+          sumstats_path = gwas_sumstats,
+          show_progress = isTRUE(verbose)
+        )
       )
     } else {
       validate_gwas_sumstats(gwas_sumstats)
@@ -219,9 +317,13 @@ validate_inputs <- function(
   if (!is.null(somatic_maf)) {
     verbose_message(verbose, "Validating somatic MAF...")
     objects$somatic_maf <- if (is.character(somatic_maf) && length(somatic_maf) == 1L) {
-      validate_somatic_maf_path(
-        maf_path = somatic_maf,
-        show_progress = isTRUE(verbose)
+      get_or_compute_validation(
+        prefix = "somatic_maf",
+        payload = list(maf_path = normalize_cache_path(somatic_maf)),
+        compute = function() validate_somatic_maf_path(
+          maf_path = somatic_maf,
+          show_progress = isTRUE(verbose)
+        )
       )
     } else {
       validate_somatic_maf(somatic_maf)
@@ -230,9 +332,16 @@ validate_inputs <- function(
 
   if (!is.null(reg_ref_path)) {
     verbose_message(verbose, "Validating regulatory-element reference...")
-    objects$regulatory_elements <- validate_regulatory_element_reference(
-      reg_ref_path,
-      nrows = 1000L
+    objects$regulatory_elements <- get_or_compute_validation(
+      prefix = "reg_ref",
+      payload = list(
+        reg_ref_path = normalize_cache_path(reg_ref_path),
+        nrows = 1000L
+      ),
+      compute = function() validate_regulatory_element_reference(
+        reg_ref_path,
+        nrows = 1000L
+      )
     )
   }
 
@@ -247,10 +356,17 @@ validate_inputs <- function(
       stop("`reg_ref_path` is required when validating epigenomic tracks.")
     }
 
-    objects$epigenomic <- validate_epigenomic_inputs(
-      bw_files = bw_files,
-      reg_ref_path = reg_ref_path,
-      verbose = verbose
+    objects$epigenomic <- get_or_compute_validation(
+      prefix = "epigenomic_inputs",
+      payload = list(
+        reg_ref_path = normalize_cache_path(reg_ref_path),
+        bw_files = sort(vapply(bw_files, normalize_cache_path, character(1)))
+      ),
+      compute = function() validate_epigenomic_inputs(
+        bw_files = bw_files,
+        reg_ref_path = reg_ref_path,
+        verbose = verbose
+      )
     )
   }
 
@@ -999,11 +1115,45 @@ run_gene_reg_diffusion <- function(
     path = edges_path %||% resolve_output_path(scored_graph, "edges_path"),
     stem = "gene_reg_graph_scored_edges"
   )
+  cache_key <- NULL
+  if (is.null(requested_output_dir) && is.null(requested_output_stem)) {
+    cache_key <- paste0(
+      "diffusion::",
+      cache_digest(list(
+        nodes_path = nodes_path,
+        edges_path = edges_path,
+        top_k = top_k,
+        confidence_power = confidence_power,
+        beta_germline = beta_germline,
+        beta_somatic = beta_somatic,
+        beta_epigenomic = beta_epigenomic,
+        positive_only = positive_only,
+        reg_signal_clip = reg_signal_clip,
+        top_n_to_save = top_n_to_save,
+        python_path = python_path
+      ))
+    )
+    cached_result <- cache_get(cache_key)
+    if (!is.null(cached_result)) {
+      verbose_message(verbose, "Reusing cached diffusion result for identical inputs and parameters.")
+      return(cached_result)
+    }
+  }
   output_dir <- output_dir %||% make_temp_output_dir("gene_reg_diffusion")
   output_stem <- output_stem %||% "gene_reg_graph_diffusion"
 
-  validate_scored_gene_reg_nodes(read_scored_gene_reg_nodes(nodes_path %||% default_diffusion_config$nodes_path))
-  validate_scored_gene_reg_edges(read_scored_gene_reg_edges(edges_path %||% default_diffusion_config$edges_path))
+  nodes_dt <- if (!is.null(nodes)) {
+    as.data.table(nodes)
+  } else {
+    read_cached_path(nodes_path %||% default_diffusion_config$nodes_path, read_scored_gene_reg_nodes, "scored_nodes")
+  }
+  edges_dt <- if (!is.null(edges)) {
+    as.data.table(edges)
+  } else {
+    read_cached_path(edges_path %||% default_diffusion_config$edges_path, read_scored_gene_reg_edges, "scored_edges")
+  }
+  validate_scored_gene_reg_nodes(nodes_dt)
+  validate_scored_gene_reg_edges(edges_dt)
 
   result <- internal_run_gene_reg_diffusion(
     nodes_path = nodes_path %||% default_diffusion_config$nodes_path,
@@ -1021,7 +1171,7 @@ run_gene_reg_diffusion <- function(
     python_path = python_path
   )
 
-  new_bundle(
+  bundle <- new_bundle(
     type = "diffusion",
     objects = list(
       all_genes = read_diffusion_results(result$output_paths$all_genes_path),
@@ -1039,6 +1189,10 @@ run_gene_reg_diffusion <- function(
       )
     )
   )
+  if (!is.null(cache_key)) {
+    cache_set(cache_key, bundle)
+  }
+  bundle
 }
 
 #' Call the selected subgraph from diffusion results
@@ -1113,13 +1267,53 @@ call_selected_subgraph <- function(
     gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
     gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
   }
+  cache_key <- NULL
+  if (is.null(requested_output_dir) && is.null(requested_output_stem)) {
+    cache_key <- paste0(
+      "selected_subgraph::",
+      cache_digest(list(
+        diffusion_path = diffusion_path,
+        gg_nodes_path = gg_nodes_path,
+        gg_edges_path = gg_edges_path,
+        target_genes = target_genes,
+        candidate_pool_size = candidate_pool_size,
+        min_confidence = min_confidence,
+        max_edges_in_model = max_edges_in_model,
+        node_prize_weight = node_prize_weight,
+        edge_conf_weight = edge_conf_weight,
+        edge_cost_weight = edge_cost_weight,
+        node_scale = node_scale,
+        edge_scale = edge_scale,
+        max_time_seconds = max_time_seconds,
+        num_workers = num_workers,
+        random_seed = random_seed,
+        prize_column = prize_column,
+        confidence_column = confidence_column,
+        edge_cost_column = edge_cost_column,
+        python_path = python_path
+      ))
+    )
+    cached_result <- cache_get(cache_key)
+    if (!is.null(cached_result)) {
+      verbose_message(verbose, "Reusing cached selected subgraph for identical inputs and parameters.")
+      return(cached_result)
+    }
+  }
   output_dir <- output_dir %||% make_temp_output_dir("selected_subgraph")
   output_stem <- output_stem %||% "gene_gene_selected_subgraph"
 
-  validate_diffusion_results(read_diffusion_results(diffusion_path %||% default_subgraph_config$diffusion_path), prize_column = prize_column)
-  validate_gene_gene_nodes(read_gene_gene_nodes(gg_nodes_path))
+  diffusion_dt <- if (!is.null(diffusion_table)) {
+    as.data.table(diffusion_table)
+  } else {
+    read_cached_path(diffusion_path %||% default_subgraph_config$diffusion_path, read_diffusion_results, "diffusion_results")
+  }
+  gg_nodes_dt <- read_cached_path(gg_nodes_path, read_gene_gene_nodes, "gg_nodes")
+  gg_edges_dt <- read_cached_path(gg_edges_path, read_gene_gene_edges, "gg_edges")
+
+  validate_diffusion_results(diffusion_dt, prize_column = prize_column)
+  validate_gene_gene_nodes(gg_nodes_dt)
   validate_gene_gene_edges(
-    read_gene_gene_edges(gg_edges_path),
+    gg_edges_dt,
     confidence_column = confidence_column,
     edge_cost_column = edge_cost_column
   )
@@ -1148,7 +1342,7 @@ call_selected_subgraph <- function(
     python_path = python_path
   )
 
-  new_bundle(
+  bundle <- new_bundle(
     type = "selected_subgraph",
     objects = list(
       nodes = read_selected_subgraph_nodes(result$output_paths$nodes_path),
@@ -1169,6 +1363,10 @@ call_selected_subgraph <- function(
       )
     )
   )
+  if (!is.null(cache_key)) {
+    cache_set(cache_key, bundle)
+  }
+  bundle
 }
 
 #' Plot a selected subgraph and build a visualization bundle

@@ -22,11 +22,17 @@ default_stage_plot_config <- list(
   score_output_prefix = "data/processed/conseguiR_score_plot"
 )
 
+.conseguiR_plot_cache <- new.env(parent = emptyenv())
+
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
 }
 
 read_backend_gene_label_map <- function() {
+  if (exists("gene_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)) {
+    return(data.table::copy(get("gene_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
+  }
+
   loc_path <- conseguiR_plot_runtime_file("inst/extdata/backend/NCBI38.gene.loc")
   dt <- data.table::fread(loc_path, header = FALSE, showProgress = FALSE)
   if (ncol(dt) < 6L) {
@@ -37,17 +43,25 @@ read_backend_gene_label_map <- function() {
     feature_id = as.character(V1),
     label = as.character(V6)
   )], by = "feature_id")
-  out[!is.na(feature_id) & feature_id != "" & !is.na(label) & label != ""]
+  out <- out[!is.na(feature_id) & feature_id != "" & !is.na(label) & label != ""]
+  assign("gene_label_map", out, envir = .conseguiR_plot_cache)
+  data.table::copy(out)
 }
 
 read_backend_reg_label_map <- function() {
+  if (exists("reg_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)) {
+    return(data.table::copy(get("reg_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
+  }
+
   mapping_path <- conseguiR_plot_runtime_file("inst/extdata/backend/genehancer_reg_target_labels.tsv.gz")
   if (!file.exists(mapping_path)) {
     return(data.table(reg_elem_id = character(), label = character()))
   }
 
   dt <- data.table::as.data.table(data.table::fread(mapping_path, showProgress = FALSE))
-  unique(dt[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(label) & label != ""], by = "reg_elem_id")
+  out <- unique(dt[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(label) & label != ""], by = "reg_elem_id")
+  assign("reg_label_map", out, envir = .conseguiR_plot_cache)
+  data.table::copy(out)
 }
 
 resolve_score_feature_column <- function(dt) {
@@ -527,6 +541,60 @@ resolve_locus_selected_genes <- function(selected_subgraph = NULL, nodes = NULL,
   unique(as.character(stats::na.omit(selected_nodes[[gene_col[[1]]]])))
 }
 
+read_minimal_locus_gwas_table <- function(gwas_sumstats = NULL) {
+  if (is.null(gwas_sumstats)) {
+    return(NULL)
+  }
+
+  if (is.character(gwas_sumstats) && length(gwas_sumstats) == 1L) {
+    cache_key <- paste0("gwas_minimal::", normalizePath(gwas_sumstats, winslash = "/", mustWork = FALSE))
+    if (exists(cache_key, envir = .conseguiR_plot_cache, inherits = FALSE)) {
+      return(data.table::copy(get(cache_key, envir = .conseguiR_plot_cache, inherits = FALSE)))
+    }
+
+    header_cols <- names(data.table::fread(gwas_sumstats, nrows = 0L, showProgress = FALSE))
+    snp_id_col <- intersect(c("hm_rsid", "rsid", "rs_id", "hm_variant_id", "variant_id"), header_cols)
+    chr_col <- intersect(c("hm_chrom", "chromosome", "chr", "chrom"), header_cols)
+    pos_col <- intersect(c("hm_pos", "base_pair_location", "position", "pos", "bp"), header_cols)
+    p_col <- intersect(c("p_value", "pval", "p"), header_cols)
+    if (length(snp_id_col) == 0L || length(chr_col) == 0L || length(pos_col) == 0L || length(p_col) == 0L) {
+      return(NULL)
+    }
+    keep_cols <- unique(c(snp_id_col[[1]], chr_col[[1]], pos_col[[1]], p_col[[1]]))
+    gwas_dt <- data.table::as.data.table(data.table::fread(gwas_sumstats, select = keep_cols, showProgress = FALSE))
+  } else {
+    gwas_dt <- data.table::as.data.table(data.table::copy(gwas_sumstats))
+    snp_id_col <- intersect(c("hm_rsid", "rsid", "rs_id", "hm_variant_id", "variant_id"), names(gwas_dt))
+    chr_col <- intersect(c("hm_chrom", "chromosome", "chr", "chrom"), names(gwas_dt))
+    pos_col <- intersect(c("hm_pos", "base_pair_location", "position", "pos", "bp"), names(gwas_dt))
+    p_col <- intersect(c("p_value", "pval", "p"), names(gwas_dt))
+    if (length(snp_id_col) == 0L || length(chr_col) == 0L || length(pos_col) == 0L || length(p_col) == 0L) {
+      return(NULL)
+    }
+    cache_key <- NULL
+  }
+
+  out <- data.table::copy(gwas_dt)
+  out[, chromosome := normalize_locus_chromosome(get(chr_col[[1]]))]
+  out[, position := suppressWarnings(as.integer(get(pos_col[[1]])))]
+  out[, p_value := suppressWarnings(as.numeric(get(p_col[[1]])))]
+  out[, rsid := tolower(as.character(get(snp_id_col[[1]])))]
+  out <- out[
+    !is.na(chromosome) & nzchar(chromosome) &
+      !is.na(position) &
+      !is.na(p_value) & is.finite(p_value) & p_value > 0 &
+      !is.na(rsid) & nzchar(rsid),
+    .(rsid, chromosome, position, p_value)
+  ]
+  out <- unique(out, by = c("rsid", "chromosome", "position", "p_value"))
+
+  if (!is.null(cache_key)) {
+    assign(cache_key, out, envir = .conseguiR_plot_cache)
+  }
+
+  data.table::copy(out)
+}
+
 prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, end, reg_nodes = NULL) {
   if (is.null(gwas_sumstats)) {
     return(NULL)
@@ -552,55 +620,28 @@ prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, en
     }
   }
 
-  if (is.character(gwas_sumstats) && length(gwas_sumstats) == 1L) {
-    header_cols <- names(data.table::fread(gwas_sumstats, nrows = 0L, showProgress = FALSE))
-    snp_id_col <- intersect(c("hm_rsid", "rsid", "rs_id", "hm_variant_id", "variant_id"), header_cols)
-    chr_col <- intersect(c("hm_chrom", "chromosome", "chr", "chrom"), header_cols)
-    pos_col <- intersect(c("hm_pos", "base_pair_location", "position", "pos", "bp"), header_cols)
-    p_col <- intersect(c("p_value", "pval", "p"), header_cols)
-    if (length(snp_id_col) == 0L || length(chr_col) == 0L || length(pos_col) == 0L || length(p_col) == 0L) {
-      return(NULL)
-    }
-    keep_cols <- unique(c(snp_id_col[[1]], chr_col[[1]], pos_col[[1]], p_col[[1]]))
-    gwas_dt <- data.table::as.data.table(data.table::fread(gwas_sumstats, select = keep_cols, showProgress = FALSE))
-  } else {
-    gwas_dt <- data.table::as.data.table(data.table::copy(gwas_sumstats))
-    snp_id_col <- intersect(c("hm_rsid", "rsid", "rs_id", "hm_variant_id", "variant_id"), names(gwas_dt))
-    chr_col <- intersect(c("hm_chrom", "chromosome", "chr", "chrom"), names(gwas_dt))
-    pos_col <- intersect(c("hm_pos", "base_pair_location", "position", "pos", "bp"), names(gwas_dt))
-    p_col <- intersect(c("p_value", "pval", "p"), names(gwas_dt))
-  }
-
-  if (length(snp_id_col) == 0L || length(chr_col) == 0L || length(pos_col) == 0L || length(p_col) == 0L) {
+  gwas_dt <- read_minimal_locus_gwas_table(gwas_sumstats)
+  if (is.null(gwas_dt) || nrow(gwas_dt) == 0L) {
     return(NULL)
   }
 
   target_chr <- normalize_locus_chromosome(chromosome)
-  gwas_dt[, locus_chr_tmp := normalize_locus_chromosome(get(chr_col[[1]]))]
-  gwas_dt[, locus_pos_tmp := suppressWarnings(as.integer(get(pos_col[[1]])))]
-  gwas_dt[, locus_p_tmp := suppressWarnings(as.numeric(get(p_col[[1]])))]
-  gwas_dt[, locus_snp_tmp := as.character(get(snp_id_col[[1]]))]
   gwas_dt <- gwas_dt[
-    locus_chr_tmp == target_chr &
-      !is.na(locus_pos_tmp) &
-      locus_pos_tmp >= target_start &
-      locus_pos_tmp <= target_end &
-      !is.na(locus_p_tmp) &
-      is.finite(locus_p_tmp) &
-      locus_p_tmp > 0 &
-      nzchar(locus_snp_tmp)
+    chromosome == target_chr &
+      position >= target_start &
+      position <= target_end
   ]
 
   if (nrow(gwas_dt) == 0L) {
     return(NULL)
   }
 
-  data.table::setorderv(gwas_dt, c("locus_p_tmp", "locus_pos_tmp"), c(1L, 1L))
+  data.table::setorderv(gwas_dt, c("p_value", "position"), c(1L, 1L))
   top_snp <- gwas_dt[1]
   data.table::data.table(
-    snp_id = top_snp$locus_snp_tmp[[1]],
-    position = top_snp$locus_pos_tmp[[1]],
-    p_value = top_snp$locus_p_tmp[[1]],
+    snp_id = top_snp$rsid[[1]],
+    position = top_snp$position[[1]],
+    p_value = top_snp$p_value[[1]],
     reg_feature_id = target_reg_id,
     reg_start = target_start,
     reg_end = target_end
@@ -612,48 +653,18 @@ read_locus_gwas_hits <- function(gwas_sumstats = NULL, chromosome, start, end) {
     return(NULL)
   }
 
-  if (is.character(gwas_sumstats) && length(gwas_sumstats) == 1L) {
-    header_cols <- names(data.table::fread(gwas_sumstats, nrows = 0L, showProgress = FALSE))
-    snp_id_col <- intersect(c("hm_rsid", "rsid", "rs_id", "hm_variant_id", "variant_id"), header_cols)
-    chr_col <- intersect(c("hm_chrom", "chromosome", "chr", "chrom"), header_cols)
-    pos_col <- intersect(c("hm_pos", "base_pair_location", "position", "pos", "bp"), header_cols)
-    p_col <- intersect(c("p_value", "pval", "p"), header_cols)
-    if (length(snp_id_col) == 0L || length(chr_col) == 0L || length(pos_col) == 0L || length(p_col) == 0L) {
-      return(NULL)
-    }
-    keep_cols <- unique(c(snp_id_col[[1]], chr_col[[1]], pos_col[[1]], p_col[[1]]))
-    gwas_dt <- data.table::as.data.table(data.table::fread(gwas_sumstats, select = keep_cols, showProgress = FALSE))
-  } else {
-    gwas_dt <- data.table::as.data.table(data.table::copy(gwas_sumstats))
-    snp_id_col <- intersect(c("hm_rsid", "rsid", "rs_id", "hm_variant_id", "variant_id"), names(gwas_dt))
-    chr_col <- intersect(c("hm_chrom", "chromosome", "chr", "chrom"), names(gwas_dt))
-    pos_col <- intersect(c("hm_pos", "base_pair_location", "position", "pos", "bp"), names(gwas_dt))
-    p_col <- intersect(c("p_value", "pval", "p"), names(gwas_dt))
-  }
-
-  if (length(snp_id_col) == 0L || length(chr_col) == 0L || length(pos_col) == 0L || length(p_col) == 0L) {
+  gwas_dt <- read_minimal_locus_gwas_table(gwas_sumstats)
+  if (is.null(gwas_dt) || nrow(gwas_dt) == 0L) {
     return(NULL)
   }
 
   target_chr <- normalize_locus_chromosome(chromosome)
-  gwas_dt[, locus_chr_tmp := normalize_locus_chromosome(get(chr_col[[1]]))]
-  gwas_dt[, locus_pos_tmp := suppressWarnings(as.integer(get(pos_col[[1]])))]
-  gwas_dt[, locus_p_tmp := suppressWarnings(as.numeric(get(p_col[[1]])))]
-  gwas_dt[, locus_snp_tmp := as.character(get(snp_id_col[[1]]))]
   gwas_dt <- gwas_dt[
-    locus_chr_tmp == target_chr &
-      !is.na(locus_pos_tmp) &
-      locus_pos_tmp >= as.integer(start) &
-      locus_pos_tmp <= as.integer(end) &
-      !is.na(locus_p_tmp) &
-      is.finite(locus_p_tmp) &
-      locus_p_tmp > 0 &
-      nzchar(locus_snp_tmp)
-  ][, .(
-    rsid = tolower(locus_snp_tmp),
-    position = locus_pos_tmp,
-    p_value = locus_p_tmp
-  )]
+    chromosome == target_chr &
+      position >= as.integer(start) &
+      position <= as.integer(end),
+    .(rsid, position, p_value)
+  ]
 
   if (nrow(gwas_dt) == 0L) {
     return(NULL)
@@ -677,22 +688,41 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     max_pmids_per_rsid <- 200L
   }
 
+  if (!exists("dbsnp_pmid_cache", envir = .conseguiR_plot_cache, inherits = FALSE)) {
+    .conseguiR_plot_cache$dbsnp_pmid_cache <- new.env(parent = emptyenv())
+  }
+  cache_env <- .conseguiR_plot_cache$dbsnp_pmid_cache
+
+  cached_mask <- vapply(
+    rsids,
+    FUN.VALUE = logical(1),
+    FUN = function(rsid) exists(rsid, envir = cache_env, inherits = FALSE)
+  )
+  cached_rsids <- rsids[cached_mask]
+  query_rsids <- rsids[!cached_mask]
+
   if (isTRUE(verbose)) {
-    message("Querying dbSNP publication pages for PMID-backed SNP evidence across ", length(rsids), " rsID(s).")
+    message(
+      "Querying dbSNP publication pages for PMID-backed SNP evidence across ",
+      length(query_rsids),
+      " uncached rsID(s)",
+      if (length(cached_rsids) > 0L) paste0(" (", length(cached_rsids), " served from cache)") else "",
+      "."
+    )
   }
 
-  out_list <- vector("list", length(rsids))
+  out_list <- vector("list", length(query_rsids))
   pb <- NULL
-  if (isTRUE(verbose)) {
-    pb <- utils::txtProgressBar(min = 0, max = length(rsids), style = 3)
+  if (isTRUE(verbose) && length(query_rsids) > 0L) {
+    pb <- utils::txtProgressBar(min = 0, max = length(query_rsids), style = 3)
     on.exit({
       if (!is.null(pb)) {
         close(pb)
       }
     }, add = TRUE)
   }
-  for (i in seq_along(rsids)) {
-    rsid <- rsids[[i]]
+  for (i in seq_along(query_rsids)) {
+    rsid <- query_rsids[[i]]
     snp_id <- sub("^rs", "", rsid)
     endpoint <- paste0(
       "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=snp&db=pubmed&id=",
@@ -718,6 +748,7 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     }
     pmid_hits <- unique(gsub("\\D", "", pmid_hits))
     pmid_hits <- pmid_hits[!is.na(pmid_hits) & nzchar(pmid_hits)]
+    assign(rsid, pmid_hits, envir = cache_env)
     if (!is.null(pb)) {
       utils::setTxtProgressBar(pb, i)
     }
@@ -732,12 +763,28 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
   }
 
-  if (!is.null(pb) && length(rsids) > 0L) {
-    utils::setTxtProgressBar(pb, length(rsids))
+  if (!is.null(pb) && length(query_rsids) > 0L) {
+    utils::setTxtProgressBar(pb, length(query_rsids))
   }
 
-  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
+  cached_list <- vector("list", length(cached_rsids))
+  for (i in seq_along(cached_rsids)) {
+    rsid <- cached_rsids[[i]]
+    pmid_hits <- get(rsid, envir = cache_env, inherits = FALSE)
+    if (length(pmid_hits) == 0L) {
+      next
+    }
+    if (length(pmid_hits) > max_pmids_per_rsid) {
+      pmid_hits <- pmid_hits[seq_len(max_pmids_per_rsid)]
+    }
+    cached_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
+  }
+
+  out <- data.table::rbindlist(c(cached_list, out_list), use.names = TRUE, fill = TRUE)
   if (nrow(out) == 0L) {
+    if (isTRUE(verbose)) {
+      message("Found citation-backed evidence for 0 of ", length(rsids), " queried rsID(s).")
+    }
     return(NULL)
   }
 
