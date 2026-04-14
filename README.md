@@ -36,6 +36,11 @@ The package ships prebuilt unscored backend graphs for:
 
 These are treated as package-owned resources rather than user-provided inputs.
 
+Diffusion and selected-subgraph calling are now run inside a managed Python
+environment via `basilisk`. That means Python is still required for those two
+stages, but the package no longer expects users to wire up a project-specific
+interpreter by hand.
+
 ## User API
 
 The package-facing API currently exports:
@@ -148,7 +153,6 @@ plot_locus_context(
   diffusion = diffusion,
   selected_subgraph = selected_subgraph,
   gwas_sumstats = "<path-or-table>",
-  pmid_query = "lymphoma",
   label_top_lit_snps = 3L,
   plot_file_path = "MYC_locus_context.pdf"
 )
@@ -176,6 +180,9 @@ This is a strong research-grade draft rather than a polished release.
 The main remaining rough edges are:
 
 - some package-facing wrappers still delegate into `scripts/...`
-- Python and MAGMA setup still matter for a smooth first run
+- MAGMA still matters for germline scoring
+- the new `basilisk`-managed Python path for
+  `run_gene_reg_diffusion()` and `call_selected_subgraph()` still needs a
+  full end-to-end validation pass on a clean machine
 - the package still needs some final polish around fresh-clone validation and
   resource discovery

@@ -983,7 +983,8 @@ build_scored_gene_reg_graph <- function(
 #' @param positive_only Whether to restrict to positive regulatory signal.
 #' @param reg_signal_clip Regulatory signal clip value.
 #' @param top_n_to_save Number of top genes to save separately.
-#' @param python_path Optional explicit Python interpreter path.
+#' @param python_path Deprecated and ignored. Python is managed internally via
+#'   `basilisk`.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages while running
 #'   diffusion.
 #'
@@ -1092,7 +1093,8 @@ run_gene_reg_diffusion <- function(
 #' @param prize_column Diffusion prize column to optimize.
 #' @param confidence_column Gene-gene confidence column.
 #' @param edge_cost_column Gene-gene edge-cost column.
-#' @param python_path Optional explicit Python interpreter path.
+#' @param python_path Deprecated and ignored. Python is managed internally via
+#'   `basilisk`.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages while calling
 #'   the selected subgraph.
 #'

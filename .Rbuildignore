@@ -7,3 +7,7 @@
 ^scripts$
 ^conseguiR_tmp$
 ^INSTALLATION\.md$
+^Rplots\.pdf$
+^vignettes/.*\.md$
+^vignettes/conseguiR-analysis-report\.Rmd$
+(^|/)\._.*$

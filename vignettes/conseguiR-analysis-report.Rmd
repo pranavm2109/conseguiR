@@ -1,0 +1,383 @@
+---
+title: "conseguiR Worked Example Report"
+author: "The conseguiR authors"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  out.width = "92%"
+)
+```
+
+```{r libraries}
+library(conseguiR)
+library(data.table)
+library(knitr)
+```
+
+<style>
+body {
+  line-height: 1.75;
+  font-size: 16px;
+}
+h1, h2, h3 {
+  font-weight: 700;
+}
+.lead {
+  font-size: 1.1em;
+  color: #4b5563;
+}
+.callout {
+  padding: 1rem 1.2rem;
+  border-left: 4px solid #2c7fb8;
+  background: #f7fbff;
+  margin: 1.2rem 0;
+}
+</style>
+
+# Executive summary
+
+<div class="lead">
+This report presents a worked <code>conseguiR</code> analysis using a Sjogren
+syndrome GWAS, a lymphoma-focused PCAWG somatic mutation dataset, and a set of
+selected epigenomic bigWig tracks. The goal is not only to show the code, but
+also to explain what each stage is contributing and what the resulting figures
+look like along the way.
+</div>
+
+At a high level, the workflow proceeds in six stages:
+
+1. validate the raw inputs
+2. compute germline, somatic, and epigenomic scores
+3. impose those scores on the gene-regulatory graph
+4. run diffusion to obtain post-diffusion gene scores
+5. extract a smaller selected subgraph
+6. inspect the results through score plots, network plots, and a locus plot
+
+Because some compute stages are intentionally heavy, the code below is shown as
+runnable analysis code but is not evaluated during document render. The figures
+shown later in the report come from generated outputs already present in the
+project.
+
+# Example inputs
+
+The example analysis uses the following files.
+
+```{r inputs}
+gwas_path <- "data/raw/Testing/GCST90436637.h.tsv"
+somatic_maf_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcga_order_hg38.maf"
+reg_ref_path <- "data/raw/Testing/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
+refdb_path <- "data/raw/Testing/RefCDS_human_GRCh38.p12.rda"
+reference_bfile <- "data/raw/g1000_eur/g1000_eur"
+track_dir <- "data/raw/Testing"
+sample_size <- 399917L
+
+all_bw_files <- list.files(track_dir, pattern = "\\.(bw|bigWig)$", full.names = TRUE)
+all_bw_files <- all_bw_files[!grepl("^\\._", basename(all_bw_files))]
+bw_files <- all_bw_files[!grepl("(_BL_|_FL_|broken_signal_track)", basename(all_bw_files))]
+
+data.table(
+  object = c("GWAS", "Somatic MAF", "Regulatory reference", "dndscv reference", "PLINK reference", "Selected bigWig tracks"),
+  value = c(
+    gwas_path,
+    somatic_maf_path,
+    reg_ref_path,
+    refdb_path,
+    reference_bfile,
+    paste(length(bw_files), "tracks")
+  )
+)
+```
+
+<div class="callout">
+For this report we keep the epigenomic track filtering explicit in user code.
+That makes the vignette easier to read and keeps the package API focused on
+general behavior rather than on one lab-specific filtering rule.
+</div>
+
+# Step 1: validate the inputs
+
+Before running any heavy computation, we usually make sure the basic file and
+column structure is sound.
+
+```{r validate-code, eval=FALSE}
+validation <- validate_inputs(
+  gwas_sumstats = gwas_path,
+  somatic_maf = somatic_maf_path,
+  reg_ref_path = reg_ref_path,
+  epigenomic_tracks = bw_files,
+  verbose = TRUE
+)
+```
+
+The validation stage is intentionally lightweight. It is meant to catch:
+
+- missing files
+- missing key columns
+- unreadable regulatory references
+- unreadable bigWig headers
+
+It is not meant to fully dry-run MAGMA, dndscv, fishHook, or diffusion.
+
+# Step 2: compute the three score modalities
+
+## Germline scoring with MAGMA
+
+The germline branch uses MAGMA twice, once for genes and once for regulatory
+elements.
+
+```{r germline-code, eval=FALSE}
+germline_scores <- prepare_germline_scores(
+  gwas_sumstats = gwas_path,
+  reference_bfile = reference_bfile,
+  gene_sample_size = sample_size,
+  reg_sample_size = sample_size,
+  gene_step1_args = list(annotation_window = c(35, 10)),
+  gene_step2_args = list(
+    gene_model = "snp-wise=mean",
+    pval_use = c("SNP", "P"),
+    pval_duplicate = "drop"
+  ),
+  reg_step1_args = list(annotation_window = c(0, 0)),
+  reg_step2_args = list(
+    gene_model = "snp-wise=mean",
+    pval_use = c("SNP", "P"),
+    pval_duplicate = "drop"
+  ),
+  verbose = TRUE
+)
+```
+
+The key MAGMA idea is:
+
+- step 1 decides which SNPs belong to each feature
+- step 2 decides how SNP-level signal becomes one feature-level score
+
+## Somatic scoring with dndscv and fishHook
+
+The somatic branch is split into a gene model and a regulatory model.
+
+```{r somatic-code, eval=FALSE}
+somatic_scores <- prepare_somatic_scores(
+  maf = somatic_maf_path,
+  refdb = refdb_path,
+  reg_ref_path = reg_ref_path,
+  dndscv_args = list(sm = "192r_3w"),
+  fishhook_covariate_data = covariate_dt,
+  fishhook_args = list(),
+  verbose = TRUE
+)
+```
+
+When fishHook covariates are used, the practical table shape is:
+
+```{r fishhook-example, eval=FALSE}
+covariate_dt <- data.frame(
+  reg_elem_id = c("GH01J000001", "GH01J000002"),
+  accessibility = c(1.2, 0.4),
+  replication_timing = c(0.7, -0.1),
+  gc_content = c(0.44, 0.51)
+)
+```
+
+That is, one row per regulatory element, a regulatory-element identifier, and
+the covariates you want fishHook to model.
+
+## Epigenomic scoring from bigWig tracks
+
+The epigenomic score in `conseguiR` is best interpreted as a **cross-track
+variability score**, not a generic activity score.
+
+```{r epigenomic-code, eval=FALSE}
+epigenomic_scores <- prepare_epigenomic_scores(
+  reg_ref_path = reg_ref_path,
+  bw_files = bw_files,
+  min_tracks = 3L,
+  drop_mhc = TRUE,
+  transform = "log1p",
+  summary_fun = mean,
+  verbose = TRUE
+)
+```
+
+# Step 3: build the scored gene-regulatory graph
+
+```{r graph-code, eval=FALSE}
+scored_graph <- build_scored_gene_reg_graph(
+  germline_scores = germline_scores,
+  somatic_scores = somatic_scores,
+  epigenomic_scores = epigenomic_scores,
+  save_outputs = FALSE,
+  verbose = TRUE
+)
+```
+
+At this point, all three modalities have been imposed onto the graph. Missing
+modalities are zero-filled by default, which keeps the graph broad enough to
+retain biologically meaningful features even when one branch is absent.
+
+# Step 4: diffusion
+
+```{r diffusion-code, eval=FALSE}
+diffusion <- run_gene_reg_diffusion(
+  scored_graph = scored_graph,
+  top_k = 3L,
+  confidence_power = 2.0,
+  beta_germline = 0.5,
+  beta_somatic = 0.5,
+  beta_epigenomic = 0.7,
+  reg_signal_clip = 5.0,
+  verbose = TRUE
+)
+```
+
+This stage turns the pre-diffusion graph scores into a gene-centered
+post-diffusion ranking that incorporates regulatory context.
+
+# Step 5: selected subgraph calling
+
+```{r subgraph-code, eval=FALSE}
+selected_subgraph <- call_selected_subgraph(
+  diffusion = diffusion,
+  target_genes = 50L,
+  candidate_pool_size = 400L,
+  node_prize_weight = 1,
+  edge_conf_weight = 1,
+  edge_cost_weight = 1,
+  verbose = TRUE
+)
+```
+
+This is the step where the workflow shifts from a full graph to a smaller,
+more interpretable network.
+
+# Step 6: figures and interpretation
+
+Below we show representative outputs from the workflow. The code used to
+generate each figure is shown directly above it.
+
+## Germline gene plot
+
+```{r code-germline-plot, eval=FALSE}
+plot_germline_gene_scores(
+  germline_scores = germline_scores,
+  stage = "pre",
+  label_features = c("MYC", "BCL2", "CXCR5"),
+  plot_file_path = "germline_genes_pre_rank.pdf"
+)
+```
+
+```{r fig-germline, echo=FALSE}
+include_graphics("data/processed/figures/_audit_germline_gene_pre.png")
+```
+
+This plot gives us a quick read on which genes are leading the germline signal
+before diffusion.
+
+## Somatic gene plot
+
+```{r code-somatic-gene-plot, eval=FALSE}
+plot_somatic_gene_scores(
+  somatic_scores = somatic_scores,
+  stage = "pre",
+  label_features = c("MYC", "BCL2", "TP53"),
+  plot_file_path = "somatic_genes_pre_volcano.pdf"
+)
+```
+
+```{r fig-somatic-gene, echo=FALSE}
+include_graphics("data/processed/figures/_audit_somatic_gene_pre.png")
+```
+
+This is where we can see which genes dominate the somatic branch.
+
+## Epigenomic regulatory plot
+
+```{r code-epi-plot, eval=FALSE}
+plot_epigenomic_reg_scores(
+  epigenomic_scores = epigenomic_scores,
+  label_features = c("MYC", "BCL2"),
+  plot_file_path = "epigenomic_regs.pdf"
+)
+```
+
+```{r fig-epi-reg, echo=FALSE}
+include_graphics("data/processed/figures/_audit_epi_reg.png")
+```
+
+This figure emphasizes the regulatory elements that are most variable across
+the selected epigenomic tracks.
+
+## Selected subgraph plot
+
+```{r code-subgraph-plot, eval=FALSE}
+plot_selected_subgraph(
+  selected_subgraph = selected_subgraph,
+  plot_file_path = "selected_subgraph.pdf"
+)
+```
+
+```{r fig-subgraph, echo=FALSE}
+include_graphics("data/processed/figures/_audit_subgraph_tightened.png")
+```
+
+This is usually the point where the workflow becomes easiest to discuss with
+other people, because we have moved from long ranked tables to a smaller and
+more interpretable network view.
+
+## Locus-level plot
+
+```{r code-locus-plot, eval=FALSE}
+plot_locus_context(
+  chromosome = "8",
+  start = 127200000,
+  end = 128200000,
+  scored_graph = scored_graph,
+  diffusion = diffusion,
+  gwas_sumstats = gwas_path,
+  label_top_lit_snps = 3L,
+  label_features = c("MYC"),
+  plot_file_path = "sjogren_MYC_locus_context.pdf",
+  verbose = TRUE
+)
+```
+
+```{r fig-locus, echo=FALSE}
+include_graphics("data/processed/figures/MYC_locus_context_10labels.png")
+```
+
+The locus plot is where the package becomes especially useful for biological
+storytelling. It lets us connect:
+
+- regulatory-element scores
+- post-diffusion gene scores
+- regulatory interactions
+- and cited SNPs that overlap the locus
+
+# Closing thoughts
+
+This report is meant to read like an analysis narrative rather than a bare API
+listing. The important pattern across the workflow is that each stage adds a
+different layer of structure:
+
+- input validation establishes trust in the raw data
+- scoring provides modality-specific signal
+- graph construction puts all modalities in one shared space
+- diffusion makes the regulatory context gene-centered
+- subgraph calling distills the large network into something more interpretable
+- plotting turns those results into views that can actually support discussion
+
+In practice, that is why `conseguiR` works best as a staged workflow rather
+than as a one-line black box.

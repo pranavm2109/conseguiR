@@ -10,11 +10,13 @@ Description: Tools for scoring somatic, germline, and epigenomic evidence at gen
     projecting scores onto biological graphs, running diffusion, calling subnetworks, and exporting results for
     downstream visualization and app development.
 License: MIT + file LICENSE
+biocViews: Software, GeneRegulation, GeneticVariability, GraphAndNetwork
 Encoding: UTF-8
-LazyData: true
+SystemRequirements: MAGMA (for germline scoring); Python 3 with numpy, pandas, and ortools (optional, for diffusion and subgraph calling)
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
+    basilisk,
     data.table,
     dplyr,
     jsonlite,
@@ -28,12 +30,13 @@ Imports:
     IRanges,
     GenomeInfoDb,
     AnnotationDbi,
-    S4Vectors
+    S4Vectors,
+    reticulate
 Suggests:
+    BiocStyle,
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
-    org.Hs.eg.db,
-    reticulate
+    org.Hs.eg.db
 Config/testthat/edition: 3
 VignetteBuilder: knitr

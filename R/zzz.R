@@ -1,14 +1,31 @@
-# Package startup support for the lymphoma_graph_env Python environment.
-# This file is intentionally not exported; it only sets package-level options on load.
+# Package startup support for optional Python-backed stages.
+# This file is intentionally not exported and should avoid expensive side effects
+# at load time so package startup remains lightweight and Bioconductor-friendly.
 
-lymphoma_graph_env_name <- "lymphoma_graph_env"
 .conseguiR_pkg_root <- NULL
+.conseguiR_default_conda_env <- function() {
+  env <- getOption("conseguiR.conda_env", Sys.getenv("CONSEGUIR_CONDA_ENV", unset = ""))
+  env <- trimws(as.character(env %||% ""))
+  if (!nzchar(env)) {
+    return(NULL)
+  }
+
+  env
+}
+
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
+}
 
 consequIR_valid_python_bin <- function(path) {
   is.character(path) && length(path) == 1L && nzchar(path) && file.exists(path) && !dir.exists(path)
 }
 
-consequIR_python_from_conda_run <- function(env = lymphoma_graph_env_name) {
+consequIR_python_from_conda_run <- function(env = .conseguiR_default_conda_env()) {
+  if (is.null(env) || !nzchar(env)) {
+    return(NULL)
+  }
+
   if (!nzchar(Sys.which("conda"))) {
     return(NULL)
   }
@@ -43,7 +60,11 @@ consequIR_python_from_conda_run <- function(env = lymphoma_graph_env_name) {
   }
 }
 
-consequIR_python_from_reticulate <- function(env = lymphoma_graph_env_name) {
+consequIR_python_from_reticulate <- function(env = .conseguiR_default_conda_env()) {
+  if (is.null(env) || !nzchar(env)) {
+    return(NULL)
+  }
+
   if (!requireNamespace("reticulate", quietly = TRUE)) {
     return(NULL)
   }
@@ -102,8 +123,9 @@ consequIR_prepend_path <- function(prefix) {
 }
 
 consequIR_find_python <- function() {
+  configured_env <- .conseguiR_default_conda_env()
   current_env <- Sys.getenv("CONDA_DEFAULT_ENV")
-  if (identical(current_env, lymphoma_graph_env_name)) {
+  if (!is.null(configured_env) && identical(current_env, configured_env)) {
     python_path <- consequIR_python_from_conda_prefix()
     if (!is.null(python_path)) {
       return(python_path)
@@ -118,12 +140,12 @@ consequIR_find_python <- function() {
     }
   }
 
-  python_path <- consequIR_python_from_conda_run(lymphoma_graph_env_name)
+  python_path <- consequIR_python_from_conda_run(configured_env)
   if (!is.null(python_path)) {
     return(python_path)
   }
 
-  python_path <- consequIR_python_from_reticulate(lymphoma_graph_env_name)
+  python_path <- consequIR_python_from_reticulate(configured_env)
   if (!is.null(python_path)) {
     return(python_path)
   }
@@ -134,40 +156,6 @@ consequIR_find_python <- function() {
 .onLoad <- function(libname, pkgname) {
   if (!is.null(libname) && !is.null(pkgname)) {
     .conseguiR_pkg_root <<- file.path(libname, pkgname)
-  }
-
-  if (is.null(getOption("conseguiR.python"))) {
-    python_path <- consequIR_find_python()
-    if (!is.null(python_path)) {
-      options(
-        conseguiR.python = python_path,
-        conseguiR.conda_env = lymphoma_graph_env_name
-      )
-    }
-  }
-
-  conda_prefix <- Sys.getenv("CONDA_PREFIX")
-  if (nzchar(conda_prefix) && identical(Sys.getenv("CONDA_DEFAULT_ENV"), lymphoma_graph_env_name)) {
-    consequIR_prepend_path(conda_prefix)
-  }
-
-  auto_init <- getOption("conseguiR.auto_initialize_backend_graphs", TRUE)
-  if (isTRUE(auto_init)) {
-    try(
-      .conseguiR_initialize_backend_graphs(
-        strict = FALSE,
-        quiet = TRUE
-      ),
-      silent = TRUE
-    )
-  }
-
-  auto_runtime_check <- getOption("conseguiR.auto_check_runtime", TRUE)
-  if (isTRUE(auto_runtime_check)) {
-    try(
-      check_conseguiR_runtime(quiet = TRUE),
-      silent = TRUE
-    )
   }
 
   invisible()

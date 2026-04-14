@@ -25,6 +25,7 @@ sys.source(conseguiR_runtime_file("scripts/Internals/R/03_prepare_germline_score
 sys.source(conseguiR_runtime_file("scripts/Internals/R/04_prepare_somatic_scores.R"), envir = environment())
 sys.source(conseguiR_runtime_file("scripts/Internals/R/05_prepare_epigenomic_scores.R"), envir = environment())
 sys.source(conseguiR_runtime_file("scripts/Internals/R/06_impose_scores_on_gene_reg_graph_nodes.R"), envir = environment())
+sys.source(conseguiR_runtime_file("scripts/Internals/R/06b_python_basilisk.R"), envir = environment())
 sys.source(conseguiR_runtime_file("scripts/Internals/R/07_run_diffusion_on_gene_reg_graph.R"), envir = environment())
 sys.source(conseguiR_runtime_file("scripts/Internals/R/08_call_subgraph.R"), envir = environment())
 sys.source(conseguiR_runtime_file("scripts/Internals/R/09_create_selected_subgraph_visualisation_bundle.R"), envir = environment())
