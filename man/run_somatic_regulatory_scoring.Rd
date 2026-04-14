@@ -52,9 +52,31 @@ Exact formatting:
 \item \code{fishhook_covariates}: the covariate specification object expected by the
 internal fishHook runner, or \code{NULL}.
 \item \code{fishhook_covariate_data}: a data frame/data.table containing one row per
-regulatory element and the covariate columns needed by fishHook.
+regulatory element and the covariate columns needed by fishHook. In
+practice this should include a regulatory-element identifier column plus
+the numeric or categorical covariates you want fishHook to model.
+\item \code{idcol}: the sample identifier column used by the regulatory somatic input
+handed to fishHook. It should match the sample identifier field in the MAF
+after harmonization.
 \item \code{fishhook_args}: a named list of additional fishHook arguments.
 }
+
+In plain language:
+\itemize{
+\item \code{eligible_gr} defines the territory in which fishHook is allowed to place
+mutations when estimating the background model.
+\item \code{fishhook_covariate_data} is where users typically supply replication,
+accessibility, mappability, or GC-like covariates if they have them.
+\item if you do not have a custom territory or covariates yet, \code{eligible_gr = NULL} and \code{fishhook_covariate_data = NULL} are reasonable starting points.
+}
+
+Minimal covariate-data example:
+
+\verb{covariate_dt = data.frame( reg_elem_id = c(\\"GH01J000001\\", \\"GH01J000002\\"), accessibility = c(1.2, 0.4), replication_timing = c(0.7, -0.1), gc_content = c(0.44, 0.51) )}
+
+\code{fishhook_covariates = NULL}
+
+\code{fishhook_args = list()}
 
 fishHook documentation:
 \url{https://rdrr.io/github/mskilab/fish.hook/man/FishHook.html}

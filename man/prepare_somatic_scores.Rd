@@ -79,6 +79,23 @@ modeling framework independently.
 \code{fishhook_args}
 }
 
+A good mental model is:
+\itemize{
+\item \code{prepare_somatic_scores()} does not fit one joint model
+\item it runs a gene-oriented dndscv branch and a regulatory-element-oriented
+fishHook branch separately
+\item then it returns both score tables together as one somatic bundle
+}
+
+Formatting notes for covariate-bearing inputs:
+\itemize{
+\item \code{gene_cv} should already be formatted for direct use by \code{dndscv()}
+\item \code{fishhook_covariate_data} should contain one row per regulatory element
+plus the covariate columns you want fishHook to use
+\item \code{fishhook_covariates} should already be a fishHook-ready specification if
+you provide it
+}
+
 Example:
 
 \verb{prepare_somatic_scores( maf = maf_path, refdb = dndscv_refdb, reg_ref_path = reg_ref_path, dndscv_args = list(sm = \\"192r_3w\\"), fishhook_args = list() )}

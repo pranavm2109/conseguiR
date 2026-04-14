@@ -98,6 +98,28 @@ scalars
 \item \code{prize_column}, \code{confidence_column}, \code{edge_cost_column}: single column
 names present in the input tables
 }
+
+Practical column examples:
+\itemize{
+\item \code{prize_column = "post_norm"} means optimize using the post-diffusion gene
+score column
+\item \code{confidence_column = "confidence"} means use the confidence column from
+the backend gene-gene edge table
+\item \code{edge_cost_column = "weight"} means use the edge-cost/penalty column from
+the backend gene-gene edge table
+}
+
+In plain language:
+\itemize{
+\item \code{target_genes} is the size of the final selected subgraph you want back
+\item \code{candidate_pool_size} is the number of top candidate genes that are handed
+to the optimization stage before the final smaller subgraph is chosen
+\item \code{node_prize_weight} rewards high-scoring genes from diffusion
+\item \code{edge_conf_weight} rewards keeping confident gene-gene edges
+\item \code{edge_cost_weight} penalizes expensive edges
+\item \code{max_edges_in_model} and \code{max_time_seconds} are practical solver-budget
+controls for difficult graphs
+}
 }
 \examples{
 \dontrun{

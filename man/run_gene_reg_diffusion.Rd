@@ -70,6 +70,21 @@ you are not passing \code{scored_graph}
 \item \code{top_k}: a positive integer
 \item \code{confidence_power}, \code{beta_germline}, \code{beta_somatic},
 \code{beta_epigenomic}, \code{reg_signal_clip}: numeric scalars
+\item \code{positive_only}: a single logical value
+}
+
+In plain language:
+\itemize{
+\item \code{top_k} controls how many regulatory neighbors contribute most strongly to
+each gene's update step
+\item \code{beta_germline}, \code{beta_somatic}, and \code{beta_epigenomic} control how much
+each modality contributes to the regulatory signal that is propagated
+\item \code{confidence_power} upweights or downweights high-confidence regulatory
+links relative to weaker ones
+\item \code{positive_only = TRUE} suppresses negative regulatory signal before
+diffusion
+\item \code{reg_signal_clip} caps extreme regulatory signal before propagation so one
+extreme feature does not dominate the update
 }
 }
 \examples{

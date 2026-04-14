@@ -54,6 +54,19 @@ Main outputs:
 Returns:
 - validation bundle
 
+What it is and is not:
+- this is a lightweight sanity check
+- it is meant to catch bad file paths, unreadable files, and obviously wrong
+  columns before scoring starts
+- it is not meant to fully dry-run MAGMA, dndscv, fishHook, or diffusion
+
+Practical minimums:
+- GWAS: one SNP identifier column, one chromosome column, one base-pair
+  position column, and one p-value column
+- somatic MAF: sample ID, chromosome, start, end, ref, alt
+- regulatory reference: at least regulatory-element ID, chromosome, start, end
+- epigenomic: at least three readable bigWig tracks
+
 ## Germline Scoring
 
 For a more detailed MAGMA option map, see:
@@ -75,6 +88,11 @@ Stage split:
 - MAGMA step 1 = annotation
 - MAGMA step 2 = gene analysis
 
+How to think about the two MAGMA stages:
+- step 1 decides which SNPs belong to each feature
+- step 2 decides how the annotated SNP-level signal is collapsed into one
+  feature-level statistic
+
 Typical `step1_args` entries:
 - `annotation_window`
 - `filter_path`
@@ -94,6 +112,12 @@ Typical `step2_args` entries:
 Core wrapper-level MAGMA step 2 inputs:
 - `sample_size`
 - `sample_size_col`
+
+Common interpretation:
+- use `sample_size` when the full GWAS has one fixed N
+- use `sample_size_col` when N varies per row and the GWAS already contains
+  that information
+- `pval_duplicate` controls how MAGMA handles duplicate SNP IDs
 
 Main outputs:
 - gene germline score table
@@ -119,6 +143,11 @@ Stage split:
 
 The same MAGMA stage-specific structure is used here, but for the regulatory
 run rather than the gene run.
+
+Practical difference from the gene run:
+- the "features" here are regulatory elements rather than genes
+- users often keep the regulatory `annotation_window` narrower than the gene
+  one because REs are already localized intervals
 
 Main outputs:
 - regulatory germline score table
@@ -182,6 +211,18 @@ Main outputs:
 Returns:
 - somatic gene score bundle
 
+Useful interpretation:
+- this is the gene-centric somatic branch
+- dndscv is where coding mutation burden and selection-like signal are
+  summarized at gene level
+- the most common extra argument users tune is `sm`
+- if `cv` is supplied, it should already be in a dndscv-ready format; the
+  package does not reshape arbitrary covariate tables for dndscv automatically
+
+Minimal examples:
+- `dndscv_args = list(sm = "192r_3w", kc = "cgc81")`
+- `cv = NULL`
+
 ### `run_somatic_regulatory_scoring()`
 
 Purpose:
@@ -201,6 +242,23 @@ Main outputs:
 
 Returns:
 - somatic regulatory score bundle
+
+Useful interpretation:
+- this is the regulatory-element-centric somatic branch
+- `eligible_gr` defines the territory fishHook treats as eligible background
+- `fishhook_covariate_data` is where users supply one row per regulatory
+  element with covariates such as accessibility, replication, or GC-related
+  quantities if they have them
+
+Practical formatting:
+- `fishhook_covariate_data` should be one row per regulatory element
+- it should include a regulatory-element identifier column plus the covariates
+  you want fishHook to model
+- `fishhook_covariates` should already be a fishHook-ready specification if
+  you provide it
+
+Minimal example:
+- `covariate_dt = data.frame(reg_elem_id = c("GH01J000001", "GH01J000002"), accessibility = c(1.2, 0.4), replication_timing = c(0.7, -0.1), gc_content = c(0.44, 0.51))`
 
 ### `prepare_somatic_scores()`
 
@@ -222,6 +280,14 @@ Main outputs:
 Returns:
 - somatic score bundle
 
+Mental model:
+- `prepare_somatic_scores()` does not fit one combined somatic model
+- it runs dndscv and fishHook separately, then returns both outputs together
+
+Formatting note:
+- the same covariate rules apply here as in the lower-level dndscv and
+  fishHook wrappers
+
 ## Epigenomic Scoring
 
 ### `prepare_epigenomic_scores()`
@@ -242,6 +308,12 @@ Main outputs:
 Returns:
 - epigenomic score bundle
 
+Important semantic point:
+- the current epigenomic score is a cross-track variability score, not a
+  generic activity score
+- high score means the regulatory element varies strongly across the supplied
+  tracks and is therefore treated as more context-specific
+
 ## Scored Graph Construction
 
 ### `build_scored_gene_reg_graph()`
@@ -260,6 +332,16 @@ Behavior:
 - genes get `epigenomic_score = 0`
 - regulatory elements receive somatic, germline, and epigenomic scores
 - missing scores default to zero
+
+Current default behavior:
+- missing modalities are zero-filled rather than causing the feature to be
+  dropped from the graph before diffusion
+- this keeps the scored graph broader and avoids discarding biologically real
+  genes or regulatory elements just because one modality is missing
+
+Explicit table formats:
+- gene score tables are safest when they look like `gene_id`, `zstat`
+- regulatory score tables are safest when they look like `reg_elem_id`, `zstat`
 
 Main outputs:
 - scored `igraph`
@@ -291,6 +373,13 @@ Main outputs:
 Returns:
 - diffusion bundle
 
+How to think about the main knobs:
+- `beta_germline`, `beta_somatic`, and `beta_epigenomic` control modality
+  weighting
+- `confidence_power` controls how strongly edge confidence affects propagation
+- `top_k` controls how many top regulatory contributors influence each gene
+- `reg_signal_clip` caps extreme regulatory signal before propagation
+
 ## Subgraph Calling
 
 For a more detailed argument map, see:
@@ -316,6 +405,19 @@ Main outputs:
 
 Returns:
 - selected subgraph bundle
+
+How to think about the main knobs:
+- `target_genes` is the size of the final selected subgraph
+- `candidate_pool_size` is the larger pool considered before the final
+  selection
+- `node_prize_weight` rewards strong diffusion signal
+- `edge_conf_weight` rewards confident gene-gene edges
+- `edge_cost_weight` penalizes expensive edges
+
+Column-format examples:
+- `prize_column = "post_norm"`
+- `confidence_column = "confidence"`
+- `edge_cost_column = "weight"`
 
 ## Plotting
 

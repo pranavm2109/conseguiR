@@ -46,9 +46,31 @@ Exact formatting:
 \item \code{maf}: either a file path or a data frame/data.table containing somatic
 mutation records.
 \item \code{refdb}: a single path to a dndscv reference database \code{.rda} file.
+\item \code{cv}: optional covariate structure passed through to \code{dndscv()}. In most
+user workflows this is \code{NULL}, but advanced users can pass a covariate
+matrix or object that matches dndscv's expectations.
 \item \code{dndscv_args}: a named list of additional dndscv arguments, for example
 \verb{list(sm = \\"192r_3w\\", kc = \\"cgc81\\")}.
 }
+
+In plain language:
+\itemize{
+\item \code{max_muts_per_gene_per_sample} caps how many mutations from one sample can
+contribute to one gene before dndscv filters them down.
+\item \code{max_coding_muts_per_sample} caps extremely hypermutated samples in the
+coding analysis.
+\item the most common advanced dndscv passthrough is \code{sm}, which controls the
+substitution model, for example \verb{\\"192r_3w\\"}.
+\item if you supply \code{cv}, it should already be formatted the way \code{dndscv()}
+expects it. \code{conseguiR} does not reshape arbitrary covariate tables into a
+dndscv-ready object for you.
+}
+
+Minimal examples:
+
+\verb{dndscv_args = list( sm = \\"192r_3w\\", kc = \\"cgc81\\" )}
+
+\code{cv = NULL}
 
 dndscv documentation:
 \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}

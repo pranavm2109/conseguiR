@@ -62,6 +62,11 @@ Score-table formatting:
 column
 \item regulatory-level score tables must contain a regulatory-element identifier
 column and a \code{zstat} column
+\item the safest explicit formats are:
+\itemize{
+\item gene tables with columns like \code{gene_id}, \code{zstat}
+\item regulatory tables with columns like \code{reg_elem_id}, \code{zstat}
+}
 }
 
 You can either pass full score bundles from earlier stages or pass explicit

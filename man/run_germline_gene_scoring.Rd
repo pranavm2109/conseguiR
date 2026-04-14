@@ -87,12 +87,30 @@ suffixes, for example \verb{\\"/path/to/g1000_eur/g1000_eur\\"}.
 \item \code{output_prefix}: a single path prefix, not a directory. For example
 \verb{\\"results/germline_gene\\"} will yield MAGMA files such as
 \code{results/germline_gene.genes.out}.
+\item \code{sample_size}: use this when the full GWAS should be analyzed with one
+fixed sample size.
+\item \code{sample_size_col}: use this when the GWAS table already contains a sample
+size column that MAGMA should read per row instead.
 \item \code{step1_args} and \code{step2_args}: named lists. For example:
 }
 
 \code{step1_args = list( annotation_window = c(35, 10), filter_path = NULL, ignore_strand = FALSE, nonhuman = FALSE, extra_args = character() )}
 
 \verb{step2_args = list( gene_model = \\"snp-wise=mean\\", genes_only = TRUE, pval_use = c(\\"SNP\\", \\"P\\"), pval_duplicate = \\"drop\\", bfile_synonyms = NULL, bfile_synonym_dup = NULL, extra_args = character() )}
+
+In plain language:
+\itemize{
+\item MAGMA step 1 (\code{step1_args}) controls how SNPs are assigned to features.
+The most important knob is usually \code{annotation_window}, which expands the
+feature boundaries upstream and downstream before MAGMA annotates SNPs.
+\item MAGMA step 2 (\code{step2_args}) controls how annotated SNP-level signal is
+collapsed into one feature-level statistic. The most important knobs are
+usually \code{gene_model}, \code{pval_use}, and \code{pval_duplicate}.
+\item \code{pval_use = c("SNP", "P")} tells MAGMA which columns in the p-value file
+correspond to SNP IDs and p-values.
+\item \code{pval_duplicate} follows MAGMA's own duplicate-SNP handling, for example
+\code{"drop"}, \code{"first"}, \code{"last"}, or \code{"error"}.
+}
 
 MAGMA manual:
 \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}

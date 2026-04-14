@@ -35,6 +35,11 @@ Validates raw GWAS, somatic, regulatory-reference, and epigenomic inputs
 using the package's internal validation layer.
 }
 \details{
+\code{validate_inputs()} is intentionally a lightweight sanity check, not a full
+dry-run of the downstream pipeline. The goal is to answer: "are these inputs
+structured well enough for conseguiR to start?" rather than "can every
+downstream tool finish successfully on this machine right now?".
+
 Input formatting rules:
 \itemize{
 \item \code{gwas_sumstats} can be either a file path or a data frame/data.table. When
@@ -42,13 +47,21 @@ a table is supplied, it should contain columns that can be mapped to GWAS
 identifiers, chromosome, position, and p-value, for example
 \code{hm_variant_id}, \code{hm_chrom}, \code{hm_pos}, \code{p_value}, or the canonical columns
 \code{variant_id}, \code{chromosome}, \code{base_pair_location}, \code{p_value}.
+\item A practical GWAS minimum is therefore: one SNP identifier column, one
+chromosome column, one base-pair position column, and one p-value column.
+If harmonized columns such as \code{hm_rsid} and \code{hm_pos} are available, they
+are preferred.
 \item \code{somatic_maf} can be either a file path or a data frame/data.table. The
 table should contain sample identifier, chromosome, start, end, reference,
 and alternate allele columns in standard MAF-style names or names that the
 internal validator can harmonize.
+\item A practical somatic minimum is a MAF-like table with columns equivalent to
+\code{Tumor_Sample_Barcode}, \code{Chromosome}, \code{Start_Position},
+\code{End_Position}, \code{Reference_Allele}, and \code{Tumor_Seq_Allele2}.
 \item \code{reg_ref_path} must be a path to a tab-delimited regulatory-element file.
 The current pipeline expects at least four columns corresponding to
-chromosome, start, end, and regulatory-element identifier.
+regulatory-element identifier, chromosome, start, and end. Extra columns
+are allowed and ignored by validation.
 \item \code{epigenomic_tracks} must be a character vector of full file paths to
 \code{.bw}/\code{.bigWig} files, for example
 \verb{c(\\"sample1.bw\\", \\"sample2.bw\\", \\"sample3.bw\\")}.

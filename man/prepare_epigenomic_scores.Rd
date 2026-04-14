@@ -56,6 +56,22 @@ tracks, for example
 \verb{c(\\"sample1.bw\\", \\"sample2.bw\\", \\"sample3.bw\\")}.
 \item \code{summary_fun}: a function object such as \code{mean} or \code{max}.
 }
+
+The current epigenomic score is not a generic "activity" score. Instead,
+conseguiR quantifies each regulatory element across the supplied tracks,
+summarizes each track over each element with \code{summary_fun}, and then scores
+elements by how variable they are across tracks. The intuition is that
+highly variable elements are more context-specific, whereas uniformly active
+elements are more housekeeping-like.
+
+In practice:
+\itemize{
+\item \code{transform = "log1p"} is a reasonable default for signal stabilization
+\item \code{summary_fun = mean} is a reasonable default for average signal over each
+regulatory element
+\item at least three tracks are required so that cross-track variability is
+meaningful
+}
 }
 \examples{
 \dontrun{

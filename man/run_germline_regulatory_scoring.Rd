@@ -84,6 +84,12 @@ file. The stage argument lists use the same format as
 \code{run_germline_gene_scoring()}: \code{step1_args = list(...)} for annotation-stage
 settings and \code{step2_args = list(...)} for gene-analysis-stage settings.
 
+In practice this function behaves like the gene-level MAGMA wrapper, except
+that the "features" being annotated and scored are regulatory elements
+rather than genes. A common pattern is to use a narrower
+\code{annotation_window} here than for genes, because regulatory intervals are
+already localized genomic objects.
+
 MAGMA manual:
 \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 }

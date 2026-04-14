@@ -107,6 +107,17 @@ through stage-specific named lists:
 are forwarded to their corresponding downstream stages
 }
 
+Formatting notes:
+\itemize{
+\item each \verb{*_args} input should be a named list
+\item nested MAGMA settings belong inside \code{gene_step1_args}, \code{gene_step2_args},
+\code{reg_step1_args}, and \code{reg_step2_args}
+\item fishHook covariate-bearing inputs still follow the same rules as
+\code{prepare_somatic_scores()}: one row per regulatory element in
+\code{fishhook_covariate_data}, and a preformatted fishHook-ready object in
+\code{fishhook_covariates} if supplied
+}
+
 The gene and regulatory location resources are backend-managed by the
 package and are not user-facing arguments in this high-level wrapper.
 

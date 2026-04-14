@@ -65,6 +65,11 @@
 #'   messages when available.
 #'
 #' @details
+#' `validate_inputs()` is intentionally a lightweight sanity check, not a full
+#' dry-run of the downstream pipeline. The goal is to answer: "are these inputs
+#' structured well enough for conseguiR to start?" rather than "can every
+#' downstream tool finish successfully on this machine right now?".
+#'
 #' Input formatting rules:
 #'
 #' - `gwas_sumstats` can be either a file path or a data frame/data.table. When
@@ -72,13 +77,21 @@
 #'   identifiers, chromosome, position, and p-value, for example
 #'   `hm_variant_id`, `hm_chrom`, `hm_pos`, `p_value`, or the canonical columns
 #'   `variant_id`, `chromosome`, `base_pair_location`, `p_value`.
+#' - A practical GWAS minimum is therefore: one SNP identifier column, one
+#'   chromosome column, one base-pair position column, and one p-value column.
+#'   If harmonized columns such as `hm_rsid` and `hm_pos` are available, they
+#'   are preferred.
 #' - `somatic_maf` can be either a file path or a data frame/data.table. The
 #'   table should contain sample identifier, chromosome, start, end, reference,
 #'   and alternate allele columns in standard MAF-style names or names that the
 #'   internal validator can harmonize.
+#' - A practical somatic minimum is a MAF-like table with columns equivalent to
+#'   `Tumor_Sample_Barcode`, `Chromosome`, `Start_Position`,
+#'   `End_Position`, `Reference_Allele`, and `Tumor_Seq_Allele2`.
 #' - `reg_ref_path` must be a path to a tab-delimited regulatory-element file.
 #'   The current pipeline expects at least four columns corresponding to
-#'   chromosome, start, end, and regulatory-element identifier.
+#'   regulatory-element identifier, chromosome, start, and end. Extra columns
+#'   are allowed and ignored by validation.
 #' - `epigenomic_tracks` must be a character vector of full file paths to
 #'   `.bw`/`.bigWig` files, for example
 #'   `c(\"sample1.bw\", \"sample2.bw\", \"sample3.bw\")`.
@@ -197,6 +210,10 @@ initialize_backend_graphs <- function(
 #' - `output_prefix`: a single path prefix, not a directory. For example
 #'   `\"results/germline_gene\"` will yield MAGMA files such as
 #'   `results/germline_gene.genes.out`.
+#' - `sample_size`: use this when the full GWAS should be analyzed with one
+#'   fixed sample size.
+#' - `sample_size_col`: use this when the GWAS table already contains a sample
+#'   size column that MAGMA should read per row instead.
 #' - `step1_args` and `step2_args`: named lists. For example:
 #'
 #' `step1_args = list(
@@ -216,6 +233,19 @@ initialize_backend_graphs <- function(
 #'   bfile_synonym_dup = NULL,
 #'   extra_args = character()
 #' )`
+#'
+#' In plain language:
+#'
+#' - MAGMA step 1 (`step1_args`) controls how SNPs are assigned to features.
+#'   The most important knob is usually `annotation_window`, which expands the
+#'   feature boundaries upstream and downstream before MAGMA annotates SNPs.
+#' - MAGMA step 2 (`step2_args`) controls how annotated SNP-level signal is
+#'   collapsed into one feature-level statistic. The most important knobs are
+#'   usually `gene_model`, `pval_use`, and `pval_duplicate`.
+#' - `pval_use = c("SNP", "P")` tells MAGMA which columns in the p-value file
+#'   correspond to SNP IDs and p-values.
+#' - `pval_duplicate` follows MAGMA's own duplicate-SNP handling, for example
+#'   `"drop"`, `"first"`, `"last"`, or `"error"`.
 #'
 #' MAGMA manual:
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
@@ -299,6 +329,12 @@ run_germline_gene_scoring <- function(
 #' file. The stage argument lists use the same format as
 #' `run_germline_gene_scoring()`: `step1_args = list(...)` for annotation-stage
 #' settings and `step2_args = list(...)` for gene-analysis-stage settings.
+#'
+#' In practice this function behaves like the gene-level MAGMA wrapper, except
+#' that the "features" being annotated and scored are regulatory elements
+#' rather than genes. A common pattern is to use a narrower
+#' `annotation_window` here than for genes, because regulatory intervals are
+#' already localized genomic objects.
 #'
 #' MAGMA manual:
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
@@ -490,8 +526,32 @@ prepare_germline_scores <- function(
 #' - `maf`: either a file path or a data frame/data.table containing somatic
 #'   mutation records.
 #' - `refdb`: a single path to a dndscv reference database `.rda` file.
+#' - `cv`: optional covariate structure passed through to `dndscv()`. In most
+#'   user workflows this is `NULL`, but advanced users can pass a covariate
+#'   matrix or object that matches dndscv's expectations.
 #' - `dndscv_args`: a named list of additional dndscv arguments, for example
 #'   `list(sm = \"192r_3w\", kc = \"cgc81\")`.
+#'
+#' In plain language:
+#'
+#' - `max_muts_per_gene_per_sample` caps how many mutations from one sample can
+#'   contribute to one gene before dndscv filters them down.
+#' - `max_coding_muts_per_sample` caps extremely hypermutated samples in the
+#'   coding analysis.
+#' - the most common advanced dndscv passthrough is `sm`, which controls the
+#'   substitution model, for example `\"192r_3w\"`.
+#' - if you supply `cv`, it should already be formatted the way `dndscv()`
+#'   expects it. `conseguiR` does not reshape arbitrary covariate tables into a
+#'   dndscv-ready object for you.
+#'
+#' Minimal examples:
+#'
+#' `dndscv_args = list(
+#'   sm = \"192r_3w\",
+#'   kc = \"cgc81\"
+#' )`
+#'
+#' `cv = NULL`
 #'
 #' dndscv documentation:
 #' \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
@@ -553,8 +613,35 @@ run_somatic_gene_scoring <- function(
 #' - `fishhook_covariates`: the covariate specification object expected by the
 #'   internal fishHook runner, or `NULL`.
 #' - `fishhook_covariate_data`: a data frame/data.table containing one row per
-#'   regulatory element and the covariate columns needed by fishHook.
+#'   regulatory element and the covariate columns needed by fishHook. In
+#'   practice this should include a regulatory-element identifier column plus
+#'   the numeric or categorical covariates you want fishHook to model.
+#' - `idcol`: the sample identifier column used by the regulatory somatic input
+#'   handed to fishHook. It should match the sample identifier field in the MAF
+#'   after harmonization.
 #' - `fishhook_args`: a named list of additional fishHook arguments.
+#'
+#' In plain language:
+#'
+#' - `eligible_gr` defines the territory in which fishHook is allowed to place
+#'   mutations when estimating the background model.
+#' - `fishhook_covariate_data` is where users typically supply replication,
+#'   accessibility, mappability, or GC-like covariates if they have them.
+#' - if you do not have a custom territory or covariates yet, `eligible_gr =
+#'   NULL` and `fishhook_covariate_data = NULL` are reasonable starting points.
+#'
+#' Minimal covariate-data example:
+#'
+#' `covariate_dt = data.frame(
+#'   reg_elem_id = c(\"GH01J000001\", \"GH01J000002\"),
+#'   accessibility = c(1.2, 0.4),
+#'   replication_timing = c(0.7, -0.1),
+#'   gc_content = c(0.44, 0.51)
+#' )`
+#'
+#' `fishhook_covariates = NULL`
+#'
+#' `fishhook_args = list()`
 #'
 #' fishHook documentation:
 #' \url{https://rdrr.io/github/mskilab/fish.hook/man/FishHook.html}
@@ -632,6 +719,21 @@ run_somatic_regulatory_scoring <- function(
 #' - regulatory-level fishHook controls: `eligible_gr`,
 #'   `fishhook_covariates`, `fishhook_covariate_data`, `fishhook_idcol`,
 #'   `fishhook_args`
+#'
+#' A good mental model is:
+#'
+#' - `prepare_somatic_scores()` does not fit one joint model
+#' - it runs a gene-oriented dndscv branch and a regulatory-element-oriented
+#'   fishHook branch separately
+#' - then it returns both score tables together as one somatic bundle
+#'
+#' Formatting notes for covariate-bearing inputs:
+#'
+#' - `gene_cv` should already be formatted for direct use by `dndscv()`
+#' - `fishhook_covariate_data` should contain one row per regulatory element
+#'   plus the covariate columns you want fishHook to use
+#' - `fishhook_covariates` should already be a fishHook-ready specification if
+#'   you provide it
 #'
 #' Example:
 #'
@@ -726,6 +828,21 @@ prepare_somatic_scores <- function(
 #'   `c(\"sample1.bw\", \"sample2.bw\", \"sample3.bw\")`.
 #' - `summary_fun`: a function object such as `mean` or `max`.
 #'
+#' The current epigenomic score is not a generic "activity" score. Instead,
+#' conseguiR quantifies each regulatory element across the supplied tracks,
+#' summarizes each track over each element with `summary_fun`, and then scores
+#' elements by how variable they are across tracks. The intuition is that
+#' highly variable elements are more context-specific, whereas uniformly active
+#' elements are more housekeeping-like.
+#'
+#' In practice:
+#'
+#' - `transform = "log1p"` is a reasonable default for signal stabilization
+#' - `summary_fun = mean` is a reasonable default for average signal over each
+#'   regulatory element
+#' - at least three tracks are required so that cross-track variability is
+#'   meaningful
+#'
 #' @examples
 #' \dontrun{
 #' prepare_epigenomic_scores(
@@ -789,6 +906,9 @@ prepare_epigenomic_scores <- function(
 #'   column
 #' - regulatory-level score tables must contain a regulatory-element identifier
 #'   column and a `zstat` column
+#' - the safest explicit formats are:
+#'   - gene tables with columns like `gene_id`, `zstat`
+#'   - regulatory tables with columns like `reg_elem_id`, `zstat`
 #'
 #' You can either pass full score bundles from earlier stages or pass explicit
 #' score tables directly through `gene_germline_scores`,
@@ -876,6 +996,20 @@ build_scored_gene_reg_graph <- function(
 #' - `top_k`: a positive integer
 #' - `confidence_power`, `beta_germline`, `beta_somatic`,
 #'   `beta_epigenomic`, `reg_signal_clip`: numeric scalars
+#' - `positive_only`: a single logical value
+#'
+#' In plain language:
+#'
+#' - `top_k` controls how many regulatory neighbors contribute most strongly to
+#'   each gene's update step
+#' - `beta_germline`, `beta_somatic`, and `beta_epigenomic` control how much
+#'   each modality contributes to the regulatory signal that is propagated
+#' - `confidence_power` upweights or downweights high-confidence regulatory
+#'   links relative to weaker ones
+#' - `positive_only = TRUE` suppresses negative regulatory signal before
+#'   diffusion
+#' - `reg_signal_clip` caps extreme regulatory signal before propagation so one
+#'   extreme feature does not dominate the update
 #'
 #' @examples
 #' \dontrun{
@@ -974,6 +1108,26 @@ run_gene_reg_diffusion <- function(
 #'   scalars
 #' - `prize_column`, `confidence_column`, `edge_cost_column`: single column
 #'   names present in the input tables
+#'
+#' Practical column examples:
+#'
+#' - `prize_column = "post_norm"` means optimize using the post-diffusion gene
+#'   score column
+#' - `confidence_column = "confidence"` means use the confidence column from
+#'   the backend gene-gene edge table
+#' - `edge_cost_column = "weight"` means use the edge-cost/penalty column from
+#'   the backend gene-gene edge table
+#'
+#' In plain language:
+#'
+#' - `target_genes` is the size of the final selected subgraph you want back
+#' - `candidate_pool_size` is the number of top candidate genes that are handed
+#'   to the optimization stage before the final smaller subgraph is chosen
+#' - `node_prize_weight` rewards high-scoring genes from diffusion
+#' - `edge_conf_weight` rewards keeping confident gene-gene edges
+#' - `edge_cost_weight` penalizes expensive edges
+#' - `max_edges_in_model` and `max_time_seconds` are practical solver-budget
+#'   controls for difficult graphs
 #'
 #' @examples
 #' \dontrun{
@@ -1718,6 +1872,16 @@ plot_selected_subgraph <- function(
 #' - `epigenomic_args` controls `prepare_epigenomic_scores()`
 #' - `scored_graph_args`, `diffusion_args`, `subgraph_args`, and `plot_args`
 #'   are forwarded to their corresponding downstream stages
+#'
+#' Formatting notes:
+#'
+#' - each `*_args` input should be a named list
+#' - nested MAGMA settings belong inside `gene_step1_args`, `gene_step2_args`,
+#'   `reg_step1_args`, and `reg_step2_args`
+#' - fishHook covariate-bearing inputs still follow the same rules as
+#'   `prepare_somatic_scores()`: one row per regulatory element in
+#'   `fishhook_covariate_data`, and a preformatted fishHook-ready object in
+#'   `fishhook_covariates` if supplied
 #'
 #' The gene and regulatory location resources are backend-managed by the
 #' package and are not user-facing arguments in this high-level wrapper.

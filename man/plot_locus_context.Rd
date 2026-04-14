@@ -76,11 +76,11 @@ SNPs are restricted to regulatory elements in the locus. If no
 literature-backed SNPs survive the lookup/filtering steps, \code{conseguiR}
 falls back to top GWAS SNPs from the top germline regulatory elements.}
 
-\item{pmid_query}{Optional disease term such as \code{"DLBCL"} or \code{"lymphoma"}
-used to filter LitVar-backed PMIDs.}
+\item{pmid_query}{Deprecated. This argument is currently ignored; locus SNP
+labeling now uses dbSNP citation support directly.}
 
-\item{pmid_page_size}{Maximum number of PMIDs per rsID retained from LitVar,
-and the Europe PMC page size used when filtering by \code{pmid_query}.}
+\item{pmid_page_size}{Maximum number of PMIDs per rsID retained from the
+dbSNP citation lookup.}
 
 \item{plot_file_path}{Optional output path for the saved figure.}
 
@@ -119,8 +119,6 @@ containing node and edge tables
 \code{c("MYC", "BCL2", "BCL6")}
 \item \code{rsid_pmid}: an optional cached literature-support table with at least
 \code{rsid} and \code{pmid} columns
-\item \code{pmid_query}: an optional disease term such as \code{"DLBCL"} or
-\code{"lymphoma"} used to filter LitVar-backed PMIDs in memory
 \item \code{label_top_lit_snps}: number of literature-backed SNPs to label before
 falling back to top GWAS SNPs in the top germline regulatory elements
 }
@@ -150,7 +148,6 @@ plot_locus_context(
   selected_subgraph = selected_subgraph,
   label_features = c("MYC"),
   gwas_sumstats = gwas_sumstats,
-  pmid_query = "lymphoma",
   label_top_lit_snps = 3L,
   plot_file_path = "MYC_locus_context.pdf"
 )
