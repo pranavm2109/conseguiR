@@ -124,4 +124,7 @@ Gene-gene edge column interpreted as edge cost or penalty.
 
 ### `python_path`
 
-Optional explicit Python interpreter path.
+Deprecated and ignored.
+
+Selected-subgraph calling now runs inside the package-managed `basilisk`
+Python environment.

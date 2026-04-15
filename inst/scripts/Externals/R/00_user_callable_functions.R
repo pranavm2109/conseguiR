@@ -400,7 +400,10 @@ validate_inputs <- function(
 #' @param output_prefix Output prefix for saved artifacts.
 #' @param sample_size Fixed sample size for MAGMA.
 #' @param sample_size_col Optional sample size column name.
-#' @param magma_path Path to the MAGMA executable.
+#' @param magma_path Optional path to the MAGMA executable. When `NULL`,
+#'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
+#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, `magma` on `PATH`, and finally a
+#'   local development copy at `tools/magma_v1/magma` when present.
 #' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
 #' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
 #' @param reuse_existing_annotation Whether to reuse an existing MAGMA
@@ -423,7 +426,7 @@ run_germline_gene_scoring <- function(
   output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   magma_gwas_cache_prefix = NULL,
   reuse_existing_gwas_cache = TRUE,
   reuse_existing_annotation = FALSE,
@@ -508,7 +511,10 @@ run_germline_gene_scoring <- function(
 #' @param output_prefix Output prefix for saved artifacts.
 #' @param sample_size Fixed sample size for MAGMA.
 #' @param sample_size_col Optional sample size column name.
-#' @param magma_path Path to the MAGMA executable.
+#' @param magma_path Optional path to the MAGMA executable. When `NULL`,
+#'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
+#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, `magma` on `PATH`, and finally a
+#'   local development copy at `tools/magma_v1/magma` when present.
 #' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
 #' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
 #' @param reuse_existing_annotation Whether to reuse an existing MAGMA
@@ -527,7 +533,7 @@ run_germline_regulatory_scoring <- function(
   output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   magma_gwas_cache_prefix = NULL,
   reuse_existing_gwas_cache = TRUE,
   reuse_existing_annotation = FALSE,
@@ -1081,7 +1087,8 @@ build_scored_gene_reg_graph <- function(
 #' @param positive_only Whether to restrict to positive regulatory signal.
 #' @param reg_signal_clip Regulatory signal clip value.
 #' @param top_n_to_save Number of top genes to save separately.
-#' @param python_path Optional explicit Python interpreter path.
+#' @param python_path Deprecated and ignored. Python is managed internally via
+#'   `basilisk`.
 #'
 #' @return A diffusion bundle containing full and top-gene diffusion tables.
 run_gene_reg_diffusion <- function(
@@ -1225,7 +1232,8 @@ run_gene_reg_diffusion <- function(
 #' @param prize_column Diffusion prize column to optimize.
 #' @param confidence_column Gene-gene confidence column.
 #' @param edge_cost_column Gene-gene edge-cost column.
-#' @param python_path Optional explicit Python interpreter path.
+#' @param python_path Deprecated and ignored. Python is managed internally via
+#'   `basilisk`.
 #'
 #' @return A selected subgraph bundle.
 call_selected_subgraph <- function(

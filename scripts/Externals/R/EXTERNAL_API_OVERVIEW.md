@@ -117,7 +117,12 @@ Common interpretation:
 - use `sample_size` when the full GWAS has one fixed N
 - use `sample_size_col` when N varies per row and the GWAS already contains
   that information
+- in a typical run you use one or the other rather than supplying both
 - `pval_duplicate` controls how MAGMA handles duplicate SNP IDs
+- `reference_bfile` should be the shared PLINK prefix without file suffixes,
+  e.g. `/path/to/g1000_eur/g1000_eur`
+- `gene_model = "snp-wise=mean"` and `pval_use = c("SNP", "P")` are practical
+  starting settings for many GWAS tables
 
 Main outputs:
 - gene germline score table
@@ -177,6 +182,14 @@ Concretely, this function exposes MAGMA stage customization twice:
 So the user can tune the gene MAGMA run and the regulatory MAGMA run
 independently.
 
+Practical decision rules:
+- use the same LD reference (`reference_bfile`) for both runs unless you have a
+  very specific reason not to
+- keep the regulatory `annotation_window` narrower when regulatory elements are
+  already localized intervals
+- use `shared_args` only for wrapper-level settings you genuinely want to send
+  to both MAGMA branches
+
 Main outputs:
 - `gene_scores`
 - `reg_scores`
@@ -218,6 +231,8 @@ Useful interpretation:
 - the most common extra argument users tune is `sm`
 - if `cv` is supplied, it should already be in a dndscv-ready format; the
   package does not reshape arbitrary covariate tables for dndscv automatically
+- `refdb` must be a dndscv-compatible reference `.rda` built for the same
+  genome build as the MAF being analyzed
 
 Minimal examples:
 - `dndscv_args = list(sm = "192r_3w", kc = "cgc81")`
@@ -256,6 +271,10 @@ Practical formatting:
   you want fishHook to model
 - `fishhook_covariates` should already be a fishHook-ready specification if
   you provide it
+- the regulatory-element IDs in `fishhook_covariate_data` should correspond to
+  the IDs in `reg_ref_path`
+- `idcol` should match the sample identifier field used by the somatic table
+  after harmonization, usually `Tumor_Sample_Barcode`
 
 Minimal example:
 - `covariate_dt = data.frame(reg_elem_id = c("GH01J000001", "GH01J000002"), accessibility = c(1.2, 0.4), replication_timing = c(0.7, -0.1), gc_content = c(0.44, 0.51))`

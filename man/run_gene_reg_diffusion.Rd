@@ -49,7 +49,8 @@ run_gene_reg_diffusion(
 
 \item{top_n_to_save}{Number of top genes to save separately.}
 
-\item{python_path}{Optional explicit Python interpreter path.}
+\item{python_path}{Deprecated and ignored. Python is managed internally via
+\code{basilisk}.}
 
 \item{verbose}{Logical scalar. If \code{TRUE}, show stage messages while running
 diffusion.}

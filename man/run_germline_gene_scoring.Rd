@@ -11,7 +11,7 @@ run_germline_gene_scoring(
   output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   magma_gwas_cache_prefix = NULL,
   reuse_existing_gwas_cache = TRUE,
   reuse_existing_annotation = FALSE,
@@ -36,7 +36,10 @@ run_germline_gene_scoring(
 
 \item{sample_size_col}{Optional sample size column name.}
 
-\item{magma_path}{Path to the MAGMA executable.}
+\item{magma_path}{Optional path to the MAGMA executable. When \code{NULL},
+\code{conseguiR} searches in this order: \code{options(conseguiR.magma_path = ...)},
+\code{Sys.getenv("CONSEGUIR_MAGMA_PATH")}, \code{magma} on \code{PATH}, and finally a
+local development copy at \code{tools/magma_v1/magma} when present.}
 
 \item{magma_gwas_cache_prefix}{Optional shared MAGMA GWAS cache prefix.}
 
@@ -91,12 +94,22 @@ suffixes, for example \verb{\\"/path/to/g1000_eur/g1000_eur\\"}.
 fixed sample size.
 \item \code{sample_size_col}: use this when the GWAS table already contains a sample
 size column that MAGMA should read per row instead.
+\item \code{sample_size} and \code{sample_size_col} are alternatives. In a typical run you
+use one or the other, not both.
 \item \code{step1_args} and \code{step2_args}: named lists. For example:
 }
 
 \code{step1_args = list( annotation_window = c(35, 10), filter_path = NULL, ignore_strand = FALSE, nonhuman = FALSE, extra_args = character() )}
 
 \verb{step2_args = list( gene_model = \\"snp-wise=mean\\", genes_only = TRUE, pval_use = c(\\"SNP\\", \\"P\\"), pval_duplicate = \\"drop\\", bfile_synonyms = NULL, bfile_synonym_dup = NULL, extra_args = character() )}
+
+The most common wrapper-level MAGMA inputs usually look like this:
+\itemize{
+\item \code{reference_bfile = "/path/to/g1000_eur/g1000_eur"}
+\item \code{sample_size = 456348}
+\item \code{sample_size_col = "n_total"} when the GWAS already contains a usable
+sample-size column
+}
 
 In plain language:
 \itemize{
@@ -110,6 +123,11 @@ usually \code{gene_model}, \code{pval_use}, and \code{pval_duplicate}.
 correspond to SNP IDs and p-values.
 \item \code{pval_duplicate} follows MAGMA's own duplicate-SNP handling, for example
 \code{"drop"}, \code{"first"}, \code{"last"}, or \code{"error"}.
+\item \code{genes_only = TRUE} is a practical default when you want the standard
+feature-level MAGMA result rather than broader auxiliary outputs.
+\item \code{gene_model = "snp-wise=mean"} is a common starting point because it asks
+MAGMA to summarize SNP-level signal across the assigned feature rather than
+relying on a single top SNP.
 }
 
 MAGMA manual:

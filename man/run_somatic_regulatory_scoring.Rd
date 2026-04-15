@@ -59,6 +59,9 @@ the numeric or categorical covariates you want fishHook to model.
 handed to fishHook. It should match the sample identifier field in the MAF
 after harmonization.
 \item \code{fishhook_args}: a named list of additional fishHook arguments.
+\item \code{reg_ref_path} should resolve to the same regulatory universe you want to
+score. In practice this means the regulatory-element IDs in
+\code{fishhook_covariate_data} should correspond to the IDs in that reference.
 }
 
 In plain language:
@@ -68,6 +71,9 @@ mutations when estimating the background model.
 \item \code{fishhook_covariate_data} is where users typically supply replication,
 accessibility, mappability, or GC-like covariates if they have them.
 \item if you do not have a custom territory or covariates yet, \code{eligible_gr = NULL} and \code{fishhook_covariate_data = NULL} are reasonable starting points.
+\item \code{idcol} should match the sample identifier column name used in the somatic
+mutation table after harmonization. In most MAF-based workflows the
+default \code{Tumor_Sample_Barcode} is the right choice.
 }
 
 Minimal covariate-data example:
@@ -77,6 +83,16 @@ Minimal covariate-data example:
 \code{fishhook_covariates = NULL}
 
 \code{fishhook_args = list()}
+
+A good first-pass mental model is:
+\itemize{
+\item \code{eligible_gr} says where mutations are allowed to occur in the background
+model
+\item \code{fishhook_covariate_data} says which feature-level covariates explain that
+background
+\item \code{fishhook_covariates} is only needed when you already have a fishHook-side
+covariate specification you want to pass through directly
+}
 
 fishHook documentation:
 \url{https://rdrr.io/github/mskilab/fish.hook/man/FishHook.html}

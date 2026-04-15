@@ -219,7 +219,6 @@ scored_graph <- build_scored_gene_reg_graph(
   germline_scores = germline_scores,
   somatic_scores = somatic_scores,
   epigenomic_scores = epigenomic_scores,
-  save_outputs = FALSE,
   verbose = TRUE
 )
 ```
@@ -229,6 +228,10 @@ modalities are zero-filled by default, which keeps the graph broad enough to
 retain biologically meaningful features even when one branch is absent.
 
 # Step 4: diffusion
+
+As in the overview vignette, the diffusion and selected-subgraph stages are
+Python-backed internally but are run through conseguiR's managed `basilisk`
+environment rather than a user-supplied interpreter.
 
 ```{r diffusion-code, eval=FALSE}
 diffusion <- run_gene_reg_diffusion(

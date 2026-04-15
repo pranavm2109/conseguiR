@@ -75,7 +75,7 @@ def test_run_cardinality_subgraph_calling_live():
     if not ortools_available(module):
         print(
             "Skipping live step 8 optimization test because OR-Tools is not installed. "
-            "Run this test from `lymphoma_graph_env` to exercise the solver path."
+            "Install the managed conseguiR Python dependencies to exercise the solver path."
         )
         return
 

@@ -11,7 +11,7 @@ run_germline_regulatory_scoring(
   output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   magma_gwas_cache_prefix = NULL,
   reuse_existing_gwas_cache = TRUE,
   reuse_existing_annotation = FALSE,
@@ -38,7 +38,10 @@ run_germline_regulatory_scoring(
 
 \item{sample_size_col}{Optional sample size column name.}
 
-\item{magma_path}{Path to the MAGMA executable.}
+\item{magma_path}{Optional path to the MAGMA executable. When \code{NULL},
+\code{conseguiR} searches in this order: \code{options(conseguiR.magma_path = ...)},
+\code{Sys.getenv("CONSEGUIR_MAGMA_PATH")}, \code{magma} on \code{PATH}, and finally a
+local development copy at \code{tools/magma_v1/magma} when present.}
 
 \item{magma_gwas_cache_prefix}{Optional shared MAGMA GWAS cache prefix.}
 

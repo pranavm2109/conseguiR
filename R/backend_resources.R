@@ -48,6 +48,12 @@
 }
 
 #' @keywords internal
+.conseguiR_existing_graph_paths <- function(paths) {
+  flat <- unlist(paths, use.names = FALSE)
+  flat[file.exists(flat)]
+}
+
+#' @keywords internal
 .conseguiR_backend_seed_dir <- function() {
   cache_key <- "backend_seed_dir"
   if (exists(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
@@ -137,25 +143,26 @@
   files <- switch(
     kind,
     gene_reg = c(
-      "gene_reg_graph_no_scores.rds",
       "gene_reg_graph_no_scores_nodes.tsv.gz",
-      "gene_reg_graph_no_scores_edges.tsv.gz"
+      "gene_reg_graph_no_scores_edges.tsv.gz",
+      "gene_reg_graph_no_scores.rds"
     ),
     gene_gene = c(
-      "gene_gene_graph.rds",
       "gene_gene_graph_nodes.tsv.gz",
-      "gene_gene_graph_edges.tsv.gz"
+      "gene_gene_graph_edges.tsv.gz",
+      "gene_gene_graph.rds"
     )
   )
 
   src <- file.path(seed_dir, files)
-  if (!all(file.exists(src))) {
+  existing_src <- src[file.exists(src)]
+  if (length(existing_src) < 2L) {
     return(FALSE)
   }
 
-  dest <- file.path(backend_dir, files)
+  dest <- file.path(backend_dir, basename(existing_src))
   dir.create(backend_dir, recursive = TRUE, showWarnings = FALSE)
-  ok <- file.copy(src, dest, overwrite = TRUE)
+  ok <- file.copy(existing_src, dest, overwrite = TRUE)
   all(ok)
 }
 
@@ -216,10 +223,11 @@
 
   if (!isTRUE(force) && exists(init_cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
     cached <- get(init_cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)
-    if (!is.null(cached) && .conseguiR_graph_files_exist(unname(paths[c(
-      if (isTRUE(build_gene_reg)) c("gene_reg_graph_rds", "gene_reg_graph_nodes", "gene_reg_graph_edges"),
-      if (isTRUE(build_gene_gene)) c("gene_gene_graph_rds", "gene_gene_graph_nodes", "gene_gene_graph_edges")
-    )]))) {
+    required_paths <- c(
+      if (isTRUE(build_gene_reg)) .conseguiR_existing_graph_paths(paths[c("gene_reg_graph_nodes", "gene_reg_graph_edges")]),
+      if (isTRUE(build_gene_gene)) .conseguiR_existing_graph_paths(paths[c("gene_gene_graph_nodes", "gene_gene_graph_edges")])
+    )
+    if (!is.null(cached) && length(required_paths) > 0L && .conseguiR_graph_files_exist(required_paths)) {
       if (!isTRUE(quiet)) {
         message("Backend graph initialization complete.")
       }
@@ -231,7 +239,6 @@
 
   if (isTRUE(build_gene_reg)) {
     target_paths <- list(
-      paths$gene_reg_graph_rds,
       paths$gene_reg_graph_nodes,
       paths$gene_reg_graph_edges
     )
@@ -267,7 +274,6 @@
 
   if (isTRUE(build_gene_gene)) {
     target_paths <- list(
-      paths$gene_gene_graph_rds,
       paths$gene_gene_graph_nodes,
       paths$gene_gene_graph_edges
     )

@@ -39,7 +39,14 @@ These are treated as package-owned resources rather than user-provided inputs.
 Diffusion and selected-subgraph calling are now run inside a managed Python
 environment via `basilisk`. That means Python is still required for those two
 stages, but the package no longer expects users to wire up a project-specific
-interpreter by hand.
+interpreter by hand. The package provisions the required Python stack for those
+steps internally.
+
+Germline scoring still depends on MAGMA, but MAGMA is now treated as an
+external prerequisite rather than a bundled package binary. You can supply it
+explicitly with `magma_path`, register it once with
+`options(conseguiR.magma_path = "/path/to/magma")`, set
+`CONSEGUIR_MAGMA_PATH`, or make `magma` available on your system `PATH`.
 
 ## User API
 
@@ -171,7 +178,7 @@ plot_locus_context(
 
 For installation and setup notes, see:
 
-- [INSTALLATION.md](INSTALLATION.md)
+- [INSTALL](INSTALL)
 
 ## Current status
 
@@ -181,8 +188,9 @@ The main remaining rough edges are:
 
 - some package-facing wrappers still delegate into `scripts/...`
 - MAGMA still matters for germline scoring
-- the new `basilisk`-managed Python path for
-  `run_gene_reg_diffusion()` and `call_selected_subgraph()` still needs a
-  full end-to-end validation pass on a clean machine
+- the `basilisk`-managed Python path for
+  `run_gene_reg_diffusion()` and `call_selected_subgraph()` has been validated
+  in this development environment and still deserves one clean-machine check
+  before release
 - the package still needs some final polish around fresh-clone validation and
   resource discovery

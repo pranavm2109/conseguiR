@@ -48,8 +48,8 @@ def require_ortools() -> None:
     if cp_model is None:
         raise ImportError(
             "OR-Tools is required to call the cardinality-constrained subgraph, "
-            "but it could not be imported. If you are using the project conda "
-            "setup, try running this script from `lymphoma_graph_env`."
+            "but it could not be imported inside the managed conseguiR Python "
+            "environment."
         ) from _ORTOOLS_IMPORT_ERROR
 
 

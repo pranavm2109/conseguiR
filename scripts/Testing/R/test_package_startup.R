@@ -6,7 +6,7 @@ suppressPackageStartupMessages({
 
 source("R/zzz.R")
 
-package_startup_uses_lymphoma_graph_env <- function() {
+package_startup_leaves_python_unconfigured <- function() {
   old_opts <- options(
     conseguiR.python = NULL,
     conseguiR.conda_env = NULL
@@ -20,7 +20,7 @@ package_startup_uses_lymphoma_graph_env <- function() {
 
 main <- function() {
   test_that("package startup avoids configuring Python implicitly", {
-    package_startup_uses_lymphoma_graph_env()
+    package_startup_leaves_python_unconfigured()
   })
 }
 

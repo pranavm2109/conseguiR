@@ -28,3 +28,6 @@ __pycache__/
 .Rhistory
 Rplots.pdf
 *.log.suppl
+
+# Local external tools used during development but not shipped with the package
+tools/magma_v1/magma

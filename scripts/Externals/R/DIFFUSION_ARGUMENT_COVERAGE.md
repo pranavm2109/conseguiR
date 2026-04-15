@@ -97,6 +97,6 @@ Number of top-ranked genes written to the separate top-gene diffusion output.
 
 ### `python_path`
 
-Optional explicit Python interpreter path.
+Deprecated and ignored.
 
-If omitted, the wrapper will use the package’s Python-resolution logic.
+Diffusion now runs inside the package-managed `basilisk` Python environment.

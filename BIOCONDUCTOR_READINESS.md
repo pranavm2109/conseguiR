@@ -23,8 +23,14 @@ the official contribution guide.
 
 The diffusion and selected-subgraph stages still rely on Python, but they now
 use a managed `basilisk` environment instead of a user-managed interpreter.
-This substantially improves Bioconductor alignment, but it still needs a clean
-end-to-end validation pass on a fresh machine / build context.
+This substantially improves Bioconductor alignment. The managed environment has
+now been validated end to end in the development environment for both:
+
+- `run_gene_reg_diffusion()`
+- `call_selected_subgraph()`
+
+The remaining question is reproducibility on a clean machine / build context,
+not whether the current managed-environment design works at all.
 
 Recommended fix:
 
@@ -66,7 +72,7 @@ The package now has `biocViews`, but it still likely needs:
 ## Practical next steps
 
 1. migrate the script-style tests into `tests/testthat`
-2. decide whether Python-backed stages are optional or `basilisk`-managed
+2. finish documenting the `basilisk`-managed Python stages as the supported workflow
 3. trim `inst/extdata` to submission-friendly example data
 4. add final package metadata (`URL`, `BugReports`, `CITATION`)
 5. run `R CMD check` and compare against the Bioconductor build expectations

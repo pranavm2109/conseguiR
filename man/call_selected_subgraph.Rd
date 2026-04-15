@@ -73,7 +73,8 @@ call_selected_subgraph(
 
 \item{edge_cost_column}{Gene-gene edge-cost column.}
 
-\item{python_path}{Optional explicit Python interpreter path.}
+\item{python_path}{Deprecated and ignored. Python is managed internally via
+\code{basilisk}.}
 
 \item{verbose}{Logical scalar. If \code{TRUE}, show stage messages while calling
 the selected subgraph.}

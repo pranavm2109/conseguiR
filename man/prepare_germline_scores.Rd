@@ -95,6 +95,19 @@ Example:
 
 \verb{prepare_germline_scores( gwas_sumstats = gwas_path, reference_bfile = \\"/path/to/g1000_eur/g1000_eur\\", gene_step1_args = list(annotation_window = c(35, 10)), gene_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")) )}
 
+Practical decision rules:
+\itemize{
+\item use the same \code{reference_bfile} for both the gene and regulatory runs
+\item use \code{gene_sample_size} / \code{gene_sample_size_col} for the gene run and
+\code{reg_sample_size} / \code{reg_sample_size_col} for the regulatory run when the
+two branches need different MAGMA p-value inputs
+\item keep \code{gene_step1_args} and \code{reg_step1_args} separate when you want a wider
+annotation window for genes but a tighter one for already-localized
+regulatory elements
+\item keep \code{shared_args} for wrapper-level settings you truly want to send to
+both branches rather than duplicating them by hand
+}
+
 MAGMA manual:
 \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 }

@@ -9,9 +9,11 @@
         pkgname = "conseguiR",
         packages = c(
           "python=3.11",
-          "numpy",
-          "pandas",
-          "ortools"
+          "numpy=1.26.4",
+          "pandas=2.2.3"
+        ),
+        pip = c(
+          "ortools==9.10.4067"
         )
       )
     }
@@ -80,8 +82,10 @@
       env = .conseguiR_basilisk_env(),
       fun = function(script_path, module_name, function_name, config, config_class_name, result_field) {
         importlib <- reticulate::import("importlib.util", convert = FALSE)
+        sys <- reticulate::import("sys", convert = FALSE)
         spec <- importlib$spec_from_file_location(module_name, script_path)
         module <- importlib$module_from_spec(spec)
+        sys$modules[[module_name]] <- module
         spec$loader$exec_module(module)
 
         config_class <- module[[config_class_name]]

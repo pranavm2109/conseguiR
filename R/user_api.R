@@ -182,7 +182,10 @@ initialize_backend_graphs <- function(
 #' @param output_prefix Output prefix for saved artifacts.
 #' @param sample_size Fixed sample size for MAGMA.
 #' @param sample_size_col Optional sample size column name.
-#' @param magma_path Path to the MAGMA executable.
+#' @param magma_path Optional path to the MAGMA executable. When `NULL`,
+#'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
+#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, `magma` on `PATH`, and finally a
+#'   local development copy at `tools/magma_v1/magma` when present.
 #' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
 #' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
 #' @param reuse_existing_annotation Whether to reuse an existing MAGMA
@@ -214,6 +217,8 @@ initialize_backend_graphs <- function(
 #'   fixed sample size.
 #' - `sample_size_col`: use this when the GWAS table already contains a sample
 #'   size column that MAGMA should read per row instead.
+#' - `sample_size` and `sample_size_col` are alternatives. In a typical run you
+#'   use one or the other, not both.
 #' - `step1_args` and `step2_args`: named lists. For example:
 #'
 #' `step1_args = list(
@@ -234,6 +239,13 @@ initialize_backend_graphs <- function(
 #'   extra_args = character()
 #' )`
 #'
+#' The most common wrapper-level MAGMA inputs usually look like this:
+#'
+#' - `reference_bfile = "/path/to/g1000_eur/g1000_eur"`
+#' - `sample_size = 456348`
+#' - `sample_size_col = "n_total"` when the GWAS already contains a usable
+#'   sample-size column
+#'
 #' In plain language:
 #'
 #' - MAGMA step 1 (`step1_args`) controls how SNPs are assigned to features.
@@ -246,6 +258,11 @@ initialize_backend_graphs <- function(
 #'   correspond to SNP IDs and p-values.
 #' - `pval_duplicate` follows MAGMA's own duplicate-SNP handling, for example
 #'   `"drop"`, `"first"`, `"last"`, or `"error"`.
+#' - `genes_only = TRUE` is a practical default when you want the standard
+#'   feature-level MAGMA result rather than broader auxiliary outputs.
+#' - `gene_model = "snp-wise=mean"` is a common starting point because it asks
+#'   MAGMA to summarize SNP-level signal across the assigned feature rather than
+#'   relying on a single top SNP.
 #'
 #' MAGMA manual:
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
@@ -273,7 +290,7 @@ run_germline_gene_scoring <- function(
   output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   magma_gwas_cache_prefix = NULL,
   reuse_existing_gwas_cache = TRUE,
   reuse_existing_annotation = FALSE,
@@ -362,7 +379,7 @@ run_germline_regulatory_scoring <- function(
   output_prefix = NULL,
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   magma_gwas_cache_prefix = NULL,
   reuse_existing_gwas_cache = TRUE,
   reuse_existing_annotation = FALSE,
@@ -452,6 +469,18 @@ run_germline_regulatory_scoring <- function(
 #'   reg_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\"))
 #' )`
 #'
+#' Practical decision rules:
+#'
+#' - use the same `reference_bfile` for both the gene and regulatory runs
+#' - use `gene_sample_size` / `gene_sample_size_col` for the gene run and
+#'   `reg_sample_size` / `reg_sample_size_col` for the regulatory run when the
+#'   two branches need different MAGMA p-value inputs
+#' - keep `gene_step1_args` and `reg_step1_args` separate when you want a wider
+#'   annotation window for genes but a tighter one for already-localized
+#'   regulatory elements
+#' - keep `shared_args` for wrapper-level settings you truly want to send to
+#'   both branches rather than duplicating them by hand
+#'
 #' MAGMA manual:
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 #'
@@ -531,6 +560,10 @@ prepare_germline_scores <- function(
 #'   matrix or object that matches dndscv's expectations.
 #' - `dndscv_args`: a named list of additional dndscv arguments, for example
 #'   `list(sm = \"192r_3w\", kc = \"cgc81\")`.
+#' - `maf` should already be MAF-like before it reaches this function. In
+#'   practice that means sample, chromosome, start, end, reference allele, and
+#'   alternate allele information should already be available under standard
+#'   MAF-style column names or names the package validator can harmonize.
 #'
 #' In plain language:
 #'
@@ -543,6 +576,9 @@ prepare_germline_scores <- function(
 #' - if you supply `cv`, it should already be formatted the way `dndscv()`
 #'   expects it. `conseguiR` does not reshape arbitrary covariate tables into a
 #'   dndscv-ready object for you.
+#' - `refdb` is not just any annotation file. It must be a dndscv-compatible
+#'   reference `.rda` resource built for the same genome build as the MAF you
+#'   are scoring.
 #'
 #' Minimal examples:
 #'
@@ -552,6 +588,10 @@ prepare_germline_scores <- function(
 #' )`
 #'
 #' `cv = NULL`
+#'
+#' If you do use `cv`, think of it as an advanced dndscv-native object rather
+#' than a generic spreadsheet of covariates. The package passes it through; it
+#' does not convert a plain data frame into the structure expected by dndscv.
 #'
 #' dndscv documentation:
 #' \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
@@ -620,6 +660,9 @@ run_somatic_gene_scoring <- function(
 #'   handed to fishHook. It should match the sample identifier field in the MAF
 #'   after harmonization.
 #' - `fishhook_args`: a named list of additional fishHook arguments.
+#' - `reg_ref_path` should resolve to the same regulatory universe you want to
+#'   score. In practice this means the regulatory-element IDs in
+#'   `fishhook_covariate_data` should correspond to the IDs in that reference.
 #'
 #' In plain language:
 #'
@@ -629,6 +672,9 @@ run_somatic_gene_scoring <- function(
 #'   accessibility, mappability, or GC-like covariates if they have them.
 #' - if you do not have a custom territory or covariates yet, `eligible_gr =
 #'   NULL` and `fishhook_covariate_data = NULL` are reasonable starting points.
+#' - `idcol` should match the sample identifier column name used in the somatic
+#'   mutation table after harmonization. In most MAF-based workflows the
+#'   default `Tumor_Sample_Barcode` is the right choice.
 #'
 #' Minimal covariate-data example:
 #'
@@ -642,6 +688,15 @@ run_somatic_gene_scoring <- function(
 #' `fishhook_covariates = NULL`
 #'
 #' `fishhook_args = list()`
+#'
+#' A good first-pass mental model is:
+#'
+#' - `eligible_gr` says where mutations are allowed to occur in the background
+#'   model
+#' - `fishhook_covariate_data` says which feature-level covariates explain that
+#'   background
+#' - `fishhook_covariates` is only needed when you already have a fishHook-side
+#'   covariate specification you want to pass through directly
 #'
 #' fishHook documentation:
 #' \url{https://rdrr.io/github/mskilab/fish.hook/man/FishHook.html}
@@ -734,6 +789,16 @@ run_somatic_regulatory_scoring <- function(
 #'   plus the covariate columns you want fishHook to use
 #' - `fishhook_covariates` should already be a fishHook-ready specification if
 #'   you provide it
+#' - `fishhook_idcol` should match the sample identifier field used by the MAF
+#'   after harmonization, typically `Tumor_Sample_Barcode`
+#'
+#' In practice, a simple starting configuration is often:
+#'
+#' - `gene_cv = NULL`
+#' - `dndscv_args = list(sm = "192r_3w")`
+#' - `eligible_gr = NULL`
+#' - `fishhook_covariate_data = NULL` or a one-row-per-reg-element table
+#' - `fishhook_args = list()`
 #'
 #' Example:
 #'

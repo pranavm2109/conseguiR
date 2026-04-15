@@ -17,17 +17,47 @@ ensure_parent_dir <- function(path) {
 }
 
 read_gene_reg_graph_no_scores <- function(path = default_gene_reg_scoring_config$graph_rds_path) {
-  if (!file.exists(path)) {
-    stop("Gene-reg graph file does not exist: ", path)
+  if (file.exists(path)) {
+    graph <- readRDS(path)
+
+    if (!inherits(graph, "igraph")) {
+      stop("Expected an igraph object at: ", path)
+    }
+
+    return(graph)
   }
 
-  graph <- readRDS(path)
+  nodes_path <- sub("\\.rds$", "_nodes.tsv.gz", path)
+  edges_path <- sub("\\.rds$", "_edges.tsv.gz", path)
+  if (!identical(nodes_path, path) && file.exists(nodes_path) && file.exists(edges_path)) {
+    nodes <- data.table::as.data.table(data.table::fread(nodes_path, showProgress = FALSE))
+    edges <- data.table::as.data.table(data.table::fread(edges_path, showProgress = FALSE))
 
-  if (!inherits(graph, "igraph")) {
-    stop("Expected an igraph object at: ", path)
+    if (!all(c("node_id", "node_type") %in% names(nodes))) {
+      stop("Gene-reg node table is missing required columns needed to reconstruct the graph.")
+    }
+    if (!all(c("from", "to") %in% names(edges))) {
+      stop("Gene-reg edge table is missing required columns needed to reconstruct the graph.")
+    }
+
+    vertices <- as.data.frame(nodes)
+    if ("name" %in% names(vertices)) {
+      vertices$name <- as.character(vertices$name)
+    } else {
+      vertices$name <- as.character(vertices$node_id)
+    }
+
+    return(graph_from_data_frame(
+      d = as.data.frame(edges),
+      vertices = vertices,
+      directed = TRUE
+    ))
   }
 
-  graph
+  stop(
+    "Gene-reg graph file does not exist: ", path,
+    ". Neither a seed `.rds` graph nor matching `_nodes.tsv.gz`/`_edges.tsv.gz` files were found."
+  )
 }
 
 extract_gene_reg_graph_nodes <- function(graph) {

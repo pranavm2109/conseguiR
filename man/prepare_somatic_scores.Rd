@@ -94,6 +94,17 @@ Formatting notes for covariate-bearing inputs:
 plus the covariate columns you want fishHook to use
 \item \code{fishhook_covariates} should already be a fishHook-ready specification if
 you provide it
+\item \code{fishhook_idcol} should match the sample identifier field used by the MAF
+after harmonization, typically \code{Tumor_Sample_Barcode}
+}
+
+In practice, a simple starting configuration is often:
+\itemize{
+\item \code{gene_cv = NULL}
+\item \code{dndscv_args = list(sm = "192r_3w")}
+\item \code{eligible_gr = NULL}
+\item \code{fishhook_covariate_data = NULL} or a one-row-per-reg-element table
+\item \code{fishhook_args = list()}
 }
 
 Example:

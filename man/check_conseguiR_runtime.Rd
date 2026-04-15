@@ -13,6 +13,11 @@ check_conseguiR_runtime(quiet = FALSE)
 A named list describing the current runtime status.
 }
 \description{
-Checks whether the expected R packages, Python interpreter, Python modules,
-and MAGMA executable are available for the current \code{conseguiR} runtime.
+Checks whether the expected core R packages and optional external runtimes
+are available for the current \code{conseguiR} session.
+}
+\details{
+The package baseline is considered usable when the core R dependencies and
+MAGMA are available. Python is reported separately because it is only needed
+for the diffusion and selected-subgraph stages.
 }

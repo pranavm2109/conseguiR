@@ -6,7 +6,7 @@ suppressPackageStartupMessages({
 })
 
 source("R/zzz.R")
-# Manually trigger package initialization to set up lymphoma_graph_env for Python execution
+# Manually trigger package initialization before sourcing the external wrapper layer.
 .onLoad(libname = ".", pkgname = "conseguiR")
 
 source("scripts/Externals/R/00_user_callable_functions.R")

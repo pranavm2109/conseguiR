@@ -32,6 +32,83 @@ conseguiR_verbose_cat <- function(lines, verbose) {
   }
 }
 
+conseguiR_magma_resolution_note <- function() {
+  paste(
+    "Install MAGMA separately and provide it via `magma_path`,",
+    "`options(conseguiR.magma_path = \"/path/to/magma\")`,",
+    "the `CONSEGUIR_MAGMA_PATH` environment variable, or by making `magma`",
+    "available on your system PATH."
+  )
+}
+
+resolve_magma_path <- function(magma_path = NULL, must_work = TRUE) {
+  explicit_path <- NULL
+  if (!is.null(magma_path)) {
+    if (!is.character(magma_path) || length(magma_path) != 1L || !nzchar(magma_path)) {
+      stop("`magma_path` must be NULL or a single non-empty character string.")
+    }
+    explicit_path <- magma_path
+  }
+
+  option_path <- getOption("conseguiR.magma_path", NULL)
+  if (!is.null(option_path) && (!is.character(option_path) || length(option_path) != 1L || !nzchar(option_path))) {
+    stop("`options(conseguiR.magma_path = ...)` must contain a single non-empty character string.")
+  }
+
+  env_path <- Sys.getenv("CONSEGUIR_MAGMA_PATH", unset = "")
+  if (!nzchar(env_path)) {
+    env_path <- NULL
+  }
+
+  path_path <- Sys.which("magma")
+  if (!nzchar(path_path)) {
+    path_path <- NULL
+  }
+
+  dev_relpath <- "tools/magma_v1/magma"
+  pkg_dev_path <- system.file(dev_relpath, package = "conseguiR")
+  if (!nzchar(pkg_dev_path)) {
+    pkg_dev_path <- NA_character_
+  }
+  dev_candidates <- unique(c(file.path(getwd(), dev_relpath), pkg_dev_path))
+  dev_candidates <- dev_candidates[!is.na(dev_candidates) & nzchar(dev_candidates)]
+  existing_dev <- dev_candidates[file.exists(dev_candidates)]
+  dev_path <- if (length(existing_dev) > 0L) existing_dev[[1L]] else NULL
+
+  candidates <- unique(Filter(Negate(is.null), c(explicit_path, option_path, env_path, path_path, dev_path)))
+
+  if (length(candidates) == 0L) {
+    if (isTRUE(must_work)) {
+      stop("Could not locate a MAGMA executable. ", conseguiR_magma_resolution_note(), call. = FALSE)
+    }
+    return(NULL)
+  }
+
+  for (candidate in candidates) {
+    if (!file.exists(candidate)) {
+      next
+    }
+    if (isTRUE(file.info(candidate)$isdir)) {
+      next
+    }
+    if (file.access(candidate, mode = 1) == 0) {
+      return(normalizePath(candidate, winslash = "/", mustWork = TRUE))
+    }
+  }
+
+  if (isTRUE(must_work)) {
+    stop(
+      "Found MAGMA candidate path(s), but none were usable executables: ",
+      paste(shQuote(candidates), collapse = ", "),
+      ". ",
+      conseguiR_magma_resolution_note(),
+      call. = FALSE
+    )
+  }
+
+  NULL
+}
+
 default_magma_gwas_select_columns <- unique(c(
   "hm_rsid",
   "hm_variant_id",
@@ -172,7 +249,7 @@ run_magma_step1_annotation <- function(
   gwas_sumstats,
   gene_loc_path,
   output_prefix,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   snp_loc_path = paste0(output_prefix, ".snp_loc.tsv"),
   pval_path = paste0(output_prefix, ".pval.tsv"),
   annotation_window = NULL,
@@ -184,12 +261,7 @@ run_magma_step1_annotation <- function(
   extra_args = character(),
   verbose = FALSE
 ) {
-  if (!file.exists(magma_path)) {
-    stop("MAGMA executable does not exist: ", magma_path)
-  }
-  if (file.info(magma_path)$isdir) {
-    stop("MAGMA path points to a directory, not an executable: ", magma_path)
-  }
+  magma_path <- resolve_magma_path(magma_path)
 
   if (!file.exists(gene_loc_path)) {
     stop("Gene/regulatory location file does not exist: ", gene_loc_path)
@@ -315,7 +387,7 @@ run_magma_step2_gene_analysis <- function(
   output_prefix,
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   gene_model = NULL,
   genes_only = TRUE,
   pval_use = c("SNP", "P"),
@@ -326,9 +398,7 @@ run_magma_step2_gene_analysis <- function(
   extra_args = character(),
   verbose = FALSE
 ) {
-  if (!file.exists(magma_path)) {
-    stop("MAGMA executable does not exist: ", magma_path)
-  }
+  magma_path <- resolve_magma_path(magma_path)
   if (!file.exists(gene_annot_path)) {
     stop("MAGMA gene annotation file does not exist: ", gene_annot_path)
   }
@@ -537,7 +607,7 @@ run_magma_feature_scoring_pipeline <- function(
   feature_type = c("gene", "regulatory_element"),
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   annotation_window = NULL,
   filter_path = NULL,
   ignore_strand = FALSE,
@@ -673,7 +743,7 @@ run_magma_gene_scoring_pipeline <- function(
   output_prefix,
   sample_size = NULL,
   sample_size_col = NULL,
-  magma_path = "tools/magma_v1/magma",
+  magma_path = NULL,
   annotation_window = NULL,
   filter_path = NULL,
   ignore_strand = FALSE,

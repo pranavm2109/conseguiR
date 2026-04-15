@@ -51,6 +51,10 @@ user workflows this is \code{NULL}, but advanced users can pass a covariate
 matrix or object that matches dndscv's expectations.
 \item \code{dndscv_args}: a named list of additional dndscv arguments, for example
 \verb{list(sm = \\"192r_3w\\", kc = \\"cgc81\\")}.
+\item \code{maf} should already be MAF-like before it reaches this function. In
+practice that means sample, chromosome, start, end, reference allele, and
+alternate allele information should already be available under standard
+MAF-style column names or names the package validator can harmonize.
 }
 
 In plain language:
@@ -64,6 +68,9 @@ substitution model, for example \verb{\\"192r_3w\\"}.
 \item if you supply \code{cv}, it should already be formatted the way \code{dndscv()}
 expects it. \code{conseguiR} does not reshape arbitrary covariate tables into a
 dndscv-ready object for you.
+\item \code{refdb} is not just any annotation file. It must be a dndscv-compatible
+reference \code{.rda} resource built for the same genome build as the MAF you
+are scoring.
 }
 
 Minimal examples:
@@ -71,6 +78,10 @@ Minimal examples:
 \verb{dndscv_args = list( sm = \\"192r_3w\\", kc = \\"cgc81\\" )}
 
 \code{cv = NULL}
+
+If you do use \code{cv}, think of it as an advanced dndscv-native object rather
+than a generic spreadsheet of covariates. The package passes it through; it
+does not convert a plain data frame into the structure expected by dndscv.
 
 dndscv documentation:
 \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
