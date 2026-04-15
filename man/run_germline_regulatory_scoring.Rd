@@ -97,7 +97,9 @@ MAGMA manual:
 \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 }
 \examples{
-\dontrun{
+names(formals(run_germline_regulatory_scoring))
+
+\donttest{
 run_germline_regulatory_scoring(
   gwas_sumstats = "study_gwas.tsv",
   reference_bfile = "/path/to/g1000_eur/g1000_eur",

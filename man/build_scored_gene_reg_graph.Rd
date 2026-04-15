@@ -75,7 +75,9 @@ score tables directly through \code{gene_germline_scores},
 \code{reg_epigenomic_scores}.
 }
 \examples{
-\dontrun{
+names(formals(build_scored_gene_reg_graph))
+
+\donttest{
 build_scored_gene_reg_graph(
   gene_germline_scores = "germline_gene_scores.tsv",
   reg_germline_scores = "germline_reg_scores.tsv",

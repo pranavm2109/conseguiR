@@ -121,7 +121,9 @@ fishHook tutorial:
 \url{https://mskilab.com/fishHook/tutorial.html}
 }
 \examples{
-\dontrun{
+names(formals(prepare_somatic_scores))
+
+\donttest{
 prepare_somatic_scores(
   maf = "study_somatic.maf",
   refdb = "RefCDS_human_GRCh38.rda",

@@ -137,7 +137,9 @@ Exact list formatting:
 \verb{epigenomic_args = list( bw_files = c(\\"track1.bw\\", \\"track2.bw\\", \\"track3.bw\\"), min_tracks = 3L, transform = \\"log1p\\" )}
 }
 \examples{
-\dontrun{
+names(formals(run_conseguiR))
+
+\donttest{
 run_conseguiR(
   gwas_sumstats = "study_gwas.tsv",
   somatic_maf = "study_somatic.maf",

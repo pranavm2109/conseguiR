@@ -1,10 +1,9 @@
 #' @keywords internal
 .conseguiR_basilisk_env <- local({
-  env <- NULL
-
   function() {
+    env <- .conseguiR_state$basilisk_env
     if (is.null(env)) {
-      env <<- basilisk::BasiliskEnvironment(
+      env <- basilisk::BasiliskEnvironment(
         envname = "conseguiR_py",
         pkgname = "conseguiR",
         packages = c(
@@ -16,6 +15,7 @@
           "ortools==9.10.4067"
         )
       )
+      .conseguiR_state$basilisk_env <- env
     }
 
     env
@@ -27,7 +27,7 @@
   status <- list(
     python_path = NULL,
     python_ok = FALSE,
-    python_modules = setNames(rep(FALSE, length(modules)), modules),
+    python_modules = stats::setNames(rep(FALSE, length(modules)), modules),
     error = NULL
   )
 

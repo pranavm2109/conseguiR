@@ -1,78 +1,249 @@
-# Bioconductor Readiness Audit
+# Bioconductor Submission Checklist
 
-This document tracks the package against common Bioconductor expectations from
-the official contribution guide.
+This document tracks `conseguiR` against the Bioconductor submissions guidance,
+especially:
 
-## Already improved
+- Chapter 1 "Bioconductor Package Submissions"
+- the linked package-development chapters on `README`, `DESCRIPTION`,
+  `NAMESPACE`, `LICENSE`, `INSTALL`, documentation, package data, unit tests,
+  R code, third-party code, and `.gitignore`
 
-- Exported functions have man pages and runnable examples.
+Primary reference:
+
+- https://contributions.bioconductor.org/bioconductor-package-submissions.html
+
+The goal of this file is practical triage:
+
+- what is already in good shape
+- what is partially addressed but still review-sensitive
+- what still needs to be fixed before submission
+
+## Done
+
+These items are either already aligned with the submission page or have been
+brought into much better shape during the recent cleanup.
+
+### Scope and package type
+
+- `conseguiR` is clearly a software package aimed at genomic / regulatory /
+  mutation-analysis workflows, so it fits the broad Bioconductor scope for
+  high-throughput biological data analysis.
+- `biocViews` is present in `DESCRIPTION`.
+
+### Core package metadata and standard files
+
+- `README.md` exists.
+- `DESCRIPTION` exists and now passes the `DESCRIPTION meta-information` stage
+  in staged `R CMD check`.
+- `NEWS.md` exists.
+- `INSTALL` exists.
+- `LICENSE` now uses a valid MIT DCF stub:
+  - `YEAR: 2026`
+  - `COPYRIGHT HOLDER: Pranav Mishra`
+
+### Documentation baseline
+
+- Exported user-facing functions have man pages.
 - A narrative vignette exists in `vignettes/conseguiR-overview.Rmd`.
-- A second report-style analysis document exists in
-  `vignettes/conseguiR-analysis-report.Rmd`.
-- Package startup is now lightweight and no longer auto-initializes backend
-  graphs or auto-discovers Python runtimes.
-- Python-backed stages now run through a managed `basilisk` environment rather
-  than a hard-coded user conda environment.
-- Standard package files `NEWS.md` and `INSTALL` are now present.
-- Generated vignette markdown files are excluded from the build.
-- A standard `tests/testthat` entry point is now present.
+- The package documentation is no longer failing at the `DESCRIPTION`
+  meta-information stage because of a malformed `LICENSE`.
 
-## Remaining likely blockers
+### Runtime and package behavior
 
-### 1. Python runtime strategy
+- Package startup is lightweight and no longer tries to initialize heavy
+  backend state automatically.
+- Python-backed stages now use a managed `basilisk` environment instead of a
+  hard-coded user conda setup.
+- The bundled MAGMA executable has been removed from the built package tarball,
+  so the old "undeclared executable file" warning is fixed.
+- MAGMA is now treated as an external prerequisite, with resolution via:
+  - explicit `magma_path`
+  - `options(conseguiR.magma_path = ...)`
+  - `CONSEGUIR_MAGMA_PATH`
+  - `magma` on `PATH`
+  - a repository-local development fallback when present
 
-The diffusion and selected-subgraph stages still rely on Python, but they now
-use a managed `basilisk` environment instead of a user-managed interpreter.
-This substantially improves Bioconductor alignment. The managed environment has
-now been validated end to end in the development environment for both:
+### Recent check issues already fixed
 
-- `run_gene_reg_diffusion()`
-- `call_selected_subgraph()`
+- The `setNames` "no visible global function definition" note was fixed by
+  using `stats::setNames()`.
+- The earlier "unused Imports" note was resolved in staged checking by adding
+  targeted `@importFrom` declarations.
+- The repository-local `man/initialize_backend_graphs.Rd` now documents all of
+  the function arguments.
+- macOS `._*` shadow files were removed from `R/`, which had been interfering
+  with roxygen behavior.
 
-The remaining question is reproducibility on a clean machine / build context,
-not whether the current managed-environment design works at all.
+## Partially Done
 
-Recommended fix:
+These areas are moving in the right direction, but they are still likely to
+attract reviewer attention or still need one more round of hardening.
 
-- validate the `basilisk` environment provisioning path on a clean setup
-- confirm the managed environment works under package build/check conditions
+### Interoperability with Bioconductor infrastructure
 
-### 2. Test layout and scope
+- The package uses Bioconductor-relevant packages and genomic concepts.
+- However, the user-facing API is still mainly built around package-specific
+  bundles and sourced script layers rather than deeper integration with
+  canonical Bioconductor container classes throughout the workflow.
+- This does not automatically disqualify the package, but reviewers may ask
+  for a clearer interoperability story.
 
-The historical tests still live under `scripts/Testing/R` and
-`scripts/Testing/Python`. A minimal `tests/testthat` harness now exists, but
-the full package test suite still needs to be migrated into standard package
-testing layout.
+### Documentation quality
 
-Recommended fix:
+- The package has a vignette and function-level documentation.
+- Documentation still needs one more pass for submission polish:
+  - examples of expected input formats
+  - clearer explanation of external prerequisites
+  - a cleaner narrative of how the package interoperates with Bioconductor
+    infrastructure
 
-- move or rewrite the existing script-style tests under `tests/testthat/`
-- make sure package tests do not depend on local development-only outputs under
-  `data/processed/`
+### Python / third-party code story
 
-### 3. Package data footprint
+- The move to `basilisk` is a major improvement.
+- The package still has meaningful Python-backed execution and external MAGMA
+  dependence, so the "third-party code" review area is still sensitive.
+- What remains is less about architecture and more about proving that the
+  resulting user experience is robust in a clean build/check environment.
 
-The repository contains large development data outside the build, and
-`inst/extdata` is still sizeable. This should be reviewed before submission.
+### Testing
 
-Recommended fix:
+- A `tests/testthat` harness exists.
+- Historical tests still largely live under `scripts/Testing`.
+- This means the package has tests, but not yet in a submission-polished,
+  standard package layout.
 
-- keep only the smallest necessary example files in `inst/extdata`
-- move large supporting resources to an external download/cache path or a hub
-  strategy if they are essential
+### Build/check progress
 
-### 4. Metadata polish
+- Staged `R CMD build` and `R CMD check` are much healthier than before.
+- The package now passes the following previously failing check stages in staged
+  runs:
+  - `checking for executable files`
+  - `checking DESCRIPTION meta-information`
+  - `checking dependencies in R code`
+- We still have not yet driven a full submission-style run to a genuinely clean
+  end state under devel Bioconductor plus `BiocCheck(new-package = TRUE)`.
 
-The package now has `biocViews`, but it still likely needs:
+## Must Fix Before Submission
 
-- final submission-ready versioning
-- project `URL` and `BugReports`
-- a `CITATION` file if the package/paper citation should be explicit
+These are the items that should be treated as actual submission blockers until
+resolved.
 
-## Practical next steps
+### 1. Clean default branch / package-only repository state
 
-1. migrate the script-style tests into `tests/testthat`
-2. finish documenting the `basilisk`-managed Python stages as the supported workflow
-3. trim `inst/extdata` to submission-friendly example data
-4. add final package metadata (`URL`, `BugReports`, `CITATION`)
-5. run `R CMD check` and compare against the Bioconductor build expectations
+The submissions page says the default branch used for submission must contain
+only package code. In practice, `conseguiR` still looks like an active research
+repository rather than a package-only submission branch.
+
+Needs work:
+
+- remove or relocate development-only artifacts from the submission branch
+- ensure the default branch is package-focused
+- verify that no extra non-package files bleed into `R CMD build`
+
+### 2. Full `R CMD check` and `BiocCheck` on the right environment
+
+Bioconductor explicitly says the package will be subjected to:
+
+- `R CMD build`
+- `R CMD check`
+- `BiocCheckGitClone()`
+- `BiocCheck(new-package = TRUE)`
+
+Needs work:
+
+- run `BiocCheck(new-package = TRUE)` and fix all actionable issues
+- run the package against the devel version of Bioconductor
+- verify behavior on Linux, macOS, and Windows expectations as far as possible
+
+### 3. Final package metadata polish
+
+Still missing or incomplete:
+
+- `URL` field in `DESCRIPTION`
+- `BugReports` field in `DESCRIPTION`
+- `CITATION` file
+- final submission-ready versioning / release discipline
+
+### 4. Test migration into standard package layout
+
+Bioconductor expects a conventional, maintained testing story.
+
+Needs work:
+
+- migrate or rewrite meaningful tests under `tests/testthat`
+- reduce reliance on `scripts/Testing`
+- ensure tests are self-contained and do not depend on local development output
+
+### 5. Package data footprint
+
+`inst/extdata` is still large enough to merit attention.
+
+Current staged-check signal:
+
+- installed size about `43.1 MB`
+- `extdata` about `42.5 MB`
+
+Needs work:
+
+- decide which resources are truly package-owned examples
+- move anything larger or more reference-like to a more appropriate strategy if
+  possible
+- document why each shipped resource needs to live inside the package
+
+### 6. Third-party dependency clarity
+
+Even though MAGMA externalization is fixed technically, the submission story
+still needs to be very clear.
+
+Needs work:
+
+- document MAGMA as an optional / external prerequisite as cleanly as possible
+- ensure package functions fail gracefully when MAGMA is absent
+- make sure the package is still useful and checkable even when the external
+  tool is not installed
+
+## Current High-Priority Queue
+
+If we were prioritizing strictly for submission readiness, the next steps
+should be:
+
+1. Add `URL`, `BugReports`, and a `CITATION` file.
+2. Run `BiocCheck(new-package = TRUE)` and capture every issue.
+3. Clean the default branch so it looks like package source, not a mixed
+   package-plus-development workspace.
+4. Migrate the important tests into `tests/testthat`.
+5. Reassess `inst/extdata` and shrink it where possible.
+6. Do one final pass on Python / MAGMA dependency messaging and failure modes.
+
+## Notes on Recent Check Results
+
+Interpreting recent staged checks requires care because a few notes were caused
+by temporary staging mistakes rather than the repository itself.
+
+### Real issues that were fixed
+
+- bundled MAGMA executable warning
+- invalid MIT license stub
+- `setNames` namespace note
+- broad `Imports` note
+
+### Temporary staging artifacts, not current repo blockers
+
+- "left-over files" notes caused by copying `man/*.Rd` into the staged root
+  instead of into `man/`
+- stale staged copies of `initialize_backend_graphs.Rd`
+
+## Definition of "Submission Ready"
+
+For this repository, we should consider `conseguiR` submission-ready only when
+all of the following are true:
+
+- default branch contains only package-relevant source
+- staged `R CMD build` and `R CMD check` are clean aside from unavoidable
+  environment-only limitations
+- `BiocCheck(new-package = TRUE)` is clean or all remaining issues have
+  deliberate, documented justification
+- metadata is complete (`URL`, `BugReports`, `CITATION`)
+- tests are in standard package layout
+- shipped data and third-party dependencies have a defensible Bioconductor
+  story

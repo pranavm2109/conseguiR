@@ -1,7 +1,7 @@
 Package: conseguiR
 Type: Package
 Title: Integrative Germline, Somatic, and Epigenomic Graph Prioritization
-Version: 0.0.1
+Version: 0.99.0
 Authors@R: c(
     person(given = "Pranav", family = "Mishra", role = c("aut", "cre"), email = "pranav.mishra@yale.edu"),
     person(given = "Mark", family = "Robinson", role = "aut", email = "mark.robinson@yale.edu")
@@ -10,10 +10,12 @@ Description: Tools for scoring somatic, germline, and epigenomic evidence at gen
     projecting scores onto biological graphs, running diffusion, calling subnetworks, and exporting results for
     downstream visualization and app development.
 License: MIT + file LICENSE
+URL: https://github.com/pranavm2109/conseguiR
+BugReports: https://github.com/pranavm2109/conseguiR/issues
 biocViews: Software, GeneRegulation, GeneticVariability, GraphAndNetwork
 Encoding: UTF-8
 Depends:
-    R (>= 3.5.0)
+    R (>= 4.5.0)
 SystemRequirements: MAGMA (for germline scoring); Python 3 with numpy, pandas, and ortools (optional, for diffusion and subgraph calling)
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3

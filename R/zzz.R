@@ -2,7 +2,8 @@
 # This file is intentionally not exported and should avoid expensive side effects
 # at load time so package startup remains lightweight and Bioconductor-friendly.
 
-.conseguiR_pkg_root <- NULL
+.conseguiR_state <- new.env(parent = emptyenv())
+.conseguiR_state$pkg_root <- NULL
 .conseguiR_default_conda_env <- function() {
   env <- getOption("conseguiR.conda_env", Sys.getenv("CONSEGUIR_CONDA_ENV", unset = ""))
   env <- trimws(as.character(env %||% ""))
@@ -101,27 +102,6 @@ consequIR_python_from_conda_prefix <- function() {
   }
 }
 
-consequIR_prepend_path <- function(prefix) {
-  if (!nzchar(prefix) || !dir.exists(prefix)) {
-    return(invisible(NULL))
-  }
-
-  env_bin <- file.path(prefix, "bin")
-  if (!nzchar(env_bin) || !dir.exists(env_bin)) {
-    return(invisible(NULL))
-  }
-
-  current_path <- Sys.getenv("PATH")
-  path_sep <- .Platform$path.sep
-  path_entries <- unlist(strsplit(current_path, path_sep, fixed = TRUE), use.names = FALSE)
-  if (env_bin %in% path_entries) {
-    return(invisible(NULL))
-  }
-
-  Sys.setenv(PATH = paste(c(env_bin, current_path), collapse = path_sep))
-  invisible(NULL)
-}
-
 consequIR_find_python <- function() {
   configured_env <- .conseguiR_default_conda_env()
   current_env <- Sys.getenv("CONDA_DEFAULT_ENV")
@@ -155,7 +135,7 @@ consequIR_find_python <- function() {
 
 .onLoad <- function(libname, pkgname) {
   if (!is.null(libname) && !is.null(pkgname)) {
-    .conseguiR_pkg_root <<- file.path(libname, pkgname)
+    .conseguiR_state$pkg_root <- file.path(libname, pkgname)
   }
 
   invisible()

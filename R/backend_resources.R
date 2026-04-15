@@ -11,7 +11,7 @@
   }
 
   candidates <- c(
-    if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, "data", "processed"),
+    if (!is.null(.conseguiR_state$pkg_root)) file.path(.conseguiR_state$pkg_root, "data", "processed"),
     file.path(getwd(), "data", "processed"),
     file.path(tools::R_user_dir("conseguiR", which = "cache"), "backend")
   )
@@ -63,8 +63,8 @@
   installed <- tryCatch(system.file("extdata", "backend", package = "conseguiR"), error = function(e) "")
   candidates <- c(
     installed,
-    if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, "extdata", "backend"),
-    if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, "inst", "extdata", "backend"),
+    if (!is.null(.conseguiR_state$pkg_root)) file.path(.conseguiR_state$pkg_root, "extdata", "backend"),
+    if (!is.null(.conseguiR_state$pkg_root)) file.path(.conseguiR_state$pkg_root, "inst", "extdata", "backend"),
     file.path(getwd(), "extdata", "backend"),
     file.path(getwd(), "inst", "extdata", "backend")
   )
@@ -169,7 +169,7 @@
 #' @keywords internal
 .conseguiR_data_candidates <- function(relpath) {
   unique(c(
-    if (!is.null(.conseguiR_pkg_root)) file.path(.conseguiR_pkg_root, relpath),
+    if (!is.null(.conseguiR_state$pkg_root)) file.path(.conseguiR_state$pkg_root, relpath),
     file.path(getwd(), relpath)
   ))
 }

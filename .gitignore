@@ -31,3 +31,6 @@ Rplots.pdf
 
 # Local external tools used during development but not shipped with the package
 tools/magma_v1/magma
+
+# Local BiocCheck output
+conseguiR.BiocCheck/

@@ -8,7 +8,7 @@
 
 #' @keywords internal
 .conseguiR_runtime_file <- function(relpath) {
-  pkg_root <- if (exists(".conseguiR_pkg_root", inherits = FALSE)) .conseguiR_pkg_root else NULL
+  pkg_root <- .conseguiR_state$pkg_root
   candidates <- c(
     if (!is.null(pkg_root)) file.path(pkg_root, relpath),
     file.path(getwd(), relpath),
@@ -101,7 +101,7 @@
 #' @examples
 #' validate_inputs()
 #'
-#' \dontrun{
+#' \donttest{
 #' validate_inputs(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   somatic_maf = "study_somatic.maf",
@@ -135,7 +135,18 @@ validate_inputs <- function(
 #' Builds the package's unscored backend graph resources when they are missing
 #' and the required raw graph resources are available.
 #'
-#' @inheritParams initialize_backend_graphs
+#' @param backend_dir Optional backend cache directory. When `NULL`,
+#'   `conseguiR` uses its default backend cache location.
+#' @param build_gene_reg Logical scalar. If `TRUE`, ensure the gene-regulatory
+#'   backend graph resources are available.
+#' @param build_gene_gene Logical scalar. If `TRUE`, ensure the gene-gene
+#'   backend graph resources are available.
+#' @param force Logical scalar. If `TRUE`, rebuild or reseed backend resources
+#'   even when cached outputs already exist.
+#' @param strict Logical scalar. If `TRUE`, error when required backend inputs
+#'   are unavailable. If `FALSE`, return a best-effort status object instead.
+#' @param quiet Logical scalar. If `TRUE`, suppress non-essential backend
+#'   initialization messages.
 #' @param verbose Logical scalar. If `TRUE`, print backend initialization
 #'   status messages.
 #'
@@ -268,7 +279,9 @@ initialize_backend_graphs <- function(
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(run_germline_gene_scoring))
+#'
+#' \donttest{
 #' run_germline_gene_scoring(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
@@ -357,7 +370,9 @@ run_germline_gene_scoring <- function(
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(run_germline_regulatory_scoring))
+#'
+#' \donttest{
 #' run_germline_regulatory_scoring(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
@@ -485,7 +500,9 @@ run_germline_regulatory_scoring <- function(
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(prepare_germline_scores))
+#'
+#' \donttest{
 #' prepare_germline_scores(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
@@ -597,7 +614,9 @@ prepare_germline_scores <- function(
 #' \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(run_somatic_gene_scoring))
+#'
+#' \donttest{
 #' run_somatic_gene_scoring(
 #'   maf = "study_somatic.maf",
 #'   refdb = "RefCDS_human_GRCh38.rda",
@@ -705,7 +724,9 @@ run_somatic_gene_scoring <- function(
 #' \url{https://mskilab.com/fishHook/tutorial.html}
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(run_somatic_regulatory_scoring))
+#'
+#' \donttest{
 #' run_somatic_regulatory_scoring(
 #'   maf = "study_somatic.maf",
 #'   reg_ref_path = "regulatory_elements.loc",
@@ -820,7 +841,9 @@ run_somatic_regulatory_scoring <- function(
 #' \url{https://mskilab.com/fishHook/tutorial.html}
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(prepare_somatic_scores))
+#'
+#' \donttest{
 #' prepare_somatic_scores(
 #'   maf = "study_somatic.maf",
 #'   refdb = "RefCDS_human_GRCh38.rda",
@@ -909,7 +932,9 @@ prepare_somatic_scores <- function(
 #'   meaningful
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(prepare_epigenomic_scores))
+#'
+#' \donttest{
 #' prepare_epigenomic_scores(
 #'   reg_ref_path = "regulatory_elements.loc",
 #'   bw_files = c("track1.bw", "track2.bw", "track3.bw"),
@@ -981,7 +1006,9 @@ prepare_epigenomic_scores <- function(
 #' `reg_epigenomic_scores`.
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(build_scored_gene_reg_graph))
+#'
+#' \donttest{
 #' build_scored_gene_reg_graph(
 #'   gene_germline_scores = "germline_gene_scores.tsv",
 #'   reg_germline_scores = "germline_reg_scores.tsv",
@@ -1078,7 +1105,9 @@ build_scored_gene_reg_graph <- function(
 #'   extreme feature does not dominate the update
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(run_gene_reg_diffusion))
+#'
+#' \donttest{
 #' scored_graph <- build_scored_gene_reg_graph(
 #'   gene_germline_scores = "germline_gene_scores.tsv",
 #'   reg_germline_scores = "germline_reg_scores.tsv",
@@ -1197,7 +1226,9 @@ run_gene_reg_diffusion <- function(
 #'   controls for difficult graphs
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(call_selected_subgraph))
+#'
+#' \donttest{
 #' diffusion <- run_gene_reg_diffusion(
 #'   nodes_path = "gene_reg_graph_scored_nodes.tsv.gz",
 #'   edges_path = "gene_reg_graph_scored_edges.tsv.gz"
@@ -1309,7 +1340,14 @@ call_selected_subgraph <- function(
 #' - `plot_file_path`: a single file path such as `"scores_plot.pdf"`
 #'
 #' @examples
-#' \dontrun{
+#' plot_scores(
+#'   table = data.frame(feature_id = c("A", "B"), zstat = c(1, -1)),
+#'   feature_column = "feature_id",
+#'   z_column = "zstat",
+#'   save_plot = FALSE
+#' )
+#'
+#' \donttest{
 #' germline <- prepare_germline_scores(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
@@ -1380,6 +1418,10 @@ plot_scores <- function(
 #' @param save_plot Whether to save the figure.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages.
 #'
+#' @examples
+#' bundle <- list(gene_scores = data.frame(gene_id = c("A", "B"), zstat = c(1, -1)))
+#' plot_germline_gene_scores(germline_scores = bundle, stage = "pre", save_plot = FALSE)
+#'
 #' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
 plot_germline_gene_scores <- function(
@@ -1430,6 +1472,10 @@ plot_germline_gene_scores <- function(
 #' @param save_plot Whether to save the figure.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages.
 #'
+#' @examples
+#' bundle <- list(reg_scores = data.frame(reg_elem_id = c("r1", "r2"), zstat = c(1, -1)))
+#' plot_germline_reg_scores(germline_scores = bundle, save_plot = FALSE)
+#'
 #' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
 plot_germline_reg_scores <- function(
@@ -1476,6 +1522,12 @@ plot_germline_reg_scores <- function(
 #' @param dpi Plot DPI.
 #' @param save_plot Whether to save the figure.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @examples
+#' bundle <- list(
+#'   gene_scores = data.frame(gene_id = c("A", "B"), zstat = c(2, -2), p_value = c(0.01, 0.02))
+#' )
+#' plot_somatic_gene_scores(somatic_scores = bundle, stage = "pre", save_plot = FALSE)
 #'
 #' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
@@ -1527,6 +1579,12 @@ plot_somatic_gene_scores <- function(
 #' @param save_plot Whether to save the figure.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages.
 #'
+#' @examples
+#' bundle <- list(
+#'   reg_scores = data.frame(reg_elem_id = c("r1", "r2"), zstat = c(2, -2), p_value = c(0.01, 0.02))
+#' )
+#' plot_somatic_reg_scores(somatic_scores = bundle, save_plot = FALSE)
+#'
 #' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
 plot_somatic_reg_scores <- function(
@@ -1570,6 +1628,12 @@ plot_somatic_reg_scores <- function(
 #' @param save_plot Whether to save the figure.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages.
 #'
+#' @examples
+#' diffusion_bundle <- list(
+#'   all_genes = data.frame(gene_name = c("A", "B"), post_epigenomic = c(1.5, 0.5), post_norm = c(2, 1))
+#' )
+#' plot_epigenomic_gene_scores(diffusion = diffusion_bundle, save_plot = FALSE)
+#'
 #' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
 plot_epigenomic_gene_scores <- function(
@@ -1611,6 +1675,10 @@ plot_epigenomic_gene_scores <- function(
 #' @param dpi Plot DPI.
 #' @param save_plot Whether to save the figure.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages.
+#'
+#' @examples
+#' bundle <- list(reg_scores = data.frame(reg_elem_id = c("r1", "r2"), zstat = c(1, -1)))
+#' plot_epigenomic_reg_scores(epigenomic_scores = bundle, save_plot = FALSE)
 #'
 #' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
@@ -1717,7 +1785,9 @@ plot_epigenomic_reg_scores <- function(
 #'   elements
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(plot_locus_context))
+#'
+#' \donttest{
 #' plot_locus_context(
 #'   chromosome = "8",
 #'   start = 127200000,
@@ -1828,7 +1898,9 @@ plot_locus_context <- function(
 #' - `layout`: a single layout keyword such as `\"fr\"`
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(plot_selected_subgraph))
+#'
+#' \donttest{
 #' selected_subgraph <- call_selected_subgraph(
 #'   diffusion_path = "gene_reg_graph_diffusion_all_genes.tsv",
 #'   target_genes = 50L
@@ -1986,7 +2058,9 @@ plot_selected_subgraph <- function(
 #' )`
 #'
 #' @examples
-#' \dontrun{
+#' names(formals(run_conseguiR))
+#'
+#' \donttest{
 #' run_conseguiR(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   somatic_maf = "study_somatic.maf",

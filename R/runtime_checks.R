@@ -55,7 +55,7 @@
 
   dev_relpath <- "tools/magma_v1/magma"
   dev_path <- NULL
-  pkg_root <- if (exists(".conseguiR_pkg_root", inherits = FALSE)) .conseguiR_pkg_root else NULL
+  pkg_root <- .conseguiR_state$pkg_root
   dev_candidates <- c(
     if (!is.null(pkg_root)) file.path(pkg_root, dev_relpath),
     file.path(getwd(), dev_relpath)
@@ -112,17 +112,21 @@
 #'
 #' @param quiet Whether to suppress the summary message.
 #'
+#' @examples
+#' status <- check_conseguiR_runtime(quiet = TRUE)
+#' is.list(status)
+#'
 #' @return A named list describing the current runtime status.
 #' @export
 check_conseguiR_runtime <- function(quiet = FALSE) {
   req <- .conseguiR_runtime_requirements()
 
-  core_r_packages <- setNames(
+  core_r_packages <- stats::setNames(
     vapply(req$core_r_packages, requireNamespace, quietly = TRUE, FUN.VALUE = logical(1)),
     req$core_r_packages
   )
 
-  optional_r_packages <- setNames(
+  optional_r_packages <- stats::setNames(
     vapply(req$optional_r_packages, requireNamespace, quietly = TRUE, FUN.VALUE = logical(1)),
     req$optional_r_packages
   )

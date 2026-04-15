@@ -56,3 +56,8 @@ A plot bundle containing the ggplot object and plotting data.
 \description{
 Plot germline gene signal before or after diffusion
 }
+\examples{
+bundle <- list(gene_scores = data.frame(gene_id = c("A", "B"), zstat = c(1, -1)))
+plot_germline_gene_scores(germline_scores = bundle, stage = "pre", save_plot = FALSE)
+
+}

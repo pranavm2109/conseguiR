@@ -89,7 +89,9 @@ extreme feature does not dominate the update
 }
 }
 \examples{
-\dontrun{
+names(formals(run_gene_reg_diffusion))
+
+\donttest{
 scored_graph <- build_scored_gene_reg_graph(
   gene_germline_scores = "germline_gene_scores.tsv",
   reg_germline_scores = "germline_reg_scores.tsv",

@@ -101,7 +101,9 @@ fishHook tutorial:
 \url{https://mskilab.com/fishHook/tutorial.html}
 }
 \examples{
-\dontrun{
+names(formals(run_somatic_regulatory_scoring))
+
+\donttest{
 run_somatic_regulatory_scoring(
   maf = "study_somatic.maf",
   reg_ref_path = "regulatory_elements.loc",

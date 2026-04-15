@@ -15,6 +15,24 @@ initialize_backend_graphs(
 )
 }
 \arguments{
+\item{backend_dir}{Optional backend cache directory. When \code{NULL},
+\code{conseguiR} uses its default backend cache location.}
+
+\item{build_gene_reg}{Logical scalar. If \code{TRUE}, ensure the gene-regulatory
+backend graph resources are available.}
+
+\item{build_gene_gene}{Logical scalar. If \code{TRUE}, ensure the gene-gene
+backend graph resources are available.}
+
+\item{force}{Logical scalar. If \code{TRUE}, rebuild or reseed backend resources
+even when cached outputs already exist.}
+
+\item{strict}{Logical scalar. If \code{TRUE}, error when required backend inputs
+are unavailable. If \code{FALSE}, return a best-effort status object instead.}
+
+\item{quiet}{Logical scalar. If \code{TRUE}, suppress non-essential backend
+initialization messages.}
+
 \item{verbose}{Logical scalar. If \code{TRUE}, print backend initialization
 status messages.}
 }

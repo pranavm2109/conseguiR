@@ -47,3 +47,8 @@ A plot bundle containing the ggplot object and plotting data.
 \description{
 Plot epigenomic regulatory signal
 }
+\examples{
+bundle <- list(reg_scores = data.frame(reg_elem_id = c("r1", "r2"), zstat = c(1, -1)))
+plot_epigenomic_reg_scores(epigenomic_scores = bundle, save_plot = FALSE)
+
+}

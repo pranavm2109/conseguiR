@@ -80,7 +80,14 @@ a \code{zstat}-like numeric column
 }
 }
 \examples{
-\dontrun{
+plot_scores(
+  table = data.frame(feature_id = c("A", "B"), zstat = c(1, -1)),
+  feature_column = "feature_id",
+  z_column = "zstat",
+  save_plot = FALSE
+)
+
+\donttest{
 germline <- prepare_germline_scores(
   gwas_sumstats = "study_gwas.tsv",
   reference_bfile = "/path/to/g1000_eur/g1000_eur",

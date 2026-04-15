@@ -47,3 +47,10 @@ A plot bundle containing the ggplot object and plotting data.
 \description{
 Plot somatic regulatory signal
 }
+\examples{
+bundle <- list(
+  reg_scores = data.frame(reg_elem_id = c("r1", "r2"), zstat = c(2, -2), p_value = c(0.01, 0.02))
+)
+plot_somatic_reg_scores(somatic_scores = bundle, save_plot = FALSE)
+
+}

@@ -87,7 +87,9 @@ dndscv documentation:
 \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}
 }
 \examples{
-\dontrun{
+names(formals(run_somatic_gene_scoring))
+
+\donttest{
 run_somatic_gene_scoring(
   maf = "study_somatic.maf",
   refdb = "RefCDS_human_GRCh38.rda",

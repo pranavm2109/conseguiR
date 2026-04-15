@@ -4,6 +4,10 @@
 ^\.DS_Store$
 ^._.*$
 ^data$
+^data/raw/Testing$
+^data/raw/Testing/
+^data/processed$
+^data/processed/
 ^scripts$
 ^conseguiR_tmp$
 ^INSTALLATION\.md$

@@ -8,6 +8,10 @@ output:
     toc_float: true
     number_sections: true
     df_print: paged
+vignette: >
+  %\VignetteIndexEntry{conseguiR Worked Example Report}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
@@ -384,3 +388,9 @@ different layer of structure:
 
 In practice, that is why `conseguiR` works best as a staged workflow rather
 than as a one-line black box.
+
+# Session information
+
+```{r session-info}
+sessionInfo()
+```

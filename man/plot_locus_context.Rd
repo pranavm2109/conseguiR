@@ -138,7 +138,9 @@ elements
 }
 }
 \examples{
-\dontrun{
+names(formals(plot_locus_context))
+
+\donttest{
 plot_locus_context(
   chromosome = "8",
   start = 127200000,

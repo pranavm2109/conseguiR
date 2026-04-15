@@ -21,3 +21,8 @@ The package baseline is considered usable when the core R dependencies and
 MAGMA are available. Python is reported separately because it is only needed
 for the diffusion and selected-subgraph stages.
 }
+\examples{
+status <- check_conseguiR_runtime(quiet = TRUE)
+is.list(status)
+
+}
