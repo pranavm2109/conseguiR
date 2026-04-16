@@ -38,8 +38,7 @@ run_germline_gene_scoring(
 
 \item{magma_path}{Optional path to the MAGMA executable. When \code{NULL},
 \code{conseguiR} searches in this order: \code{options(conseguiR.magma_path = ...)},
-\code{Sys.getenv("CONSEGUIR_MAGMA_PATH")}, \code{magma} on \code{PATH}, and finally a
-local development copy at \code{tools/magma_v1/magma} when present.}
+\code{Sys.getenv("CONSEGUIR_MAGMA_PATH")}, then \code{magma} on \code{PATH}.}
 
 \item{magma_gwas_cache_prefix}{Optional shared MAGMA GWAS cache prefix.}
 
@@ -136,7 +135,7 @@ MAGMA manual:
 \examples{
 names(formals(run_germline_gene_scoring))
 
-\donttest{
+\dontrun{
 run_germline_gene_scoring(
   gwas_sumstats = "study_gwas.tsv",
   reference_bfile = "/path/to/g1000_eur/g1000_eur",

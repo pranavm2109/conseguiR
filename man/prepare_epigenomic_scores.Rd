@@ -76,7 +76,7 @@ meaningful
 \examples{
 names(formals(prepare_epigenomic_scores))
 
-\donttest{
+\dontrun{
 prepare_epigenomic_scores(
   reg_ref_path = "regulatory_elements.loc",
   bw_files = c("track1.bw", "track2.bw", "track3.bw"),

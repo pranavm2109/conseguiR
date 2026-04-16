@@ -86,7 +86,7 @@ graphics device extension supported by the plotting helper
 \examples{
 names(formals(plot_selected_subgraph))
 
-\donttest{
+\dontrun{
 selected_subgraph <- call_selected_subgraph(
   diffusion_path = "gene_reg_graph_diffusion_all_genes.tsv",
   target_genes = 50L

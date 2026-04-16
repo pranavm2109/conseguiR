@@ -101,7 +101,7 @@
 #' @examples
 #' validate_inputs()
 #'
-#' \donttest{
+#' \dontrun{
 #' validate_inputs(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   somatic_maf = "study_somatic.maf",
@@ -195,8 +195,7 @@ initialize_backend_graphs <- function(
 #' @param sample_size_col Optional sample size column name.
 #' @param magma_path Optional path to the MAGMA executable. When `NULL`,
 #'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
-#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, `magma` on `PATH`, and finally a
-#'   local development copy at `tools/magma_v1/magma` when present.
+#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, then `magma` on `PATH`.
 #' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
 #' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
 #' @param reuse_existing_annotation Whether to reuse an existing MAGMA
@@ -281,7 +280,7 @@ initialize_backend_graphs <- function(
 #' @examples
 #' names(formals(run_germline_gene_scoring))
 #'
-#' \donttest{
+#' \dontrun{
 #' run_germline_gene_scoring(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
@@ -372,7 +371,7 @@ run_germline_gene_scoring <- function(
 #' @examples
 #' names(formals(run_germline_regulatory_scoring))
 #'
-#' \donttest{
+#' \dontrun{
 #' run_germline_regulatory_scoring(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
@@ -502,7 +501,7 @@ run_germline_regulatory_scoring <- function(
 #' @examples
 #' names(formals(prepare_germline_scores))
 #'
-#' \donttest{
+#' \dontrun{
 #' prepare_germline_scores(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
@@ -616,7 +615,7 @@ prepare_germline_scores <- function(
 #' @examples
 #' names(formals(run_somatic_gene_scoring))
 #'
-#' \donttest{
+#' \dontrun{
 #' run_somatic_gene_scoring(
 #'   maf = "study_somatic.maf",
 #'   refdb = "RefCDS_human_GRCh38.rda",
@@ -726,7 +725,7 @@ run_somatic_gene_scoring <- function(
 #' @examples
 #' names(formals(run_somatic_regulatory_scoring))
 #'
-#' \donttest{
+#' \dontrun{
 #' run_somatic_regulatory_scoring(
 #'   maf = "study_somatic.maf",
 #'   reg_ref_path = "regulatory_elements.loc",
@@ -843,7 +842,7 @@ run_somatic_regulatory_scoring <- function(
 #' @examples
 #' names(formals(prepare_somatic_scores))
 #'
-#' \donttest{
+#' \dontrun{
 #' prepare_somatic_scores(
 #'   maf = "study_somatic.maf",
 #'   refdb = "RefCDS_human_GRCh38.rda",
@@ -934,7 +933,7 @@ prepare_somatic_scores <- function(
 #' @examples
 #' names(formals(prepare_epigenomic_scores))
 #'
-#' \donttest{
+#' \dontrun{
 #' prepare_epigenomic_scores(
 #'   reg_ref_path = "regulatory_elements.loc",
 #'   bw_files = c("track1.bw", "track2.bw", "track3.bw"),
@@ -1008,15 +1007,32 @@ prepare_epigenomic_scores <- function(
 #' @examples
 #' names(formals(build_scored_gene_reg_graph))
 #'
-#' \donttest{
-#' build_scored_gene_reg_graph(
-#'   gene_germline_scores = "germline_gene_scores.tsv",
-#'   reg_germline_scores = "germline_reg_scores.tsv",
-#'   gene_somatic_scores = "somatic_gene_scores.tsv",
-#'   reg_somatic_scores = "somatic_reg_scores.tsv",
-#'   reg_epigenomic_scores = "epigenomic_reg_scores.tsv"
+#' toy_graph <- igraph::graph_from_data_frame(
+#'   d = data.frame(
+#'     from = "GH01J000001",
+#'     to = "TP53",
+#'     confidence = 0.9
+#'   ),
+#'   vertices = data.frame(
+#'     name = c("TP53", "GH01J000001"),
+#'     node_id = c("TP53", "GH01J000001"),
+#'     node_type = c("gene", "reg")
+#'   ),
+#'   directed = TRUE
 #' )
-#' }
+#'
+#' scored_graph <- build_scored_gene_reg_graph(
+#'   graph = toy_graph,
+#'   graph_rds_path = tempfile(fileext = ".rds"),
+#'   gene_germline_scores = data.frame(gene_id = "TP53", zstat = 2),
+#'   reg_germline_scores = data.frame(reg_elem_id = "GH01J000001", zstat = 1.2),
+#'   gene_somatic_scores = data.frame(gene_id = "TP53", zstat = -1.5),
+#'   reg_somatic_scores = data.frame(reg_elem_id = "GH01J000001", zstat = 0.3),
+#'   reg_epigenomic_scores = data.frame(reg_elem_id = "GH01J000001", zstat = 2.4),
+#'   save_outputs = FALSE
+#' )
+#'
+#' names(scored_graph$objects)
 #'
 #' @return A scored gene-reg graph bundle containing the graph, nodes, and edges.
 #' @export
@@ -1106,22 +1122,6 @@ build_scored_gene_reg_graph <- function(
 #'
 #' @examples
 #' names(formals(run_gene_reg_diffusion))
-#'
-#' \donttest{
-#' scored_graph <- build_scored_gene_reg_graph(
-#'   gene_germline_scores = "germline_gene_scores.tsv",
-#'   reg_germline_scores = "germline_reg_scores.tsv",
-#'   gene_somatic_scores = "somatic_gene_scores.tsv",
-#'   reg_somatic_scores = "somatic_reg_scores.tsv",
-#'   reg_epigenomic_scores = "epigenomic_reg_scores.tsv"
-#' )
-#'
-#' run_gene_reg_diffusion(
-#'   scored_graph = scored_graph,
-#'   top_k = 3L,
-#'   beta_epigenomic = 0.7
-#' )
-#' }
 #'
 #' @return A diffusion bundle containing full and top-gene diffusion tables.
 #' @export
@@ -1227,18 +1227,6 @@ run_gene_reg_diffusion <- function(
 #'
 #' @examples
 #' names(formals(call_selected_subgraph))
-#'
-#' \donttest{
-#' diffusion <- run_gene_reg_diffusion(
-#'   nodes_path = "gene_reg_graph_scored_nodes.tsv.gz",
-#'   edges_path = "gene_reg_graph_scored_edges.tsv.gz"
-#' )
-#'
-#' call_selected_subgraph(
-#'   diffusion = diffusion,
-#'   target_genes = 50L
-#' )
-#' }
 #'
 #' @return A selected subgraph bundle.
 #' @export
@@ -1347,7 +1335,7 @@ call_selected_subgraph <- function(
 #'   save_plot = FALSE
 #' )
 #'
-#' \donttest{
+#' \dontrun{
 #' germline <- prepare_germline_scores(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
@@ -1630,7 +1618,11 @@ plot_somatic_reg_scores <- function(
 #'
 #' @examples
 #' diffusion_bundle <- list(
-#'   all_genes = data.frame(gene_name = c("A", "B"), post_epigenomic = c(1.5, 0.5), post_norm = c(2, 1))
+#'   all_genes = data.frame(
+#'     gene_name = c("A", "B"),
+#'     post_epigenomic = c(1.5, 0.5),
+#'     post_norm = c(2, 1)
+#'   )
 #' )
 #' plot_epigenomic_gene_scores(diffusion = diffusion_bundle, save_plot = FALSE)
 #'
@@ -1787,7 +1779,7 @@ plot_epigenomic_reg_scores <- function(
 #' @examples
 #' names(formals(plot_locus_context))
 #'
-#' \donttest{
+#' \dontrun{
 #' plot_locus_context(
 #'   chromosome = "8",
 #'   start = 127200000,
@@ -1900,7 +1892,7 @@ plot_locus_context <- function(
 #' @examples
 #' names(formals(plot_selected_subgraph))
 #'
-#' \donttest{
+#' \dontrun{
 #' selected_subgraph <- call_selected_subgraph(
 #'   diffusion_path = "gene_reg_graph_diffusion_all_genes.tsv",
 #'   target_genes = 50L
@@ -2060,7 +2052,7 @@ plot_selected_subgraph <- function(
 #' @examples
 #' names(formals(run_conseguiR))
 #'
-#' \donttest{
+#' \dontrun{
 #' run_conseguiR(
 #'   gwas_sumstats = "study_gwas.tsv",
 #'   somatic_maf = "study_somatic.maf",

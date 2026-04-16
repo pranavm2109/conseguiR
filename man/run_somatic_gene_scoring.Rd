@@ -89,7 +89,7 @@ dndscv documentation:
 \examples{
 names(formals(run_somatic_gene_scoring))
 
-\donttest{
+\dontrun{
 run_somatic_gene_scoring(
   maf = "study_somatic.maf",
   refdb = "RefCDS_human_GRCh38.rda",

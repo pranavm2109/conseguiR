@@ -65,17 +65,7 @@ resolve_magma_path <- function(magma_path = NULL, must_work = TRUE) {
     path_path <- NULL
   }
 
-  dev_relpath <- "tools/magma_v1/magma"
-  pkg_dev_path <- system.file(dev_relpath, package = "conseguiR")
-  if (!nzchar(pkg_dev_path)) {
-    pkg_dev_path <- NA_character_
-  }
-  dev_candidates <- unique(c(file.path(getwd(), dev_relpath), pkg_dev_path))
-  dev_candidates <- dev_candidates[!is.na(dev_candidates) & nzchar(dev_candidates)]
-  existing_dev <- dev_candidates[file.exists(dev_candidates)]
-  dev_path <- if (length(existing_dev) > 0L) existing_dev[[1L]] else NULL
-
-  candidates <- unique(Filter(Negate(is.null), c(explicit_path, option_path, env_path, path_path, dev_path)))
+  candidates <- unique(Filter(Negate(is.null), c(explicit_path, option_path, env_path, path_path)))
 
   if (length(candidates) == 0L) {
     if (isTRUE(must_work)) {

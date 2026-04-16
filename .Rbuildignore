@@ -9,7 +9,12 @@
 ^data/processed$
 ^data/processed/
 ^scripts$
+^tools$
 ^conseguiR_tmp$
+^conseguiR\.Rcheck$
+^conseguiR\.BiocCheck$
+^check_artifacts$
+^BIOCONDUCTOR_READINESS\.md$
 ^INSTALLATION\.md$
 ^Rplots\.pdf$
 ^vignettes/.*\.md$

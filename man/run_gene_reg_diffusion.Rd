@@ -91,20 +91,4 @@ extreme feature does not dominate the update
 \examples{
 names(formals(run_gene_reg_diffusion))
 
-\donttest{
-scored_graph <- build_scored_gene_reg_graph(
-  gene_germline_scores = "germline_gene_scores.tsv",
-  reg_germline_scores = "germline_reg_scores.tsv",
-  gene_somatic_scores = "somatic_gene_scores.tsv",
-  reg_somatic_scores = "somatic_reg_scores.tsv",
-  reg_epigenomic_scores = "epigenomic_reg_scores.tsv"
-)
-
-run_gene_reg_diffusion(
-  scored_graph = scored_graph,
-  top_k = 3L,
-  beta_epigenomic = 0.7
-)
-}
-
 }

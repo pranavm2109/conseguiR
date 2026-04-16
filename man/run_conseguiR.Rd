@@ -139,7 +139,7 @@ Exact list formatting:
 \examples{
 names(formals(run_conseguiR))
 
-\donttest{
+\dontrun{
 run_conseguiR(
   gwas_sumstats = "study_gwas.tsv",
   somatic_maf = "study_somatic.maf",

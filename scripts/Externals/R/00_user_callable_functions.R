@@ -55,10 +55,10 @@ read_table_if_path <- function(x, ...) {
   }
 
   if (is.character(x) && length(x) == 1L) {
-    return(as.data.table(fread(x, ...)))
+    return(data.table::as.data.table(data.table::fread(x, ...)))
   }
 
-  as.data.table(x)
+  data.table::as.data.table(x)
 }
 
 ensure_output_parent <- function(path) {
@@ -72,7 +72,7 @@ write_bundle_table <- function(table, path = NULL) {
   }
 
   ensure_output_parent(path)
-  fwrite(as.data.table(table), path, sep = "\t")
+  data.table::fwrite(data.table::as.data.table(table), path, sep = "\t")
   path
 }
 
@@ -120,7 +120,7 @@ materialize_table_path <- function(table, path = NULL, stem = "table") {
       stop("Package `digest` is required for cached table materialization.")
     }
 
-    table_dt <- as.data.table(table)
+    table_dt <- data.table::as.data.table(table)
     cache_key <- paste0(
       "materialized::",
       stem,
@@ -137,14 +137,14 @@ materialize_table_path <- function(table, path = NULL, stem = "table") {
 
     path <- paste0(make_temp_output_prefix(stem), ".tsv")
     ensure_output_parent(path)
-    fwrite(table_dt, path, sep = "\t")
+    data.table::fwrite(table_dt, path, sep = "\t")
     assign(cache_key, path, envir = .conseguiR_external_cache)
     return(path)
   }
 
   path <- path %||% paste0(make_temp_output_prefix(stem), ".tsv")
   ensure_output_parent(path)
-  fwrite(as.data.table(table), path, sep = "\t")
+  data.table::fwrite(data.table::as.data.table(table), path, sep = "\t")
   path
 }
 
@@ -230,15 +230,15 @@ resolve_bundle_component <- function(x, preferred_name) {
   }
 
   if (is.data.frame(x) || data.table::is.data.table(x)) {
-    return(as.data.table(x))
+    return(data.table::as.data.table(x))
   }
 
   if (is.list(x) && preferred_name %in% names(x)) {
-    return(as.data.table(x[[preferred_name]]))
+    return(data.table::as.data.table(x[[preferred_name]]))
   }
 
   if (is.list(x) && "objects" %in% names(x) && preferred_name %in% names(x$objects)) {
-    return(as.data.table(x$objects[[preferred_name]]))
+    return(data.table::as.data.table(x$objects[[preferred_name]]))
   }
 
   NULL
@@ -402,8 +402,7 @@ validate_inputs <- function(
 #' @param sample_size_col Optional sample size column name.
 #' @param magma_path Optional path to the MAGMA executable. When `NULL`,
 #'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
-#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, `magma` on `PATH`, and finally a
-#'   local development copy at `tools/magma_v1/magma` when present.
+#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, then `magma` on `PATH`.
 #' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
 #' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
 #' @param reuse_existing_annotation Whether to reuse an existing MAGMA
@@ -513,8 +512,7 @@ run_germline_gene_scoring <- function(
 #' @param sample_size_col Optional sample size column name.
 #' @param magma_path Optional path to the MAGMA executable. When `NULL`,
 #'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
-#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, `magma` on `PATH`, and finally a
-#'   local development copy at `tools/magma_v1/magma` when present.
+#'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, then `magma` on `PATH`.
 #' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
 #' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
 #' @param reuse_existing_annotation Whether to reuse an existing MAGMA
@@ -964,10 +962,10 @@ prepare_epigenomic_scores <- function(
   )
 
   if (is.list(result) && "zscores" %in% names(result)) {
-    reg_scores <- as.data.table(result$zscores)
+    reg_scores <- data.table::as.data.table(result$zscores)
     diagnostics <- result$diagnostics %||% NULL
   } else {
-    reg_scores <- as.data.table(result)
+    reg_scores <- data.table::as.data.table(result)
     diagnostics <- NULL
   }
 
@@ -1151,12 +1149,12 @@ run_gene_reg_diffusion <- function(
   output_stem <- output_stem %||% "gene_reg_graph_diffusion"
 
   nodes_dt <- if (!is.null(nodes)) {
-    as.data.table(nodes)
+    data.table::as.data.table(nodes)
   } else {
     read_cached_path(nodes_path %||% default_diffusion_config$nodes_path, read_scored_gene_reg_nodes, "scored_nodes")
   }
   edges_dt <- if (!is.null(edges)) {
-    as.data.table(edges)
+    data.table::as.data.table(edges)
   } else {
     read_cached_path(edges_path %||% default_diffusion_config$edges_path, read_scored_gene_reg_edges, "scored_edges")
   }
@@ -1600,7 +1598,7 @@ plot_scores <- function(
 resolve_plot_nodes <- function(scored_graph = NULL, nodes_path = NULL) {
   nodes <- resolve_bundle_component(scored_graph, "nodes")
   if (!is.null(nodes)) {
-    return(as.data.table(nodes))
+    return(data.table::as.data.table(nodes))
   }
 
   nodes_path <- nodes_path %||% resolve_output_path(scored_graph, "nodes_path")
@@ -1626,7 +1624,7 @@ resolve_plot_diffusion <- function(diffusion = NULL, diffusion_path = NULL, whic
 resolve_plot_edges <- function(scored_graph = NULL, edges_path = NULL) {
   edges <- resolve_bundle_component(scored_graph, "edges")
   if (!is.null(edges)) {
-    return(as.data.table(edges))
+    return(data.table::as.data.table(edges))
   }
 
   edges_path <- edges_path %||% resolve_output_path(scored_graph, "edges_path")
@@ -1635,7 +1633,7 @@ resolve_plot_edges <- function(scored_graph = NULL, edges_path = NULL) {
 }
 
 merge_postdiff_scores_into_nodes <- function(nodes_dt, diffusion_dt = NULL) {
-  nodes_dt <- as.data.table(copy(nodes_dt))
+  nodes_dt <- data.table::as.data.table(data.table::copy(nodes_dt))
 
   for (col in c("post_germline", "post_somatic", "post_epigenomic", "post_norm")) {
     if (!col %in% names(nodes_dt)) {
@@ -1647,7 +1645,7 @@ merge_postdiff_scores_into_nodes <- function(nodes_dt, diffusion_dt = NULL) {
     return(nodes_dt)
   }
 
-  diffusion_dt <- as.data.table(copy(diffusion_dt))
+  diffusion_dt <- data.table::as.data.table(data.table::copy(diffusion_dt))
   diffusion_dt[, gene_name := as.character(gene_name)]
   keep_cols <- intersect(c("gene_name", "post_germline", "post_somatic", "post_epigenomic", "post_norm"), names(diffusion_dt))
   if (!"gene_name" %in% keep_cols) {
@@ -1680,8 +1678,8 @@ resolve_postdiff_gene_reg_graph <- function(
   edges_dt <- resolve_bundle_component(postdiff_gene_reg_graph, "edges")
 
   if (!is.null(nodes_dt) && !is.null(edges_dt)) {
-    nodes_dt <- as.data.table(nodes_dt)
-    edges_dt <- as.data.table(edges_dt)
+    nodes_dt <- data.table::as.data.table(nodes_dt)
+    edges_dt <- data.table::as.data.table(edges_dt)
     if (!"post_norm" %in% names(nodes_dt)) {
       diffusion_dt <- resolve_bundle_component(postdiff_gene_reg_graph, "all_genes")
       nodes_dt <- merge_postdiff_scores_into_nodes(nodes_dt, diffusion_dt)

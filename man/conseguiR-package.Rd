@@ -10,14 +10,6 @@ Minimal package-level roxygen block used to declare the runtime namespaces
 that \code{conseguiR} depends on across its exported wrapper layer and sourced
 internal scripts.
 }
-\seealso{
-Useful links:
-\itemize{
-  \item \url{https://github.com/pranavm2109/conseguiR}
-  \item Report bugs at \url{https://github.com/pranavm2109/conseguiR/issues}
-}
-
-}
 \author{
 \strong{Maintainer}: Pranav Mishra \email{pranav.mishra@yale.edu}
 

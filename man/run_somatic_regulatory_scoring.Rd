@@ -103,7 +103,7 @@ fishHook tutorial:
 \examples{
 names(formals(run_somatic_regulatory_scoring))
 
-\donttest{
+\dontrun{
 run_somatic_regulatory_scoring(
   maf = "study_somatic.maf",
   reg_ref_path = "regulatory_elements.loc",

@@ -10,9 +10,15 @@ conseguiR_plot_runtime_file <- function(relpath) {
     return(candidate)
   }
 
-  pkg_path <- system.file(relpath, package = "conseguiR")
-  if (nzchar(pkg_path) && file.exists(pkg_path)) {
-    return(pkg_path)
+  pkg_candidates <- unique(c(
+    relpath,
+    sub("^inst/", "", relpath)
+  ))
+  for (pkg_relpath in pkg_candidates) {
+    pkg_path <- system.file(pkg_relpath, package = "conseguiR")
+    if (nzchar(pkg_path) && file.exists(pkg_path)) {
+      return(pkg_path)
+    }
   }
 
   stop("Could not locate required plotting runtime file: ", relpath)

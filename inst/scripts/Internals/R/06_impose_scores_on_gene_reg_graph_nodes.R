@@ -96,6 +96,7 @@ validate_gene_reg_graph_nodes <- function(nodes) {
 read_backend_gene_id_map <- function() {
   loc_candidates <- c(
     "inst/extdata/backend/NCBI38.gene.loc",
+    "extdata/backend/NCBI38.gene.loc",
     "data/raw/NCBI38/NCBI38.gene.loc"
   )
 

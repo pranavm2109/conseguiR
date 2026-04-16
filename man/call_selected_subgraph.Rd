@@ -125,16 +125,4 @@ controls for difficult graphs
 \examples{
 names(formals(call_selected_subgraph))
 
-\donttest{
-diffusion <- run_gene_reg_diffusion(
-  nodes_path = "gene_reg_graph_scored_nodes.tsv.gz",
-  edges_path = "gene_reg_graph_scored_edges.tsv.gz"
-)
-
-call_selected_subgraph(
-  diffusion = diffusion,
-  target_genes = 50L
-)
-}
-
 }

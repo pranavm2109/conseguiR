@@ -61,7 +61,6 @@ brought into much better shape during the recent cleanup.
   - `options(conseguiR.magma_path = ...)`
   - `CONSEGUIR_MAGMA_PATH`
   - `magma` on `PATH`
-  - a repository-local development fallback when present
 
 ### Recent check issues already fixed
 
@@ -120,8 +119,13 @@ attract reviewer attention or still need one more round of hardening.
   - `checking for executable files`
   - `checking DESCRIPTION meta-information`
   - `checking dependencies in R code`
-- We still have not yet driven a full submission-style run to a genuinely clean
-  end state under devel Bioconductor plus `BiocCheck(new-package = TRUE)`.
+- The current full local check blocker is now environmental rather than a known
+  package-code failure:
+  - vignette rebuilding currently stops because Pandoc is not available in the
+    local check environment
+- We still have not yet driven a full submission-style run to a genuinely
+  clean end state under devel Bioconductor plus
+  `BiocCheck(new-package = TRUE)`.
 
 ## Must Fix Before Submission
 
@@ -151,6 +155,8 @@ Bioconductor explicitly says the package will be subjected to:
 
 Needs work:
 
+- rerun full `R CMD check` in an environment with Pandoc available for vignette
+  rebuilding
 - run `BiocCheck(new-package = TRUE)` and fix all actionable issues
 - run the package against the devel version of Bioconductor
 - verify behavior on Linux, macOS, and Windows expectations as far as possible
@@ -159,9 +165,6 @@ Needs work:
 
 Still missing or incomplete:
 
-- `URL` field in `DESCRIPTION`
-- `BugReports` field in `DESCRIPTION`
-- `CITATION` file
 - final submission-ready versioning / release discipline
 
 ### 4. Test migration into standard package layout
@@ -182,6 +185,7 @@ Current staged-check signal:
 
 - installed size about `43.1 MB`
 - `extdata` about `42.5 MB`
+- current working tree `inst/extdata` size about `49 MB`
 
 Needs work:
 
@@ -207,13 +211,14 @@ Needs work:
 If we were prioritizing strictly for submission readiness, the next steps
 should be:
 
-1. Add `URL`, `BugReports`, and a `CITATION` file.
-2. Run `BiocCheck(new-package = TRUE)` and capture every issue.
-3. Clean the default branch so it looks like package source, not a mixed
+1. Confirm metadata stays submission-ready as versioning stabilizes.
+2. Run a full vignette-building `R CMD check` in an environment with Pandoc.
+3. Run `BiocCheck(new-package = TRUE)` and capture every issue.
+4. Clean the default branch so it looks like package source, not a mixed
    package-plus-development workspace.
-4. Migrate the important tests into `tests/testthat`.
-5. Reassess `inst/extdata` and shrink it where possible.
-6. Do one final pass on Python / MAGMA dependency messaging and failure modes.
+5. Migrate the important tests into `tests/testthat`.
+6. Reassess `inst/extdata` and shrink it where possible.
+7. Do one final pass on Python / MAGMA dependency messaging and failure modes.
 
 ## Notes on Recent Check Results
 

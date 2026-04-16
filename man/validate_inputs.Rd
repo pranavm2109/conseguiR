@@ -72,7 +72,7 @@ files. Use either \code{epigenomic_tracks} or \code{epigenomic_track_dir}.
 \examples{
 validate_inputs()
 
-\donttest{
+\dontrun{
 validate_inputs(
   gwas_sumstats = "study_gwas.tsv",
   somatic_maf = "study_somatic.maf",

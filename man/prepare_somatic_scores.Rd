@@ -123,7 +123,7 @@ fishHook tutorial:
 \examples{
 names(formals(prepare_somatic_scores))
 
-\donttest{
+\dontrun{
 prepare_somatic_scores(
   maf = "study_somatic.maf",
   refdb = "RefCDS_human_GRCh38.rda",

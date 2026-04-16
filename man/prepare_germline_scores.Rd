@@ -114,7 +114,7 @@ MAGMA manual:
 \examples{
 names(formals(prepare_germline_scores))
 
-\donttest{
+\dontrun{
 prepare_germline_scores(
   gwas_sumstats = "study_gwas.tsv",
   reference_bfile = "/path/to/g1000_eur/g1000_eur",

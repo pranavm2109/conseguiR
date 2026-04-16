@@ -1,19 +1,17 @@
 citHeader("To cite conseguiR in publications, please use:")
 
-citEntry(
-  entry = "Manual",
+bibentry(
+  bibtype = "Manual",
   title = "conseguiR: Integrative Germline, Somatic, and Epigenomic Graph Prioritization",
-  author = personList(
+  author = c(
     person(given = "Pranav", family = "Mishra"),
     person(given = "Mark", family = "Robinson")
   ),
   year = "2026",
   note = "R package version 0.99.0",
-  url = "https://github.com/pranavm2109/conseguiR",
   textVersion = paste(
     "Mishra P, Robinson M (2026).",
     "conseguiR: Integrative Germline, Somatic, and Epigenomic Graph Prioritization.",
-    "R package version 0.99.0.",
-    "https://github.com/pranavm2109/conseguiR"
+    "R package version 0.99.0."
   )
 )

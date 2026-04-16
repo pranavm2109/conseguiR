@@ -15,10 +15,6 @@ package asset. `conseguiR` will look for it in this order:
 * `Sys.getenv("CONSEGUIR_MAGMA_PATH")`
 * `magma` on your system `PATH`
 
-For local development, the package will also honor a repository-local
-`tools/magma_v1/magma` if that file exists, but that path is not required for
-normal package installation or use.
-
 The package no longer tries to discover or initialize external runtimes
 automatically during package load.
 
