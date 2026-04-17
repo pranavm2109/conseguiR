@@ -58,7 +58,7 @@ Plot somatic gene signal before or after diffusion
 }
 \examples{
 bundle <- list(
-    gene_scores = data.frame(gene_id = c("A", "B"), zstat = c(2, -2), p_value = c(0.01, 0.02))
+  gene_scores = data.frame(gene_id = c("A", "B"), zstat = c(2, -2), p_value = c(0.01, 0.02))
 )
 plot_somatic_gene_scores(somatic_scores = bundle, stage = "pre", save_plot = FALSE)
 

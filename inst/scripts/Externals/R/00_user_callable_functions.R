@@ -650,7 +650,7 @@ prepare_germline_scores <- function(
   shared_args <- as_list_or_empty(shared_args)
   verbose_message(verbose, "Preparing germline scores...")
   gene_loc_path <- if (exists(".conseguiR_default_gene_loc_path", inherits = TRUE)) .conseguiR_default_gene_loc_path() else "data/raw/NCBI38/NCBI38.gene.loc"
-  reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
+  reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/processed/GRCh38-cCREs.loc"
 
   gene_bundle <- run_with_args(
     run_germline_gene_scoring,

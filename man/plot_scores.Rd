@@ -81,10 +81,10 @@ a \code{zstat}-like numeric column
 }
 \examples{
 plot_scores(
-    table = data.frame(feature_id = c("A", "B"), zstat = c(1, -1)),
-    feature_column = "feature_id",
-    z_column = "zstat",
-    save_plot = FALSE
+  table = data.frame(feature_id = c("A", "B"), zstat = c(1, -1)),
+  feature_column = "feature_id",
+  z_column = "zstat",
+  save_plot = FALSE
 )
 
 }

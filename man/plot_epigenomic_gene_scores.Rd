@@ -46,11 +46,11 @@ Plot post-diffusion epigenomic gene signal
 }
 \examples{
 diffusion_bundle <- list(
-    all_genes = data.frame(
-        gene_name = c("A", "B"),
-        post_epigenomic = c(1.5, 0.5),
-        post_norm = c(2, 1)
-    )
+  all_genes = data.frame(
+    gene_name = c("A", "B"),
+    post_epigenomic = c(1.5, 0.5),
+    post_norm = c(2, 1)
+  )
 )
 plot_epigenomic_gene_scores(diffusion = diffusion_bundle, save_plot = FALSE)
 

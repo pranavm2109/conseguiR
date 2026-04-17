@@ -226,17 +226,7 @@
   if (!is.null(encode_loc_path)) {
     return(encode_loc_path)
   }
-
-  path <- .conseguiR_prefer_repo_relative_path("data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
-  if (!is.null(path)) {
-    return(path)
-  }
-  path <- .conseguiR_find_data_path("data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
-  if (!is.null(path)) {
-    return(path)
-  }
-
-  .conseguiR_backend_resource_path("2026-01-26_UCSC_all_unfiltered_reg_elements.loc")
+  .conseguiR_backend_resource_path("GRCh38-cCREs.loc")
 }
 
 #' @keywords internal
@@ -292,7 +282,7 @@
 
 #' @keywords internal
 .conseguiR_internal_script_env <- function(relpath) {
-  env <- new.env(parent = baseenv())
+  env <- new.env(parent = globalenv())
   sys.source(.conseguiR_runtime_file(relpath), envir = env)
   env
 }

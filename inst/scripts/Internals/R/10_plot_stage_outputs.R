@@ -88,17 +88,10 @@ read_backend_reg_label_map <- function() {
     return(data.table::copy(get("reg_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
   }
 
-  mapping_path <- NULL
-  for (filename in c("reg_target_labels.tsv.gz", "genehancer_reg_target_labels.tsv.gz")) {
-    candidate <- tryCatch(
-      conseguiR_plot_backend_resource_path(filename),
-      error = function(e) NULL
-    )
-    if (!is.null(candidate) && file.exists(candidate)) {
-      mapping_path <- candidate
-      break
-    }
-  }
+  mapping_path <- tryCatch(
+    conseguiR_plot_backend_resource_path("reg_target_labels.tsv.gz"),
+    error = function(e) NULL
+  )
 
   if (is.null(mapping_path) || !file.exists(mapping_path)) {
     return(data.table::data.table(reg_elem_id = character(), label = character()))

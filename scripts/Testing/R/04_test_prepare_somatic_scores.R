@@ -9,7 +9,7 @@ suppressPackageStartupMessages({
 source("scripts/Internals/R/04_prepare_somatic_scores.R")
 
 default_somatic_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcga_order_hg38.maf"
-default_reg_ref_path <- "data/raw/Testing/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
+default_reg_ref_path <- "data/processed/GRCh38-cCREs.loc"
 default_fishhook_covariate_path <- "data/raw/Testing/2026-01-26_all_reg_elems_sample_level_mut_frac_comparison_bet_only_memory_b_normal_and_non_cll_malig_b_cells.rds"
 default_dndscv_refdb <- "data/raw/Testing/RefCDS_human_GRCh38.p12.rda"
 
@@ -191,7 +191,7 @@ test_extract_dndscv_gene_scores <- function() {
 
 test_extract_fishhook_reg_scores <- function() {
   fishhook_mock <- data.table(
-    reg_elem_id = c("GH01J000013", "GH01J000021"),
+    reg_elem_id = c("EH38E0080197", "EH38E2084302"),
     p = c(1e-4, 0.03),
     effectsize = c(2.1, 1.2)
   )
@@ -199,7 +199,7 @@ test_extract_fishhook_reg_scores <- function() {
   scores <- extract_fishhook_reg_scores(fishhook_mock)
 
   expect_identical(names(scores), c("reg_elem_id", "p_value", "zstat"))
-  expect_identical(as.character(scores$reg_elem_id[[1]]), "GH01J000013")
+  expect_identical(as.character(scores$reg_elem_id[[1]]), "EH38E0080197")
   expect_true(all(scores$p_value > 0))
   expect_true(all(scores$zstat > 0))
   invisible(scores)
@@ -210,7 +210,7 @@ test_somatic_extreme_scores_are_capped <- function() {
   expect_true(all(is.finite(capped_from_p)))
 
   fishhook_mock <- data.table(
-    reg_elem_id = c("GH01J000013", "GH01J000021"),
+    reg_elem_id = c("EH38E0080197", "EH38E2084302"),
     p = c(1e-4, 0.03),
     zscore = c(Inf, -Inf)
   )
@@ -229,7 +229,7 @@ test_run_somatic_scoring_pipeline_with_mock_outputs <- function(print_scores = T
   )
 
   fishhook_mock <- data.table(
-    reg_elem_id = c("GH01J000013", "GH01J000021"),
+    reg_elem_id = c("EH38E0080197", "EH38E2084302"),
     p = c(1e-4, 0.03),
     effectsize = c(2.1, 1.2)
   )

@@ -78,7 +78,7 @@ default \code{Tumor_Sample_Barcode} is the right choice.
 
 Minimal covariate-data example:
 
-\verb{covariate_dt = data.frame( reg_elem_id = c(\\"GH01J000001\\", \\"GH01J000002\\"), accessibility = c(1.2, 0.4), replication_timing = c(0.7, -0.1), gc_content = c(0.44, 0.51) )}
+\verb{covariate_dt = data.frame( reg_elem_id = c(\\"EH38E0080197\\", \\"EH38E2084302\\"), accessibility = c(1.2, 0.4), replication_timing = c(0.7, -0.1), gc_content = c(0.44, 0.51) )}
 
 \code{fishhook_covariates = NULL}
 

@@ -142,7 +142,7 @@ test_standardize_score_tables_negative_cases <- function() {
   )
 
   expect_error(
-    standardize_reg_score_table(data.table(reg = "GH01J000013", z = 1), "epigenomic"),
+    standardize_reg_score_table(data.table(reg = "EH38E0080197", z = 1), "epigenomic"),
     expected = "Regulatory-element epigenomic score table is missing required columns",
     fixed = TRUE
   )
@@ -196,7 +196,7 @@ test_prepare_scored_gene_reg_graph_negative_bad_reg_scores <- function() {
   expect_error(
     prepare_scored_gene_reg_graph(
       graph = fixture$graph,
-      reg_epigenomic_scores = data.table(reg = "GH01J000013", z = 1),
+      reg_epigenomic_scores = data.table(reg = "EH38E0080197", z = 1),
       save_outputs = FALSE
     ),
     expected = "Regulatory-element epigenomic score table is missing required columns",

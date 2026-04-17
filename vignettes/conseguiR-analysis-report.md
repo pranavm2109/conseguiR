@@ -72,7 +72,7 @@ The example analysis uses the following files.
 ``` r
 gwas_path <- "data/raw/Testing/GCST90436637.h.tsv"
 somatic_maf_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcga_order_hg38.maf"
-reg_ref_path <- "data/raw/Testing/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
+reg_ref_path <- "data/processed/GRCh38-cCREs.loc"
 refdb_path <- "data/raw/Testing/RefCDS_human_GRCh38.p12.rda"
 reference_bfile <- "data/raw/g1000_eur/g1000_eur"
 track_dir <- "data/raw/Testing"
@@ -105,7 +105,7 @@ data.table(
 #>                                                                         <char>
 #> 1:                                         data/raw/Testing/GCST90436637.h.tsv
 #> 2: data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcga_order_hg38.maf
-#> 3:            data/raw/Testing/2026-01-26_UCSC_all_unfiltered_reg_elements.loc
+#> 3:                                       data/processed/GRCh38-cCREs.loc
 #> 4:                                data/raw/Testing/RefCDS_human_GRCh38.p12.rda
 #> 5:                                                data/raw/g1000_eur/g1000_eur
 #> 6:                                                                    0 tracks
@@ -199,7 +199,7 @@ When fishHook covariates are used, the practical table shape is:
 
 ``` r
 covariate_dt <- data.frame(
-  reg_elem_id = c("GH01J000001", "GH01J000002"),
+  reg_elem_id = c("EH38E0080197", "EH38E2084302"),
   accessibility = c(1.2, 0.4),
   replication_timing = c(0.7, -0.1),
   gc_content = c(0.44, 0.51)

@@ -15,6 +15,11 @@ default_config <- list(
   ),
   gene_loc_path = "data/raw/NCBI38/NCBI38.gene.loc",
   output_prefix = "data/processed/gene_reg_graph_no_scores",
+  evidence_alpha = 0.6,
+  weight_3d = 1.0,
+  weight_crispr = 1.25,
+  weight_eqtl = 1.0,
+  support_bonus = 0.15,
   min_link_value = 0,
   keep_self_loops = FALSE,
   directed = FALSE
@@ -27,21 +32,25 @@ ensure_parent_dir <- function(path) {
 
 read_encode_ccres <- function(path) {
   message("Reading ENCODE cCREs from: ", path)
-  fread(path, header = FALSE, showProgress = FALSE)
+  data.table::fread(path, header = FALSE, showProgress = FALSE)
 }
 
 read_encode_gene_links <- function(zip_path, member) {
   message("Reading ENCODE gene links from: ", basename(zip_path), "::", member)
-  fread(
+  data.table::fread(
     cmd = sprintf("unzip -p %s %s", shQuote(zip_path), shQuote(member)),
     header = FALSE,
+    sep = "\t",
+    fill = Inf,
+    quote = "",
+    blank.lines.skip = TRUE,
     showProgress = FALSE
   )
 }
 
 read_gene_loc_table <- function(path) {
   message("Reading gene locations from: ", path)
-  fread(path, header = FALSE, showProgress = FALSE)
+  data.table::fread(path, header = FALSE, showProgress = FALSE)
 }
 
 standardize_ccres <- function(reg_elements) {
@@ -53,7 +62,7 @@ standardize_ccres <- function(reg_elements) {
     )
   }
 
-  unique(dt[, .(
+  unique(dt[, list(
     reg_chr = as.character(V1),
     reg_start = as.integer(V2) + 1L,
     reg_end = as.integer(V3),
@@ -69,14 +78,14 @@ standardize_gene_loc_table <- function(gene_loc) {
     stop("Gene location table must have at least 6 columns.")
   }
 
-  dt <- dt[, .(
+  dt <- dt[, list(
     gene_symbol = trimws(as.character(V6)),
     gene_chr = as.character(V2),
     gene_start = as.integer(V3),
     gene_end = as.integer(V4)
   )]
   dt <- dt[!is.na(gene_symbol) & gene_symbol != ""]
-  dt[, .(
+  dt[, list(
     gene_chr = first(gene_chr),
     gene_start = min(gene_start, na.rm = TRUE),
     gene_end = max(gene_end, na.rm = TRUE)
@@ -96,14 +105,45 @@ source_from_member <- function(member) {
   tolower(gsub("[^A-Za-z0-9]+", "_", member))
 }
 
-standardize_encode_links <- function(dt, source_name) {
+percentile_rank <- function(x) {
+  out <- rep(NA_real_, length(x))
+  ok <- is.finite(x)
+  if (!any(ok)) {
+    return(out)
+  }
+  if (sum(ok) == 1L) {
+    out[ok] <- 1
+    return(out)
+  }
+  ranks <- data.table::frank(x[ok], ties.method = "average", na.last = "keep")
+  out[ok] <- (ranks - 1) / (sum(ok) - 1)
+  out
+}
+
+max_finite_or_na <- function(x) {
+  x <- x[is.finite(x)]
+  if (length(x) == 0L) {
+    return(NA_real_)
+  }
+  max(x)
+}
+
+first_non_missing_character <- function(x) {
+  x <- x[!is.na(x)]
+  if (length(x) == 0L) {
+    return(NA_character_)
+  }
+  as.character(x[[1]])
+}
+
+standardize_encode_links <- function(dt, source_name, evidence_alpha = 0.6) {
   dt <- as.data.table(dt)
 
   if (identical(source_name, "3d_chromatin")) {
     if (ncol(dt) < 9L) {
       stop("ENCODE 3D chromatin links must have 9 columns.")
     }
-    out <- dt[, .(
+    out <- dt[, list(
       reg_id = as.character(V1),
       ensembl_gene_id = as.character(V2),
       common_gene_name = trimws(as.character(V3)),
@@ -119,7 +159,7 @@ standardize_encode_links <- function(dt, source_name) {
     if (ncol(dt) < 10L) {
       stop("ENCODE CRISPR links must have 10 columns.")
     }
-    out <- dt[, .(
+    out <- dt[, list(
       reg_id = as.character(V1),
       ensembl_gene_id = as.character(V2),
       common_gene_name = trimws(as.character(V3)),
@@ -135,7 +175,7 @@ standardize_encode_links <- function(dt, source_name) {
     if (ncol(dt) < 9L) {
       stop("ENCODE eQTL links must have 9 columns.")
     }
-    out <- dt[, .(
+    out <- dt[, list(
       reg_id = as.character(V1),
       ensembl_gene_id = as.character(V2),
       common_gene_name = trimws(as.character(V3)),
@@ -156,16 +196,30 @@ standardize_encode_links <- function(dt, source_name) {
     common_gene_name,
     ensembl_gene_id
   )]
-  out[, score_component := fifelse(
+  out[, metric_value := as.numeric(effect_value)]
+  out[, metric_magnitude := abs(metric_value)]
+  out[, significance_value := fifelse(
     is.finite(p_value) & p_value > 0,
     -log10(pmax(p_value, 1e-300)),
-    fifelse(is.finite(effect_value), abs(effect_value), 1)
+    NA_real_
+  )]
+  out[, source_magnitude_rank := percentile_rank(metric_magnitude)]
+  out[, source_significance_rank := percentile_rank(significance_value)]
+  out[, source_evidence := data.table::fifelse(
+    is.finite(source_significance_rank) & is.finite(source_magnitude_rank),
+    evidence_alpha * source_significance_rank +
+      (1 - evidence_alpha) * source_magnitude_rank,
+    data.table::fifelse(
+      is.finite(source_significance_rank),
+      source_significance_rank,
+      source_magnitude_rank
+    )
   )]
 
   out[
     !is.na(reg_id) & reg_id != "" &
       !is.na(gene_id) & gene_id != "",
-    .(
+    list(
       reg_id,
       gene_id,
       ensembl_gene_id,
@@ -174,27 +228,18 @@ standardize_encode_links <- function(dt, source_name) {
       assay_type,
       experiment_id,
       context_label,
-      effect_value,
+      metric_value,
+      metric_magnitude,
       p_value,
-      score_component
+      significance_value,
+      source_significance_rank,
+      source_magnitude_rank,
+      source_evidence
     )
   ]
 }
 
-read_all_encode_links <- function(zip_path, members) {
-  rbindlist(
-    lapply(members, function(member) {
-      standardize_encode_links(
-        read_encode_gene_links(zip_path, member),
-        source_name = source_from_member(member)
-      )
-    }),
-    fill = TRUE,
-    use.names = TRUE
-  )
-}
-
-collapse_encode_links <- function(links, reg_elements, gene_loc) {
+collapse_encode_links <- function(links, reg_elements, gene_loc, source_name) {
   reg_dt <- as.data.table(reg_elements)
   gene_dt <- as.data.table(gene_loc)
   link_dt <- as.data.table(links)
@@ -209,18 +254,25 @@ collapse_encode_links <- function(links, reg_elements, gene_loc) {
     sort = FALSE
   )
 
-  merged[
+  collapsed <- merged[
     ,
-    .(
+    list(
       ensembl_gene_id = first(ensembl_gene_id),
       gene_type = first(gene_type),
-      link_value = uniqueN(evidence_type),
-      link_score = sum(unique(score_component), na.rm = TRUE),
-      link_method = paste(sort(unique(evidence_type)), collapse = "|"),
-      evidence_count = .N,
-      support_3d = any(evidence_type == "3d_chromatin"),
-      support_crispr = any(evidence_type == "crispr"),
-      support_eqtl = any(evidence_type == "eqtl"),
+      source_row_count = .N,
+      metric_value = metric_value[which.max(data.table::fifelse(
+        is.finite(source_evidence),
+        source_evidence,
+        -Inf
+      ))],
+      p_value = p_value[which.max(data.table::fifelse(
+        is.finite(source_evidence),
+        source_evidence,
+        -Inf
+      ))],
+      source_significance = max_finite_or_na(source_significance_rank),
+      source_magnitude = max_finite_or_na(source_magnitude_rank),
+      source_evidence = max_finite_or_na(source_evidence),
       assay_types = paste(sort(unique(na.omit(assay_type))), collapse = "|"),
       context_labels = paste(sort(unique(na.omit(context_label))), collapse = "|"),
       reg_chr = first(reg_chr),
@@ -232,8 +284,224 @@ collapse_encode_links <- function(links, reg_elements, gene_loc) {
       gene_start = first(gene_start),
       gene_end = first(gene_end)
     ),
-    by = .(reg_id, gene_id)
+    by = list(reg_id, gene_id)
   ]
+
+  for (col in c("source_significance", "source_magnitude", "source_evidence")) {
+    collapsed[!is.finite(get(col)), (col) := NA_real_]
+  }
+
+  metric_col <- switch(
+    source_name,
+    "3d_chromatin" = "score_3d",
+    "crispr" = "effect_crispr",
+    "eqtl" = "slope_eqtl",
+    "metric_value"
+  )
+  p_col <- switch(
+    source_name,
+    "3d_chromatin" = "p_3d",
+    "crispr" = "p_crispr",
+    "eqtl" = "p_eqtl",
+    "p_value"
+  )
+  sig_col <- paste0("significance_", source_name)
+  mag_col <- paste0("magnitude_", source_name)
+  evidence_col <- paste0("evidence_", source_name)
+  assay_col <- paste0("assay_types_", source_name)
+  context_col <- paste0("context_labels_", source_name)
+  rows_col <- paste0("rows_", source_name)
+  support_col <- switch(
+    source_name,
+    "3d_chromatin" = "support_3d",
+    "crispr" = "support_crispr",
+    "eqtl" = "support_eqtl",
+    paste0("support_", source_name)
+  )
+
+  data.table::setnames(collapsed, "metric_value", metric_col)
+  data.table::setnames(collapsed, "p_value", p_col)
+  data.table::setnames(collapsed, "source_significance", sig_col)
+  data.table::setnames(collapsed, "source_magnitude", mag_col)
+  data.table::setnames(collapsed, "source_evidence", evidence_col)
+  data.table::setnames(collapsed, "assay_types", assay_col)
+  data.table::setnames(collapsed, "context_labels", context_col)
+  data.table::setnames(collapsed, "source_row_count", rows_col)
+  collapsed[, (support_col) := TRUE]
+  collapsed
+}
+
+process_encode_link_member <- function(
+  member,
+  zip_path,
+  reg_elements,
+  gene_loc,
+  evidence_alpha = 0.6
+) {
+  source_name <- source_from_member(member)
+  raw_links <- read_encode_gene_links(zip_path, member)
+  if (is.null(raw_links) || nrow(raw_links) == 0L) {
+    return(NULL)
+  }
+  collapse_encode_links(
+    links = standardize_encode_links(
+      raw_links,
+      source_name = source_name,
+      evidence_alpha = evidence_alpha
+    ),
+    reg_elements = reg_elements,
+    gene_loc = gene_loc,
+    source_name = source_name
+  )
+}
+
+collapse_all_encode_links <- function(
+  zip_path,
+  members,
+  reg_elements,
+  gene_loc,
+  evidence_alpha = 0.6,
+  weight_3d = 1,
+  weight_crispr = 1.25,
+  weight_eqtl = 1,
+  support_bonus = 0.15
+) {
+  partials <- lapply(
+    members,
+    process_encode_link_member,
+    zip_path = zip_path,
+    reg_elements = reg_elements,
+    gene_loc = gene_loc,
+    evidence_alpha = evidence_alpha
+  )
+  partials <- Filter(Negate(is.null), partials)
+  if (length(partials) == 0L) {
+    return(data.table::data.table())
+  }
+  combined <- Reduce(function(x, y) {
+    merge(x, y, by = c("reg_id", "gene_id"), all = TRUE, sort = FALSE)
+  }, partials)
+  combined <- data.table::as.data.table(combined)
+
+  required_columns <- c(
+    "ensembl_gene_id", "gene_type",
+    "score_3d", "p_3d", "significance_3d_chromatin",
+    "magnitude_3d_chromatin", "evidence_3d_chromatin",
+    "effect_crispr", "p_crispr", "significance_crispr",
+    "magnitude_crispr", "evidence_crispr",
+    "slope_eqtl", "p_eqtl", "significance_eqtl",
+    "magnitude_eqtl", "evidence_eqtl",
+    "rows_3d_chromatin", "rows_crispr", "rows_eqtl",
+    "support_3d", "support_crispr", "support_eqtl",
+    "assay_types_3d_chromatin", "assay_types_crispr", "assay_types_eqtl",
+    "context_labels_3d_chromatin", "context_labels_crispr",
+    "context_labels_eqtl", "reg_chr", "reg_start", "reg_end",
+    "reg_accession", "reg_element_type", "gene_chr", "gene_start", "gene_end"
+  )
+  missing_columns <- setdiff(required_columns, names(combined))
+  for (col in missing_columns) {
+    combined[, (col) := NA]
+  }
+
+  combined[
+    ,
+    list(
+      ensembl_gene_id = first_non_missing_character(ensembl_gene_id),
+      gene_type = first_non_missing_character(gene_type),
+      score_3d = first(score_3d),
+      p_3d = first(p_3d),
+      significance_3d_chromatin = first(significance_3d_chromatin),
+      magnitude_3d_chromatin = first(magnitude_3d_chromatin),
+      evidence_3d_chromatin = first(evidence_3d_chromatin),
+      effect_crispr = first(effect_crispr),
+      p_crispr = first(p_crispr),
+      significance_crispr = first(significance_crispr),
+      magnitude_crispr = first(magnitude_crispr),
+      evidence_crispr = first(evidence_crispr),
+      slope_eqtl = first(slope_eqtl),
+      p_eqtl = first(p_eqtl),
+      significance_eqtl = first(significance_eqtl),
+      magnitude_eqtl = first(magnitude_eqtl),
+      evidence_eqtl = first(evidence_eqtl),
+      rows_3d_chromatin = first(rows_3d_chromatin),
+      rows_crispr = first(rows_crispr),
+      rows_eqtl = first(rows_eqtl),
+      support_3d = isTRUE(first(support_3d)),
+      support_crispr = isTRUE(first(support_crispr)),
+      support_eqtl = isTRUE(first(support_eqtl)),
+      assay_types_3d_chromatin = first(assay_types_3d_chromatin),
+      assay_types_crispr = first(assay_types_crispr),
+      assay_types_eqtl = first(assay_types_eqtl),
+      context_labels_3d_chromatin = first(context_labels_3d_chromatin),
+      context_labels_crispr = first(context_labels_crispr),
+      context_labels_eqtl = first(context_labels_eqtl),
+      reg_chr = first(reg_chr),
+      reg_start = first(reg_start),
+      reg_end = first(reg_end),
+      reg_accession = first(reg_accession),
+      reg_element_type = first(reg_element_type),
+      gene_chr = first(gene_chr),
+      gene_start = first(gene_start),
+      gene_end = first(gene_end)
+    ),
+    by = list(reg_id, gene_id)
+  ][
+    ,
+    `:=`(
+      support_count = as.integer(support_3d) +
+        as.integer(support_crispr) +
+        as.integer(support_eqtl),
+      combined_edge_score =
+        weight_3d * data.table::fcoalesce(evidence_3d_chromatin, 0) +
+        weight_crispr * data.table::fcoalesce(evidence_crispr, 0) +
+        weight_eqtl * data.table::fcoalesce(evidence_eqtl, 0) +
+        support_bonus * pmax(
+          as.integer(support_3d) +
+            as.integer(support_crispr) +
+            as.integer(support_eqtl) - 1L,
+          0L
+        )
+    )
+  ][
+    ,
+    `:=`(
+      link_value = combined_edge_score,
+      link_score = combined_edge_score,
+      evidence_count = data.table::fcoalesce(rows_3d_chromatin, 0L) +
+        data.table::fcoalesce(rows_crispr, 0L) +
+        data.table::fcoalesce(rows_eqtl, 0L)
+    )
+  ][
+    ,
+    link_method := data.table::fifelse(
+      support_3d & support_crispr & support_eqtl,
+      "3d_chromatin|crispr|eqtl",
+      data.table::fifelse(
+        support_3d & support_crispr,
+        "3d_chromatin|crispr",
+        data.table::fifelse(
+          support_3d & support_eqtl,
+          "3d_chromatin|eqtl",
+          data.table::fifelse(
+            support_crispr & support_eqtl,
+            "crispr|eqtl",
+            data.table::fifelse(
+              support_3d,
+              "3d_chromatin",
+              data.table::fifelse(
+                support_crispr,
+                "crispr",
+                data.table::fifelse(
+                  support_eqtl,
+                  "eqtl",
+                  NA_character_
+                )
+              )
+            )
+          )
+        )
+      )
+    )]
 }
 
 filter_gene_reg_links <- function(edges, min_link_value = 0, keep_self_loops = FALSE) {
@@ -250,7 +518,7 @@ filter_gene_reg_links <- function(edges, min_link_value = 0, keep_self_loops = F
 build_gene_reg_nodes <- function(edges, reg_elements = NULL) {
   edge_dt <- as.data.table(edges)
 
-  gene_nodes <- unique(edge_dt[, .(
+  gene_nodes <- unique(edge_dt[, list(
     name = gene_id,
     node_id = gene_id,
     node_type = "gene",
@@ -261,7 +529,7 @@ build_gene_reg_nodes <- function(edges, reg_elements = NULL) {
     gene_type = gene_type
   )])
 
-  reg_nodes_from_edges <- unique(edge_dt[, .(
+  reg_nodes_from_edges <- unique(edge_dt[, list(
     name = reg_id,
     node_id = reg_id,
     node_type = "reg",
@@ -299,23 +567,80 @@ build_gene_reg_edges <- function(edges) {
   dt[, `:=`(
     from = reg_id,
     to = gene_id,
-    weight = fifelse(is.na(link_value), NA_real_, 1 / (1 + link_value)),
-    confidence = link_value
+    confidence = combined_edge_score,
+    weight = fifelse(
+      is.na(combined_edge_score),
+      NA_real_,
+      1 / (1 + combined_edge_score)
+    )
+  )]
+  dt[, link_method := data.table::fifelse(
+    support_3d & support_crispr & support_eqtl,
+    "3d_chromatin|crispr|eqtl",
+    data.table::fifelse(
+      support_3d & support_crispr,
+      "3d_chromatin|crispr",
+      data.table::fifelse(
+        support_3d & support_eqtl,
+        "3d_chromatin|eqtl",
+        data.table::fifelse(
+          support_crispr & support_eqtl,
+          "crispr|eqtl",
+          data.table::fifelse(
+            support_3d,
+            "3d_chromatin",
+            data.table::fifelse(
+              support_crispr,
+              "crispr",
+              data.table::fifelse(
+                support_eqtl,
+                "eqtl",
+                NA_character_
+              )
+            )
+          )
+        )
+      )
+    )
   )]
 
-  unique(dt[, .(
+  unique(dt[, list(
     from,
     to,
     weight,
     confidence,
+    combined_edge_score,
     link_score,
     link_method,
+    support_count,
     evidence_count,
+    score_3d,
+    p_3d,
+    significance_3d_chromatin,
+    magnitude_3d_chromatin,
+    evidence_3d_chromatin,
+    effect_crispr,
+    p_crispr,
+    significance_crispr,
+    magnitude_crispr,
+    evidence_crispr,
+    slope_eqtl,
+    p_eqtl,
+    significance_eqtl,
+    magnitude_eqtl,
+    evidence_eqtl,
     support_3d,
     support_crispr,
     support_eqtl,
-    assay_types,
-    context_labels,
+    rows_3d_chromatin,
+    rows_crispr,
+    rows_eqtl,
+    assay_types_3d_chromatin,
+    assay_types_crispr,
+    assay_types_eqtl,
+    context_labels_3d_chromatin,
+    context_labels_crispr,
+    context_labels_eqtl,
     reg_chr,
     reg_start,
     reg_end,
@@ -329,8 +654,8 @@ build_reg_target_labels <- function(edges) {
   dt <- as.data.table(edges)
   dt[
     ,
-    .(label = paste(sort(unique(gene_id)), collapse = "|")),
-    by = .(reg_elem_id = reg_id)
+    list(label = paste(sort(unique(gene_id)), collapse = "|")),
+    by = list(reg_elem_id = reg_id)
   ]
 }
 
@@ -359,17 +684,20 @@ save_graph_outputs <- function(graph, nodes, edges, reg_target_labels, output_pr
 
 prepare_gene_reg_graph <- function(config = default_config) {
   reg_elements_raw <- read_encode_ccres(config$reg_elements_path)
-  gene_links_raw <- read_all_encode_links(
-    zip_path = config$gene_links_zip_path,
-    members = config$gene_link_members
-  )
   gene_loc_raw <- read_gene_loc_table(config$gene_loc_path)
 
   reg_elements_std <- standardize_ccres(reg_elements_raw)
-  gene_links_std <- collapse_encode_links(
-    links = gene_links_raw,
+  gene_loc_std <- standardize_gene_loc_table(gene_loc_raw)
+  gene_links_std <- collapse_all_encode_links(
+    zip_path = config$gene_links_zip_path,
+    members = config$gene_link_members,
     reg_elements = reg_elements_std,
-    gene_loc = standardize_gene_loc_table(gene_loc_raw)
+    gene_loc = gene_loc_std,
+    evidence_alpha = config$evidence_alpha,
+    weight_3d = config$weight_3d,
+    weight_crispr = config$weight_crispr,
+    weight_eqtl = config$weight_eqtl,
+    support_bonus = config$support_bonus
   )
 
   edges <- filter_gene_reg_links(

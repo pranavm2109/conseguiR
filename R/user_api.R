@@ -731,7 +731,7 @@ run_somatic_gene_scoring <- function(
 #' Minimal covariate-data example:
 #'
 #' `covariate_dt = data.frame(
-#'   reg_elem_id = c(\"GH01J000001\", \"GH01J000002\"),
+#'   reg_elem_id = c(\"EH38E0080197\", \"EH38E2084302\"),
 #'   accessibility = c(1.2, 0.4),
 #'   replication_timing = c(0.7, -0.1),
 #'   gc_content = c(0.44, 0.51)
@@ -1015,13 +1015,13 @@ prepare_epigenomic_scores <- function(
 #'
 #' toy_graph <- igraph::graph_from_data_frame(
 #'   d = data.frame(
-#'     from = "GH01J000001",
+#'     from = "EH38E0080197",
 #'     to = "TP53",
 #'     confidence = 0.9
 #'   ),
 #'   vertices = data.frame(
-#'     name = c("TP53", "GH01J000001"),
-#'     node_id = c("TP53", "GH01J000001"),
+#'     name = c("TP53", "EH38E0080197"),
+#'     node_id = c("TP53", "EH38E0080197"),
 #'     node_type = c("gene", "reg")
 #'   ),
 #'   directed = TRUE
@@ -1031,10 +1031,10 @@ prepare_epigenomic_scores <- function(
 #'   graph = toy_graph,
 #'   graph_rds_path = tempfile(fileext = ".rds"),
 #'   gene_germline_scores = data.frame(gene_id = "TP53", zstat = 2),
-#'   reg_germline_scores = data.frame(reg_elem_id = "GH01J000001", zstat = 1.2),
+#'   reg_germline_scores = data.frame(reg_elem_id = "EH38E0080197", zstat = 1.2),
 #'   gene_somatic_scores = data.frame(gene_id = "TP53", zstat = -1.5),
-#'   reg_somatic_scores = data.frame(reg_elem_id = "GH01J000001", zstat = 0.3),
-#'   reg_epigenomic_scores = data.frame(reg_elem_id = "GH01J000001", zstat = 2.4),
+#'   reg_somatic_scores = data.frame(reg_elem_id = "EH38E0080197", zstat = 0.3),
+#'   reg_epigenomic_scores = data.frame(reg_elem_id = "EH38E0080197", zstat = 2.4),
 #'   save_outputs = FALSE
 #' )
 #'

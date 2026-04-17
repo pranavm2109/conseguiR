@@ -9,7 +9,7 @@ source("scripts/Internals/R/03_prepare_germline_scores.R")
 
 default_gwas_path <- "data/raw/Testing/34737426-GCST90043906-EFO_0000403.h.tsv"
 default_gene_loc_path <- "data/raw/NCBI38/NCBI38.gene.loc"
-default_reg_loc_path <- "data/raw/GeneHancer/2026-01-26_UCSC_all_unfiltered_reg_elements.loc"
+default_reg_loc_path <- "data/processed/GRCh38-cCREs.loc"
 default_reference_bfile <- "data/raw/g1000_eur/g1000_eur"
 default_sample_size <- 456348L
 default_germline_test_output_dir <- "data/processed/test_outputs/germline"
@@ -268,8 +268,8 @@ test_extract_magma_feature_zstat_regulatory <- function() {
   genes_out_path <- make_germline_test_path("magma_reg_out", ".genes.out")
 
   genes_out_dt <- data.table(
-    GENE = c("GH01J000013", "GH01J000021"),
-    GENE_NAME = c("GH01J000013", "GH01J000021"),
+    GENE = c("EH38E0080197", "EH38E2084302"),
+    GENE_NAME = c("EH38E0080197", "EH38E2084302"),
     ZSTAT = c(1.25, -0.88),
     P = c(0.211, 0.379)
   )
@@ -284,7 +284,7 @@ test_extract_magma_feature_zstat_regulatory <- function() {
   if (!identical(names(zstat_dt), c("feature_id", "zstat"))) {
     stop("Regulatory ZSTAT extraction test failed: unexpected output columns.")
   }
-  if (!identical(as.character(zstat_dt$feature_id[[1]]), "GH01J000013")) {
+  if (!identical(as.character(zstat_dt$feature_id[[1]]), "EH38E0080197")) {
     stop("Regulatory ZSTAT extraction test failed: feature_id was not extracted correctly.")
   }
 
