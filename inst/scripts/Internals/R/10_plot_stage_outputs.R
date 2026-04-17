@@ -88,9 +88,20 @@ read_backend_reg_label_map <- function() {
     return(data.table::copy(get("reg_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
   }
 
-  mapping_path <- conseguiR_plot_backend_resource_path("genehancer_reg_target_labels.tsv.gz")
-  if (!file.exists(mapping_path)) {
-    return(data.table(reg_elem_id = character(), label = character()))
+  mapping_path <- NULL
+  for (filename in c("reg_target_labels.tsv.gz", "genehancer_reg_target_labels.tsv.gz")) {
+    candidate <- tryCatch(
+      conseguiR_plot_backend_resource_path(filename),
+      error = function(e) NULL
+    )
+    if (!is.null(candidate) && file.exists(candidate)) {
+      mapping_path <- candidate
+      break
+    }
+  }
+
+  if (is.null(mapping_path) || !file.exists(mapping_path)) {
+    return(data.table::data.table(reg_elem_id = character(), label = character()))
   }
 
   dt <- data.table::as.data.table(data.table::fread(mapping_path, showProgress = FALSE))
@@ -124,7 +135,7 @@ infer_feature_context <- function(feature_column, which = NULL, dt = NULL) {
   if (!is.null(dt) && "feature_id" %in% names(dt)) {
     feature_values <- unique(stats::na.omit(as.character(dt$feature_id)))
     feature_values <- feature_values[nzchar(feature_values)]
-    if (length(feature_values) > 0L && any(grepl("^GH", feature_values))) {
+    if (length(feature_values) > 0L && any(grepl("^(GH|EH)", feature_values))) {
       return("reg")
     }
   }
