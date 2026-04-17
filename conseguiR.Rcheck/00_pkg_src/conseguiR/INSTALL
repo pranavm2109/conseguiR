@@ -1,0 +1,31 @@
+This package can be installed with standard R package tools.
+
+Optional external tools are required for some analysis stages:
+
+* MAGMA is required for germline scoring wrappers.
+* Diffusion and selected-subgraph calling use a managed Python environment via
+  `basilisk`. The required Python modules are provisioned through that
+  environment rather than a user-managed interpreter.
+
+MAGMA is treated as a user-installed external dependency rather than a bundled
+package asset. `conseguiR` will look for it in this order:
+
+* the explicit `magma_path` argument passed to a germline scoring function
+* `options(conseguiR.magma_path = "/path/to/magma")`
+* `Sys.getenv("CONSEGUIR_MAGMA_PATH")`
+* `magma` on your system `PATH`
+
+The package no longer tries to discover or initialize external runtimes
+automatically during package load.
+
+If the managed Python environment is unavailable, core R-side functionality such as
+input validation, score harmonization, graph construction, and plotting remains
+available.
+
+Practical implications:
+
+* Users do not need to supply `python_path` for diffusion or subgraph calling.
+* The first diffusion or selected-subgraph run may take longer because
+  `basilisk` may need to create its managed environment.
+* Compute functions are designed to return R objects by default; users should
+  only request saved outputs when they explicitly want files written.

@@ -10,6 +10,8 @@ Description: Tools for scoring somatic, germline, and epigenomic evidence at gen
     projecting scores onto biological graphs, running diffusion, calling subnetworks, and exporting results for
     downstream visualization and app development.
 License: MIT + file LICENSE
+URL: https://github.com/pranavm2109/conseguiR
+BugReports: https://github.com/pranavm2109/conseguiR/issues
 biocViews: Software, GeneRegulation, GeneticVariability, GraphAndNetwork
 Encoding: UTF-8
 Depends:

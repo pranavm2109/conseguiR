@@ -51,6 +51,94 @@
   get(name, envir = .conseguiR_runtime_env, inherits = FALSE)
 }
 
+#' @keywords internal
+.conseguiR_call_external <- function(name, args) {
+  do.call(.conseguiR_external_fun(name), args)
+}
+
+#' @keywords internal
+.conseguiR_default_gene_gene_paths <- function(
+  gg_nodes_path = NULL,
+  gg_edges_path = NULL
+) {
+  if (is.null(gg_nodes_path) || is.null(gg_edges_path)) {
+    initialize_backend_graphs(strict = FALSE, quiet = TRUE)
+    backend_paths <- .conseguiR_backend_paths()
+    gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
+    gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
+  }
+
+  list(
+    gg_nodes_path = gg_nodes_path,
+    gg_edges_path = gg_edges_path
+  )
+}
+
+#' @keywords internal
+.conseguiR_pipeline_paths <- function(
+  graph_rds_path = NULL,
+  gg_nodes_path = NULL,
+  gg_edges_path = NULL
+) {
+  initialize_backend_graphs(strict = FALSE, quiet = TRUE)
+  backend_paths <- .conseguiR_backend_paths()
+  gene_gene_paths <- .conseguiR_default_gene_gene_paths(
+    gg_nodes_path = gg_nodes_path,
+    gg_edges_path = gg_edges_path
+  )
+
+  list(
+    graph_rds_path = graph_rds_path %||% backend_paths$gene_reg_graph_rds,
+    gg_nodes_path = gene_gene_paths$gg_nodes_path,
+    gg_edges_path = gene_gene_paths$gg_edges_path
+  )
+}
+
+#' @keywords internal
+.conseguiR_pipeline_args <- function(
+  gwas_sumstats,
+  somatic_maf,
+  reg_ref_path,
+  reference_bfile,
+  dndscv_refdb,
+  epigenomic_track_dir,
+  epigenomic_tracks,
+  paths,
+  output_dir,
+  target_genes,
+  germline_args,
+  somatic_args,
+  epigenomic_args,
+  scored_graph_args,
+  diffusion_args,
+  subgraph_args,
+  plot_args,
+  verbose
+) {
+  list(
+    gwas_sumstats = gwas_sumstats,
+    somatic_maf = somatic_maf,
+    reg_ref_path = reg_ref_path,
+    reference_bfile = reference_bfile,
+    dndscv_refdb = dndscv_refdb,
+    epigenomic_track_dir = epigenomic_track_dir,
+    epigenomic_tracks = epigenomic_tracks,
+    graph_rds_path = paths$graph_rds_path,
+    gg_nodes_path = paths$gg_nodes_path,
+    gg_edges_path = paths$gg_edges_path,
+    output_dir = output_dir,
+    target_genes = target_genes,
+    germline_args = germline_args,
+    somatic_args = somatic_args,
+    epigenomic_args = epigenomic_args,
+    scored_graph_args = scored_graph_args,
+    diffusion_args = diffusion_args,
+    subgraph_args = subgraph_args,
+    plot_args = plot_args,
+    verbose = verbose
+  )
+}
+
 #' Validate raw conseguiR inputs
 #'
 #' Validates raw GWAS, somatic, regulatory-reference, and epigenomic inputs
@@ -100,15 +188,6 @@
 #'
 #' @examples
 #' validate_inputs()
-#'
-#' \dontrun{
-#' validate_inputs(
-#'   gwas_sumstats = "study_gwas.tsv",
-#'   somatic_maf = "study_somatic.maf",
-#'   reg_ref_path = "regulatory_elements.loc",
-#'   epigenomic_tracks = c("track1.bw", "track2.bw", "track3.bw")
-#' )
-#' }
 #'
 #' @return A validation bundle containing validated objects and config.
 #' @export
@@ -280,19 +359,6 @@ initialize_backend_graphs <- function(
 #' @examples
 #' names(formals(run_germline_gene_scoring))
 #'
-#' \dontrun{
-#' run_germline_gene_scoring(
-#'   gwas_sumstats = "study_gwas.tsv",
-#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
-#'   sample_size = 456348,
-#'   step1_args = list(annotation_window = c(35, 10)),
-#'   step2_args = list(
-#'     gene_model = "snp-wise=mean",
-#'     pval_use = c("SNP", "P")
-#'   )
-#' )
-#' }
-#'
 #' @return A germline gene score bundle.
 #' @export
 run_germline_gene_scoring <- function(
@@ -370,19 +436,6 @@ run_germline_gene_scoring <- function(
 #'
 #' @examples
 #' names(formals(run_germline_regulatory_scoring))
-#'
-#' \dontrun{
-#' run_germline_regulatory_scoring(
-#'   gwas_sumstats = "study_gwas.tsv",
-#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
-#'   sample_size = 456348,
-#'   step1_args = list(annotation_window = c(0, 0)),
-#'   step2_args = list(
-#'     gene_model = "snp-wise=mean",
-#'     pval_use = c("SNP", "P")
-#'   )
-#' )
-#' }
 #'
 #' @return A germline regulatory score bundle.
 #' @export
@@ -501,17 +554,6 @@ run_germline_regulatory_scoring <- function(
 #' @examples
 #' names(formals(prepare_germline_scores))
 #'
-#' \dontrun{
-#' prepare_germline_scores(
-#'   gwas_sumstats = "study_gwas.tsv",
-#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
-#'   gene_step1_args = list(annotation_window = c(35, 10)),
-#'   gene_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P")),
-#'   reg_step1_args = list(annotation_window = c(0, 0)),
-#'   reg_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P"))
-#' )
-#' }
-#'
 #' @return A germline score bundle with gene and regulatory score tables.
 #' @export
 prepare_germline_scores <- function(
@@ -615,14 +657,6 @@ prepare_germline_scores <- function(
 #' @examples
 #' names(formals(run_somatic_gene_scoring))
 #'
-#' \dontrun{
-#' run_somatic_gene_scoring(
-#'   maf = "study_somatic.maf",
-#'   refdb = "RefCDS_human_GRCh38.rda",
-#'   dndscv_args = list(sm = "192r_3w")
-#' )
-#' }
-#'
 #' @return A somatic gene score bundle.
 #' @export
 run_somatic_gene_scoring <- function(
@@ -724,15 +758,6 @@ run_somatic_gene_scoring <- function(
 #'
 #' @examples
 #' names(formals(run_somatic_regulatory_scoring))
-#'
-#' \dontrun{
-#' run_somatic_regulatory_scoring(
-#'   maf = "study_somatic.maf",
-#'   reg_ref_path = "regulatory_elements.loc",
-#'   fishhook_covariate_data = covariate_dt,
-#'   fishhook_args = list()
-#' )
-#' }
 #'
 #' @return A somatic regulatory score bundle.
 #' @export
@@ -842,16 +867,6 @@ run_somatic_regulatory_scoring <- function(
 #' @examples
 #' names(formals(prepare_somatic_scores))
 #'
-#' \dontrun{
-#' prepare_somatic_scores(
-#'   maf = "study_somatic.maf",
-#'   refdb = "RefCDS_human_GRCh38.rda",
-#'   reg_ref_path = "regulatory_elements.loc",
-#'   dndscv_args = list(sm = "192r_3w"),
-#'   fishhook_covariate_data = covariate_dt
-#' )
-#' }
-#'
 #' @return A somatic score bundle with gene and regulatory score tables.
 #' @export
 prepare_somatic_scores <- function(
@@ -932,15 +947,6 @@ prepare_somatic_scores <- function(
 #'
 #' @examples
 #' names(formals(prepare_epigenomic_scores))
-#'
-#' \dontrun{
-#' prepare_epigenomic_scores(
-#'   reg_ref_path = "regulatory_elements.loc",
-#'   bw_files = c("track1.bw", "track2.bw", "track3.bw"),
-#'   min_tracks = 3L,
-#'   transform = "log1p"
-#' )
-#' }
 #'
 #' @return An epigenomic score bundle.
 #' @export
@@ -1255,18 +1261,16 @@ call_selected_subgraph <- function(
   python_path = NULL,
   verbose = FALSE
 ) {
-  if (is.null(gg_nodes_path) || is.null(gg_edges_path)) {
-    initialize_backend_graphs(strict = FALSE, quiet = TRUE)
-    backend_paths <- .conseguiR_backend_paths()
-    gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
-    gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
-  }
+  backend_paths <- .conseguiR_default_gene_gene_paths(
+    gg_nodes_path = gg_nodes_path,
+    gg_edges_path = gg_edges_path
+  )
 
-  .conseguiR_external_fun("call_selected_subgraph")(
+  .conseguiR_call_external("call_selected_subgraph", list(
     diffusion = diffusion,
     diffusion_path = diffusion_path,
-    gg_nodes_path = gg_nodes_path,
-    gg_edges_path = gg_edges_path,
+    gg_nodes_path = backend_paths$gg_nodes_path,
+    gg_edges_path = backend_paths$gg_edges_path,
     output_dir = output_dir,
     output_stem = output_stem,
     target_genes = target_genes,
@@ -1286,7 +1290,7 @@ call_selected_subgraph <- function(
     edge_cost_column = edge_cost_column,
     python_path = python_path,
     verbose = verbose
-  )
+  ))
 }
 
 #' Plot score tables from scoring or diffusion outputs
@@ -1334,22 +1338,6 @@ call_selected_subgraph <- function(
 #'   z_column = "zstat",
 #'   save_plot = FALSE
 #' )
-#'
-#' \dontrun{
-#' germline <- prepare_germline_scores(
-#'   gwas_sumstats = "study_gwas.tsv",
-#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
-#'   gene_sample_size = 456348
-#' )
-#'
-#' plot_scores(
-#'   scores = germline,
-#'   which = "gene_scores",
-#'   plot_file_path = "germline_gene_scores.pdf",
-#'   test_tail = "one_tailed",
-#'   label_features = c("MYC", "BCL2")
-#' )
-#' }
 #'
 #' @return A plot bundle containing the ggplot object and plotting data.
 #' @export
@@ -1779,21 +1767,6 @@ plot_epigenomic_reg_scores <- function(
 #' @examples
 #' names(formals(plot_locus_context))
 #'
-#' \dontrun{
-#' plot_locus_context(
-#'   chromosome = "8",
-#'   start = 127200000,
-#'   end = 128200000,
-#'   scored_graph = scored_graph,
-#'   diffusion = diffusion,
-#'   selected_subgraph = selected_subgraph,
-#'   label_features = c("MYC"),
-#'   gwas_sumstats = gwas_sumstats,
-#'   label_top_lit_snps = 3L,
-#'   plot_file_path = "MYC_locus_context.pdf"
-#' )
-#' }
-#'
 #' @return A plot bundle containing the ggplot object and locus plotting data.
 #' @export
 plot_locus_context <- function(
@@ -1823,7 +1796,7 @@ plot_locus_context <- function(
   save_plot = !is.null(plot_file_path),
   verbose = FALSE
 ) {
-  .conseguiR_external_fun("plot_locus_context")(
+  .conseguiR_call_external("plot_locus_context", list(
     chromosome = chromosome,
     start = start,
     end = end,
@@ -1849,7 +1822,7 @@ plot_locus_context <- function(
     dpi = dpi,
     save_plot = save_plot,
     verbose = verbose
-  )
+  ))
 }
 
 #' Plot a selected subgraph and build a visualization bundle
@@ -1891,19 +1864,6 @@ plot_locus_context <- function(
 #'
 #' @examples
 #' names(formals(plot_selected_subgraph))
-#'
-#' \dontrun{
-#' selected_subgraph <- call_selected_subgraph(
-#'   diffusion_path = "gene_reg_graph_diffusion_all_genes.tsv",
-#'   target_genes = 50L
-#' )
-#'
-#' plot_selected_subgraph(
-#'   selected_subgraph = selected_subgraph,
-#'   plot_file_path = "selected_subgraph.pdf",
-#'   title = "Selected Gene Subgraph"
-#' )
-#' }
 #'
 #' @return A plot bundle containing the ggplot object and visualization bundle.
 #' @export
@@ -2052,34 +2012,6 @@ plot_selected_subgraph <- function(
 #' @examples
 #' names(formals(run_conseguiR))
 #'
-#' \dontrun{
-#' run_conseguiR(
-#'   gwas_sumstats = "study_gwas.tsv",
-#'   somatic_maf = "study_somatic.maf",
-#'   reg_ref_path = "regulatory_elements.loc",
-#'   reference_bfile = "/path/to/g1000_eur/g1000_eur",
-#'   dndscv_refdb = "RefCDS_human_GRCh38.rda",
-#'   epigenomic_tracks = c("track1.bw", "track2.bw", "track3.bw"),
-#'   target_genes = 50L,
-#'   germline_args = list(
-#'     gene_sample_size = 456348,
-#'     reg_sample_size = 456348,
-#'     gene_step1_args = list(annotation_window = c(35, 10)),
-#'     gene_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P")),
-#'     reg_step1_args = list(annotation_window = c(0, 0)),
-#'     reg_step2_args = list(gene_model = "snp-wise=mean", pval_use = c("SNP", "P"))
-#'   ),
-#'   somatic_args = list(
-#'     dndscv_args = list(sm = "192r_3w"),
-#'     fishhook_covariate_data = covariate_dt
-#'   ),
-#'   epigenomic_args = list(
-#'     bw_files = c("track1.bw", "track2.bw", "track3.bw"),
-#'     min_tracks = 3L
-#'   )
-#' )
-#' }
-#'
 #' @return A pipeline bundle containing all stage bundles.
 #' @export
 run_conseguiR <- function(
@@ -2104,13 +2036,13 @@ run_conseguiR <- function(
   plot_args = list(),
   verbose = FALSE
 ) {
-  initialize_backend_graphs(strict = FALSE, quiet = TRUE)
-  backend_paths <- .conseguiR_backend_paths()
-  graph_rds_path <- graph_rds_path %||% backend_paths$gene_reg_graph_rds
-  gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
-  gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
+  paths <- .conseguiR_pipeline_paths(
+    graph_rds_path = graph_rds_path,
+    gg_nodes_path = gg_nodes_path,
+    gg_edges_path = gg_edges_path
+  )
 
-  .conseguiR_external_fun("run_conseguiR")(
+  .conseguiR_call_external("run_conseguiR", .conseguiR_pipeline_args(
     gwas_sumstats = gwas_sumstats,
     somatic_maf = somatic_maf,
     reg_ref_path = reg_ref_path,
@@ -2118,9 +2050,7 @@ run_conseguiR <- function(
     dndscv_refdb = dndscv_refdb,
     epigenomic_track_dir = epigenomic_track_dir,
     epigenomic_tracks = epigenomic_tracks,
-    graph_rds_path = graph_rds_path,
-    gg_nodes_path = gg_nodes_path,
-    gg_edges_path = gg_edges_path,
+    paths = paths,
     output_dir = output_dir,
     target_genes = target_genes,
     germline_args = germline_args,
@@ -2131,5 +2061,5 @@ run_conseguiR <- function(
     subgraph_args = subgraph_args,
     plot_args = plot_args,
     verbose = verbose
-  )
+  ))
 }

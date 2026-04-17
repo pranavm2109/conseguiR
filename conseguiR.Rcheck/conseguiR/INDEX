@@ -1,0 +1,50 @@
+build_scored_gene_reg_graph
+                        Build a scored gene-regulatory graph
+call_selected_subgraph
+                        Call the selected subgraph from diffusion
+                        results
+check_conseguiR_runtime
+                        Check the conseguiR runtime environment
+conseguiR-package       conseguiR package metadata
+initialize_backend_graphs
+                        Initialize backend graph resources
+plot_epigenomic_gene_scores
+                        Plot post-diffusion epigenomic gene signal
+plot_epigenomic_reg_scores
+                        Plot epigenomic regulatory signal
+plot_germline_gene_scores
+                        Plot germline gene signal before or after
+                        diffusion
+plot_germline_reg_scores
+                        Plot germline regulatory signal
+plot_locus_context      Plot a locus-centered multimodal context panel
+plot_scores             Plot score tables from scoring or diffusion
+                        outputs
+plot_selected_subgraph
+                        Plot a selected subgraph and build a
+                        visualization bundle
+plot_somatic_gene_scores
+                        Plot somatic gene signal before or after
+                        diffusion
+plot_somatic_reg_scores
+                        Plot somatic regulatory signal
+prepare_epigenomic_scores
+                        Prepare regulatory epigenomic scores
+prepare_germline_scores
+                        Prepare germline scores for genes and
+                        regulatory elements
+prepare_somatic_scores
+                        Prepare somatic scores for genes and regulatory
+                        elements
+run_conseguiR           Run the full conseguiR pipeline end to end
+run_gene_reg_diffusion
+                        Run diffusion on a scored gene-regulatory graph
+run_germline_gene_scoring
+                        Run MAGMA germline gene scoring
+run_germline_regulatory_scoring
+                        Run MAGMA germline regulatory scoring
+run_somatic_gene_scoring
+                        Run dndscv somatic gene scoring
+run_somatic_regulatory_scoring
+                        Run fishHook somatic regulatory scoring
+validate_inputs         Validate raw conseguiR inputs

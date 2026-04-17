@@ -94,14 +94,30 @@ validate_gene_reg_graph_nodes <- function(nodes) {
 }
 
 read_backend_gene_id_map <- function() {
-  loc_candidates <- c(
-    "inst/extdata/backend/NCBI38.gene.loc",
-    "extdata/backend/NCBI38.gene.loc",
-    "data/raw/NCBI38/NCBI38.gene.loc"
+  helper <- tryCatch(
+    getFromNamespace(".conseguiR_backend_resource_path", "conseguiR"),
+    error = function(e) NULL
   )
+  loc_path <- if (!is.null(helper)) {
+    helper("NCBI38.gene.loc")
+  } else {
+    loc_candidates <- c(
+      getOption("conseguiR.backend_resource_dir", NULL),
+      file.path(tools::R_user_dir("conseguiR", which = "cache"), "backend_resources"),
+      "inst/extdata/backend",
+      "extdata/backend",
+      "data/raw/NCBI38/NCBI38.gene.loc"
+    )
+    loc_candidates <- unique(as.character(loc_candidates))
+    loc_candidates <- loc_candidates[!is.na(loc_candidates) & nzchar(loc_candidates)]
+    if (!any(grepl("NCBI38\\.gene\\.loc$", loc_candidates))) {
+      loc_candidates <- file.path(loc_candidates, "NCBI38.gene.loc")
+    }
+    existing <- loc_candidates[file.exists(loc_candidates)]
+    if (length(existing) == 0L) NULL else existing[[1]]
+  }
 
-  loc_path <- loc_candidates[file.exists(loc_candidates)][1]
-  if (is.na(loc_path) || !nzchar(loc_path)) {
+  if (is.null(loc_path) || !nzchar(loc_path)) {
     stop("Could not locate backend gene ID map file: NCBI38.gene.loc")
   }
 

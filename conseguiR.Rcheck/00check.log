@@ -1,0 +1,135 @@
+* using log directory '/Volumes/Crucial X10/Yale Research Work/conseguiR/conseguiR.Rcheck'
+* using R version 4.5.2 (2025-10-31)
+* using platform: aarch64-apple-darwin20
+* R was compiled by
+    Apple clang version 16.0.0 (clang-1600.0.26.6)
+    GNU Fortran (GCC) 14.2.0
+* running under: macOS Sonoma 14.6.1
+* using session charset: ASCII
+* using option '--no-manual'
+* checking for file 'conseguiR/DESCRIPTION' ... OK
+* checking extension type ... Package
+* this is package 'conseguiR' version '0.99.0'
+* package encoding: UTF-8
+* checking package namespace information ... OK
+* checking package dependencies ... OK
+* checking if this is a source package ... OK
+* checking if there is a namespace ... OK
+* checking for executable files ... OK
+* checking for hidden files and directories ... NOTE
+Found the following hidden files and directories:
+  ._DESCRIPTION
+  ._INSTALL
+  ._LICENSE
+  ._NAMESPACE
+  ._NEWS.md
+  ._R
+  ._README.md
+  ._build
+  ._inst
+  ._man
+  ._tests
+  ._vignettes
+  R/._backend_resources.R
+  R/._conseguiR-package.R
+  R/._python_basilisk.R
+  R/._runtime_checks.R
+  R/._user_api.R
+  R/._zzz.R
+  build/._vignette.rds
+  inst/._CITATION
+  inst/._doc
+  inst/._extdata
+  inst/._scripts
+  inst/doc/._conseguiR-overview.R
+  inst/doc/._conseguiR-overview.Rmd
+  inst/doc/._conseguiR-overview.html
+  inst/extdata/._backend
+  inst/extdata/backend/._2026-01-26_UCSC_all_unfiltered_reg_elements.loc
+  inst/extdata/backend/._NCBI38.gene.loc
+  inst/extdata/backend/._gene_gene_graph_edges.tsv.gz
+  inst/extdata/backend/._gene_gene_graph_nodes.tsv.gz
+  inst/extdata/backend/._gene_reg_graph_no_scores_edges.tsv.gz
+  inst/extdata/backend/._gene_reg_graph_no_scores_nodes.tsv.gz
+  inst/extdata/backend/._genehancer_reg_target_labels.tsv.gz
+  inst/scripts/._Externals
+  inst/scripts/._Internals
+  inst/scripts/Externals/._R
+  inst/scripts/Externals/R/._00_user_callable_functions.R
+  inst/scripts/Internals/._Python
+  inst/scripts/Internals/._R
+  inst/scripts/Internals/Python/._07_run_diffusion_on_gene_reg_graph.py
+  inst/scripts/Internals/Python/._08_call_subgraph.py
+  inst/scripts/Internals/R/._00_harmonise_and_validate_inputs.R
+  inst/scripts/Internals/R/._01_prepare_gene_reg_graph.R
+  inst/scripts/Internals/R/._02_prepare_gene_gene_graph.R
+  inst/scripts/Internals/R/._03_prepare_germline_scores.R
+  inst/scripts/Internals/R/._04_prepare_somatic_scores.R
+  inst/scripts/Internals/R/._05_prepare_epigenomic_scores.R
+  inst/scripts/Internals/R/._06_impose_scores_on_gene_reg_graph_nodes.R
+  inst/scripts/Internals/R/._06b_python_basilisk.R
+  inst/scripts/Internals/R/._07_run_diffusion_on_gene_reg_graph.R
+  inst/scripts/Internals/R/._08_call_subgraph.R
+  inst/scripts/Internals/R/._09_create_selected_subgraph_visualisation_bundle.R
+  inst/scripts/Internals/R/._10_plot_stage_outputs.R
+  man/._build_scored_gene_reg_graph.Rd
+  man/._call_selected_subgraph.Rd
+  man/._check_conseguiR_runtime.Rd
+  man/._conseguiR-package.Rd
+  man/._initialize_backend_graphs.Rd
+  man/._plot_epigenomic_gene_scores.Rd
+  man/._plot_epigenomic_reg_scores.Rd
+  man/._plot_germline_gene_scores.Rd
+  man/._plot_germline_reg_scores.Rd
+  man/._plot_locus_context.Rd
+  man/._plot_scores.Rd
+  man/._plot_selected_subgraph.Rd
+  man/._plot_somatic_gene_scores.Rd
+  man/._plot_somatic_reg_scores.Rd
+  man/._prepare_epigenomic_scores.Rd
+  man/._prepare_germline_scores.Rd
+  man/._prepare_somatic_scores.Rd
+  man/._run_conseguiR.Rd
+  man/._run_gene_reg_diffusion.Rd
+  man/._run_germline_gene_scoring.Rd
+  man/._run_germline_regulatory_scoring.Rd
+  man/._run_somatic_gene_scoring.Rd
+  man/._run_somatic_regulatory_scoring.Rd
+  man/._validate_inputs.Rd
+  tests/._testthat
+  tests/._testthat.R
+  tests/testthat/._test-basic-api.R
+  vignettes/._conseguiR-overview.Rmd
+These were most likely included in error. See section 'Package
+structure' in the 'Writing R Extensions' manual.
+* checking for portable file names ... OK
+* checking for sufficient/correct file permissions ... OK
+* checking whether package 'conseguiR' can be installed ... OK
+* checking installed package size ... INFO
+  installed size is 165.0Mb
+  sub-directories of 1Mb or more:
+    Meta     15.0Mb
+    R         7.0Mb
+    doc       9.0Mb
+    extdata  57.0Mb
+    help     11.0Mb
+    html      5.0Mb
+    scripts  41.0Mb
+* checking package directory ... OK
+* checking 'build' directory ... OK
+* checking DESCRIPTION meta-information ... WARNING
+During startup - Warning messages:
+1: Setting LC_CTYPE failed, using "C" 
+2: Setting LC_COLLATE failed, using "C" 
+3: Setting LC_TIME failed, using "C" 
+4: Setting LC_MESSAGES failed, using "C" 
+5: Setting LC_MONETARY failed, using "C" 
+ ERROR
+During startup - Warning messages:
+1: Setting LC_CTYPE failed, using "C" 
+2: Setting LC_COLLATE failed, using "C" 
+3: Setting LC_TIME failed, using "C" 
+4: Setting LC_MESSAGES failed, using "C" 
+5: Setting LC_MONETARY failed, using "C" 
+* DONE
+Status: 1 ERROR, 1 WARNING, 1 NOTE

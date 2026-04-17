@@ -24,6 +24,35 @@ conseguiR_plot_runtime_file <- function(relpath) {
   stop("Could not locate required plotting runtime file: ", relpath)
 }
 
+conseguiR_plot_backend_resource_path <- function(filename) {
+  helper <- tryCatch(
+    getFromNamespace(".conseguiR_backend_resource_path", "conseguiR"),
+    error = function(e) NULL
+  )
+  if (!is.null(helper)) {
+    path <- helper(filename)
+    if (!is.null(path) && file.exists(path)) {
+      return(path)
+    }
+  }
+
+  candidate_dirs <- c(
+    getOption("conseguiR.backend_resource_dir", NULL),
+    file.path(tools::R_user_dir("conseguiR", which = "cache"), "backend_resources"),
+    "inst/extdata/backend",
+    "extdata/backend"
+  )
+  candidate_dirs <- unique(as.character(candidate_dirs))
+  candidate_dirs <- candidate_dirs[!is.na(candidate_dirs) & nzchar(candidate_dirs)]
+  candidates <- file.path(candidate_dirs, filename)
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing) == 0L) {
+    stop("Could not locate required backend resource: ", filename)
+  }
+
+  normalizePath(existing[[1]], winslash = "/", mustWork = TRUE)
+}
+
 default_stage_plot_config <- list(
   score_output_prefix = "data/processed/conseguiR_score_plot"
 )
@@ -39,7 +68,7 @@ read_backend_gene_label_map <- function() {
     return(data.table::copy(get("gene_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
   }
 
-  loc_path <- conseguiR_plot_runtime_file("inst/extdata/backend/NCBI38.gene.loc")
+  loc_path <- conseguiR_plot_backend_resource_path("NCBI38.gene.loc")
   dt <- data.table::fread(loc_path, header = FALSE, showProgress = FALSE)
   if (ncol(dt) < 6L) {
     stop("Backend gene location file does not contain the expected label column.")
@@ -59,7 +88,7 @@ read_backend_reg_label_map <- function() {
     return(data.table::copy(get("reg_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
   }
 
-  mapping_path <- conseguiR_plot_runtime_file("inst/extdata/backend/genehancer_reg_target_labels.tsv.gz")
+  mapping_path <- conseguiR_plot_backend_resource_path("genehancer_reg_target_labels.tsv.gz")
   if (!file.exists(mapping_path)) {
     return(data.table(reg_elem_id = character(), label = character()))
   }

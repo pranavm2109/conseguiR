@@ -54,44 +54,82 @@
 }
 
 #' @keywords internal
+.conseguiR_backend_resource_cache_dir <- function(create = FALSE) {
+  path <- file.path(
+    tools::R_user_dir("conseguiR", which = "cache"),
+    "backend_resources"
+  )
+  if (isTRUE(create)) {
+    dir.create(path, recursive = TRUE, showWarnings = FALSE)
+  }
+  normalizePath(path, winslash = "/", mustWork = FALSE)
+}
+
+#' @keywords internal
+.conseguiR_backend_resource_dirs <- function(include_cache = TRUE) {
+  option_dir <- getOption("conseguiR.backend_resource_dir")
+  if (!is.null(option_dir)) {
+    option_dir <- trimws(as.character(option_dir))
+    option_dir <- option_dir[nzchar(option_dir)]
+  }
+
+  installed <- tryCatch(
+    system.file("extdata", "backend", package = "conseguiR"),
+    error = function(e) ""
+  )
+  candidates <- c(
+    if (isTRUE(include_cache)) .conseguiR_backend_resource_cache_dir(),
+    option_dir,
+    installed,
+    if (!is.null(.conseguiR_state$pkg_root)) {
+      file.path(.conseguiR_state$pkg_root, "extdata", "backend")
+    },
+    if (!is.null(.conseguiR_state$pkg_root)) {
+      file.path(.conseguiR_state$pkg_root, "inst", "extdata", "backend")
+    },
+    file.path(getwd(), "extdata", "backend"),
+    file.path(getwd(), "inst", "extdata", "backend")
+  )
+  candidates <- unique(candidates[!is.na(candidates) & nzchar(candidates)])
+  candidates[dir.exists(candidates)]
+}
+
+#' @keywords internal
 .conseguiR_backend_seed_dir <- function() {
   cache_key <- "backend_seed_dir"
   if (exists(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
     return(get(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE))
   }
 
-  installed <- tryCatch(system.file("extdata", "backend", package = "conseguiR"), error = function(e) "")
-  candidates <- c(
-    installed,
-    if (!is.null(.conseguiR_state$pkg_root)) file.path(.conseguiR_state$pkg_root, "extdata", "backend"),
-    if (!is.null(.conseguiR_state$pkg_root)) file.path(.conseguiR_state$pkg_root, "inst", "extdata", "backend"),
-    file.path(getwd(), "extdata", "backend"),
-    file.path(getwd(), "inst", "extdata", "backend")
-  )
-  candidates <- unique(candidates[!is.na(candidates) & nzchar(candidates)])
-  existing <- candidates[dir.exists(candidates)]
-  if (length(existing) == 0L) {
-    assign(cache_key, NULL, envir = .conseguiR_backend_cache)
-    return(NULL)
+  existing <- .conseguiR_backend_resource_dirs(include_cache = TRUE)
+  seed_dir <- if (length(existing) > 0L) {
+    normalizePath(existing[[1]], winslash = "/", mustWork = TRUE)
+  } else {
+    NULL
   }
-  seed_dir <- normalizePath(existing[[1]], winslash = "/", mustWork = TRUE)
   assign(cache_key, seed_dir, envir = .conseguiR_backend_cache)
   seed_dir
 }
 
 #' @keywords internal
+.conseguiR_backend_resource_candidates <- function(filename) {
+  dirs <- .conseguiR_backend_resource_dirs(include_cache = TRUE)
+  if (length(dirs) == 0L) {
+    return(character())
+  }
+
+  candidates <- file.path(dirs, filename)
+  unique(candidates[file.exists(candidates)])
+}
+
+#' @keywords internal
 .conseguiR_backend_resource_path <- function(filename) {
-  seed_dir <- .conseguiR_backend_seed_dir()
-  if (is.null(seed_dir)) {
+  candidates <- .conseguiR_backend_resource_candidates(filename)
+  if (length(candidates) == 0L) {
     return(NULL)
   }
 
-  candidate <- file.path(seed_dir, filename)
-  if (!file.exists(candidate)) {
-    return(NULL)
-  }
-
-  normalizePath(candidate, winslash = "/", mustWork = TRUE)
+  normalizePath(candidates[[1]], winslash = "/", mustWork = TRUE)
 }
 
 #' @keywords internal
@@ -140,8 +178,7 @@
     return(FALSE)
   }
 
-  files <- switch(
-    kind,
+  files <- switch(kind,
     gene_reg = c(
       "gene_reg_graph_no_scores_nodes.tsv.gz",
       "gene_reg_graph_no_scores_edges.tsv.gz",
@@ -196,22 +233,15 @@
   all(file.exists(unlist(paths, use.names = FALSE)))
 }
 
-.conseguiR_initialize_backend_graphs <- function(
-  backend_dir = NULL,
-  build_gene_reg = TRUE,
-  build_gene_gene = TRUE,
-  force = FALSE,
-  strict = TRUE,
-  quiet = FALSE
+#' @keywords internal
+.conseguiR_backend_init_cache_key <- function(
+  backend_dir,
+  build_gene_reg,
+  build_gene_gene,
+  force,
+  strict
 ) {
-  if (!is.null(backend_dir)) {
-    options(conseguiR.backend_dir = backend_dir)
-  }
-
-  backend_dir <- .conseguiR_backend_dir(create = TRUE)
-  options(conseguiR.backend_dir = backend_dir)
-  paths <- .conseguiR_backend_paths(backend_dir)
-  init_cache_key <- paste(
+  paste(
     "backend_init",
     normalizePath(backend_dir, winslash = "/", mustWork = FALSE),
     build_gene_reg,
@@ -220,97 +250,155 @@
     strict,
     sep = "::"
   )
+}
 
-  if (!isTRUE(force) && exists(init_cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
-    cached <- get(init_cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)
-    required_paths <- c(
-      if (isTRUE(build_gene_reg)) .conseguiR_existing_graph_paths(paths[c("gene_reg_graph_nodes", "gene_reg_graph_edges")]),
-      if (isTRUE(build_gene_gene)) .conseguiR_existing_graph_paths(paths[c("gene_gene_graph_nodes", "gene_gene_graph_edges")])
-    )
-    if (!is.null(cached) && length(required_paths) > 0L && .conseguiR_graph_files_exist(required_paths)) {
-      if (!isTRUE(quiet)) {
-        message("Backend graph initialization complete.")
-      }
-      return(cached)
-    }
+#' @keywords internal
+.conseguiR_cached_backend_init <- function(
+  init_cache_key,
+  paths,
+  build_gene_reg,
+  build_gene_gene,
+  quiet
+) {
+  if (!exists(init_cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
+    return(NULL)
   }
 
-  status <- list()
-
-  if (isTRUE(build_gene_reg)) {
-    target_paths <- list(
-      paths$gene_reg_graph_nodes,
-      paths$gene_reg_graph_edges
-    )
-
-    if (!isTRUE(force) && .conseguiR_graph_files_exist(target_paths)) {
-      status$gene_reg <- "reused"
-    } else {
-      if (.conseguiR_seed_backend_graph("gene_reg", backend_dir = backend_dir)) {
-        status$gene_reg <- "seeded"
-      } else {
-      interactions_path <- .conseguiR_find_data_path("data/raw/GeneHancer/gh_interactions_hg38_primary_assembly")
-      reg_elements_path <- .conseguiR_find_data_path("data/raw/GeneHancer/gh_reg_elements_hg38_primary_assembly")
-
-      if (is.null(interactions_path) || is.null(reg_elements_path)) {
-        msg <- paste(
-          "Unable to initialize the backend gene-regulatory graph because the",
-          "required GeneHancer resources were not found."
-        )
-        if (isTRUE(strict)) stop(msg)
-        status$gene_reg <- "skipped"
-      } else {
-        env <- .conseguiR_internal_script_env("scripts/Internals/R/01_prepare_gene_reg_graph.R")
-        config <- env$default_config
-        config$interactions_path <- interactions_path
-        config$reg_elements_path <- reg_elements_path
-        config$output_prefix <- file.path(backend_dir, "gene_reg_graph_no_scores")
-        env$prepare_gene_reg_graph(config = config)
-        status$gene_reg <- "built"
-      }
-      }
+  cached <- get(init_cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)
+  required_paths <- c(
+    if (isTRUE(build_gene_reg)) {
+      .conseguiR_existing_graph_paths(
+        paths[c("gene_reg_graph_nodes", "gene_reg_graph_edges")]
+      )
+    },
+    if (isTRUE(build_gene_gene)) {
+      .conseguiR_existing_graph_paths(
+        paths[c("gene_gene_graph_nodes", "gene_gene_graph_edges")]
+      )
     }
-  }
+  )
 
-  if (isTRUE(build_gene_gene)) {
-    target_paths <- list(
-      paths$gene_gene_graph_nodes,
-      paths$gene_gene_graph_edges
-    )
-
-    if (!isTRUE(force) && .conseguiR_graph_files_exist(target_paths)) {
-      status$gene_gene <- "reused"
-    } else {
-      if (.conseguiR_seed_backend_graph("gene_gene", backend_dir = backend_dir)) {
-        status$gene_gene <- "seeded"
-      } else {
-      links_path <- .conseguiR_find_data_path("data/raw/STRING/9606.protein.links.v12.0.txt")
-      info_path <- .conseguiR_find_data_path("data/raw/STRING/9606.protein.info.v12.0.txt")
-
-      if (is.null(links_path) || is.null(info_path)) {
-        msg <- paste(
-          "Unable to initialize the backend gene-gene graph because the",
-          "required STRING resources were not found."
-        )
-        if (isTRUE(strict)) stop(msg)
-        status$gene_gene <- "skipped"
-      } else {
-        env <- .conseguiR_internal_script_env("scripts/Internals/R/02_prepare_gene_gene_graph.R")
-        config <- env$default_config
-        config$protein_links_path <- links_path
-        config$protein_info_path <- info_path
-        config$output_prefix <- file.path(backend_dir, "gene_gene_graph")
-        env$prepare_gene_gene_graph(config = config)
-        status$gene_gene <- "built"
-      }
-      }
-    }
+  if (
+    is.null(cached) ||
+      length(required_paths) == 0L ||
+      !.conseguiR_graph_files_exist(required_paths)
+  ) {
+    return(NULL)
   }
 
   if (!isTRUE(quiet)) {
     message("Backend graph initialization complete.")
   }
 
+  cached
+}
+
+#' @keywords internal
+.conseguiR_initialize_gene_reg_backend <- function(
+  paths,
+  backend_dir,
+  force,
+  strict
+) {
+  target_paths <- list(
+    paths$gene_reg_graph_nodes,
+    paths$gene_reg_graph_edges
+  )
+
+  if (!isTRUE(force) && .conseguiR_graph_files_exist(target_paths)) {
+    return("reused")
+  }
+
+  if (.conseguiR_seed_backend_graph("gene_reg", backend_dir = backend_dir)) {
+    return("seeded")
+  }
+
+  interactions_path <- .conseguiR_find_data_path(
+    "data/raw/GeneHancer/gh_interactions_hg38_primary_assembly"
+  )
+  reg_elements_path <- .conseguiR_find_data_path(
+    "data/raw/GeneHancer/gh_reg_elements_hg38_primary_assembly"
+  )
+
+  if (is.null(interactions_path) || is.null(reg_elements_path)) {
+    msg <- paste(
+      "Unable to initialize the backend gene-regulatory graph because the",
+      "required GeneHancer resources were not found."
+    )
+    if (isTRUE(strict)) {
+      stop(msg)
+    }
+    return("skipped")
+  }
+
+  env <- .conseguiR_internal_script_env(
+    "scripts/Internals/R/01_prepare_gene_reg_graph.R"
+  )
+  config <- env$default_config
+  config$interactions_path <- interactions_path
+  config$reg_elements_path <- reg_elements_path
+  config$output_prefix <- file.path(backend_dir, "gene_reg_graph_no_scores")
+  env$prepare_gene_reg_graph(config = config)
+  "built"
+}
+
+#' @keywords internal
+.conseguiR_initialize_gene_gene_backend <- function(
+  paths,
+  backend_dir,
+  force,
+  strict
+) {
+  target_paths <- list(
+    paths$gene_gene_graph_nodes,
+    paths$gene_gene_graph_edges
+  )
+
+  if (!isTRUE(force) && .conseguiR_graph_files_exist(target_paths)) {
+    return("reused")
+  }
+
+  if (.conseguiR_seed_backend_graph("gene_gene", backend_dir = backend_dir)) {
+    return("seeded")
+  }
+
+  links_path <- .conseguiR_find_data_path(
+    "data/raw/STRING/9606.protein.links.v12.0.txt"
+  )
+  info_path <- .conseguiR_find_data_path(
+    "data/raw/STRING/9606.protein.info.v12.0.txt"
+  )
+
+  if (is.null(links_path) || is.null(info_path)) {
+    msg <- paste(
+      "Unable to initialize the backend gene-gene graph because the",
+      "required STRING resources were not found."
+    )
+    if (isTRUE(strict)) {
+      stop(msg)
+    }
+    return("skipped")
+  }
+
+  env <- .conseguiR_internal_script_env(
+    "scripts/Internals/R/02_prepare_gene_gene_graph.R"
+  )
+  config <- env$default_config
+  config$protein_links_path <- links_path
+  config$protein_info_path <- info_path
+  config$output_prefix <- file.path(backend_dir, "gene_gene_graph")
+  env$prepare_gene_gene_graph(config = config)
+  "built"
+}
+
+#' @keywords internal
+.conseguiR_backend_init_result <- function(
+  backend_dir,
+  paths,
+  status,
+  init_cache_key,
+  force
+) {
   result <- structure(
     list(
       backend_dir = backend_dir,
@@ -319,8 +407,126 @@
     ),
     class = c("conseguiR_backend_init", "list")
   )
+
   if (!isTRUE(force)) {
     assign(init_cache_key, result, envir = .conseguiR_backend_cache)
   }
+
   result
+}
+
+#' @keywords internal
+.conseguiR_backend_init_context <- function(
+  backend_dir,
+  build_gene_reg,
+  build_gene_gene,
+  force,
+  strict
+) {
+  if (!is.null(backend_dir)) {
+    options(conseguiR.backend_dir = backend_dir)
+  }
+
+  resolved_backend_dir <- .conseguiR_backend_dir(create = TRUE)
+  options(conseguiR.backend_dir = resolved_backend_dir)
+  paths <- .conseguiR_backend_paths(resolved_backend_dir)
+  init_cache_key <- .conseguiR_backend_init_cache_key(
+    backend_dir = resolved_backend_dir,
+    build_gene_reg = build_gene_reg,
+    build_gene_gene = build_gene_gene,
+    force = force,
+    strict = strict
+  )
+
+  list(
+    backend_dir = resolved_backend_dir,
+    paths = paths,
+    init_cache_key = init_cache_key
+  )
+}
+
+#' @keywords internal
+.conseguiR_backend_init_status <- function(
+  paths,
+  backend_dir,
+  build_gene_reg,
+  build_gene_gene,
+  force,
+  strict
+) {
+  status <- list()
+
+  if (isTRUE(build_gene_reg)) {
+    status$gene_reg <- .conseguiR_initialize_gene_reg_backend(
+      paths = paths,
+      backend_dir = backend_dir,
+      force = force,
+      strict = strict
+    )
+  }
+
+  if (isTRUE(build_gene_gene)) {
+    status$gene_gene <- .conseguiR_initialize_gene_gene_backend(
+      paths = paths,
+      backend_dir = backend_dir,
+      force = force,
+      strict = strict
+    )
+  }
+
+  status
+}
+
+.conseguiR_initialize_backend_graphs <- function(
+  backend_dir = NULL,
+  build_gene_reg = TRUE,
+  build_gene_gene = TRUE,
+  force = FALSE,
+  strict = TRUE,
+  quiet = FALSE
+) {
+  context <- .conseguiR_backend_init_context(
+    backend_dir = backend_dir,
+    build_gene_reg = build_gene_reg,
+    build_gene_gene = build_gene_gene,
+    force = force,
+    strict = strict
+  )
+  paths <- context$paths
+  backend_dir <- context$backend_dir
+  init_cache_key <- context$init_cache_key
+
+  if (!isTRUE(force)) {
+    cached <- .conseguiR_cached_backend_init(
+      init_cache_key = init_cache_key,
+      paths = paths,
+      build_gene_reg = build_gene_reg,
+      build_gene_gene = build_gene_gene,
+      quiet = quiet
+    )
+    if (!is.null(cached)) {
+      return(cached)
+    }
+  }
+
+  status <- .conseguiR_backend_init_status(
+    paths = paths,
+    backend_dir = backend_dir,
+    build_gene_reg = build_gene_reg,
+    build_gene_gene = build_gene_gene,
+    force = force,
+    strict = strict
+  )
+
+  if (!isTRUE(quiet)) {
+    message("Backend graph initialization complete.")
+  }
+
+  .conseguiR_backend_init_result(
+    backend_dir = backend_dir,
+    paths = paths,
+    status = status,
+    init_cache_key = init_cache_key,
+    force = force
+  )
 }

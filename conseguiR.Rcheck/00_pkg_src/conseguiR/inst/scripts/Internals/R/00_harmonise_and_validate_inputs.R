@@ -1,0 +1,425 @@
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(data.table)
+  library(GenomicRanges)
+  library(IRanges)
+  library(GenomeInfoDb)
+  library(rtracklayer)
+})
+
+# Minimal harmonization helpers for early conseguiR scripts.
+#
+# GWAS output columns:
+# - rsid: taken from rs_id, rsid, or hm_rsid when present
+# - variant_id: taken from variant_id or hm_variant_id when present
+# - magma_snp_id: prefer rsid; otherwise fall back to variant_id
+# - chromosome: taken from chromosome, hm_chrom, chr, or CHR
+# - base_pair_location: taken from base_pair_location, hm_pos, bp, pos, or BP
+# - p_value: taken from p_value, p, P, or pval
+#
+# Somatic MAF output columns:
+# - sample_id
+# - chromosome
+# - start_position
+# - end_position
+# - ref
+# - alt
+
+ensure_data_table <- function(x) {
+  if (!is.data.frame(x)) {
+    stop("Expected a data.frame or data.table.")
+  }
+
+  as.data.table(x)
+}
+
+normalize_colnames <- function(x) {
+  dt <- data.table::copy(ensure_data_table(x))
+  clean_names <- names(dt)
+  clean_names <- gsub("\\.", "_", clean_names)
+  clean_names <- gsub("\\s+", "_", clean_names)
+  clean_names <- gsub("-", "_", clean_names, fixed = TRUE)
+  setnames(dt, clean_names)
+  dt
+}
+
+pick_first_existing_column <- function(dt, candidates, field_name) {
+  hit <- intersect(candidates, names(dt))
+
+  if (length(hit) == 0) {
+    stop(
+      "Could not find a column for ",
+      field_name,
+      ". Tried: ",
+      paste(candidates, collapse = ", ")
+    )
+  }
+
+  hit[[1]]
+}
+
+read_validation_preview <- function(path, nrows = 1000L, show_progress = FALSE) {
+  fread(path, nrows = nrows, showProgress = show_progress)
+}
+
+validate_gwas_sumstats <- function(sumstats) {
+  dt <- normalize_colnames(sumstats)
+
+  rsid_candidates <- intersect(c("rs_id", "rsid", "hm_rsid"), names(dt))
+  variant_id_candidates <- intersect(c("variant_id", "hm_variant_id"), names(dt))
+
+  if (length(rsid_candidates) == 0L && length(variant_id_candidates) == 0L) {
+    stop(
+      "Could not find a column for GWAS SNP identifiers. Tried rs_id, rsid, hm_rsid, variant_id, hm_variant_id."
+    )
+  }
+
+  chr_col <- pick_first_existing_column(
+    dt,
+    c("chromosome", "hm_chrom", "chr", "CHR"),
+    "chromosome"
+  )
+  pos_col <- pick_first_existing_column(
+    dt,
+    c("base_pair_location", "hm_pos", "bp", "pos", "BP"),
+    "base-pair position"
+  )
+  p_col <- pick_first_existing_column(
+    dt,
+    c("p_value", "p", "P", "pval"),
+    "p-value"
+  )
+
+  rsid_col <- if (length(rsid_candidates) > 0L) rsid_candidates[[1]] else NULL
+  variant_id_col <- if (length(variant_id_candidates) > 0L) variant_id_candidates[[1]] else NULL
+
+  out <- unique(dt[, .(
+    rsid = if (is.null(rsid_col)) NA_character_ else as.character(get(rsid_col)),
+    variant_id = if (is.null(variant_id_col)) NA_character_ else as.character(get(variant_id_col)),
+    chromosome = as.character(get(chr_col)),
+    base_pair_location = as.integer(get(pos_col)),
+    p_value = as.numeric(get(p_col))
+  )])
+
+  out[, rsid := trimws(rsid)]
+  out[, variant_id := trimws(variant_id)]
+  out[, chromosome := trimws(chromosome)]
+  out[, rsid := fifelse(is.na(rsid) | rsid == "", NA_character_, rsid)]
+  out[, variant_id := fifelse(is.na(variant_id) | variant_id == "", NA_character_, variant_id)]
+  out[, magma_snp_id := fifelse(!is.na(rsid), rsid, variant_id)]
+  out <- out[
+    !is.na(magma_snp_id) & magma_snp_id != "" &
+    !is.na(chromosome) & chromosome != "" &
+    !is.na(base_pair_location) &
+    !is.na(p_value)
+  ]
+
+  if (nrow(out) == 0L) {
+    stop("GWAS summary statistics have no usable rows after validation.")
+  }
+
+  attr(out, "conseguiR_input_type") <- "gwas_sumstats_magma_minimal"
+  out
+}
+
+validate_gwas_sumstats_path <- function(sumstats_path, show_progress = FALSE) {
+  if (!file.exists(sumstats_path)) {
+    stop("GWAS summary statistics file does not exist: ", sumstats_path)
+  }
+
+  dt <- read_validation_preview(sumstats_path, show_progress = show_progress)
+  validate_gwas_sumstats(dt)
+}
+
+prepare_magma_input <- function(sumstats) {
+  dt <- validate_gwas_sumstats(sumstats)
+
+  snp_loc <- unique(dt[, .(
+    SNP = magma_snp_id,
+    CHR = chromosome,
+    POS = base_pair_location
+  )])
+
+  pval <- unique(dt[, .(
+    SNP = magma_snp_id,
+    P = p_value
+  )])
+
+  attr(snp_loc, "conseguiR_input_type") <- "magma_snp_loc"
+  attr(pval, "conseguiR_input_type") <- "magma_pval"
+
+  list(
+    snp_loc = snp_loc,
+    pval = pval
+  )
+}
+
+write_magma_input_files <- function(sumstats, snp_loc_path, pval_path) {
+  magma_input <- prepare_magma_input(sumstats)
+
+  fwrite(magma_input$snp_loc, snp_loc_path, sep = "\t", col.names = FALSE)
+  fwrite(magma_input$pval, pval_path, sep = "\t", col.names = TRUE)
+
+  invisible(list(
+    snp_loc_path = snp_loc_path,
+    pval_path = pval_path
+  ))
+}
+
+validate_somatic_maf <- function(maf) {
+  dt <- normalize_colnames(maf)
+
+  sample_col <- pick_first_existing_column(
+    dt,
+    c("Tumor_Sample_Barcode", "tumor_sample_barcode", "sampleID", "sample_id", "idcol"),
+    "sample identifier"
+  )
+  chr_col <- pick_first_existing_column(
+    dt,
+    c("Chromosome", "chromosome", "chr", "CHR"),
+    "chromosome"
+  )
+  start_col <- pick_first_existing_column(
+    dt,
+    c("Start_Position", "Start_position", "start_position", "Start", "start"),
+    "start position"
+  )
+  end_col <- pick_first_existing_column(
+    dt,
+    c("End_Position", "End_position", "end_position", "End", "end"),
+    "end position"
+  )
+  ref_col <- pick_first_existing_column(
+    dt,
+    c("Reference_Allele", "reference_allele", "ref"),
+    "reference allele"
+  )
+  alt_col <- pick_first_existing_column(
+    dt,
+    c("Tumor_Seq_Allele2", "tumor_seq_allele2", "mut", "alt"),
+    "alternate allele"
+  )
+
+  out <- unique(dt[, .(
+    sample_id = as.character(get(sample_col)),
+    chromosome = as.character(get(chr_col)),
+    start_position = as.integer(get(start_col)),
+    end_position = as.integer(get(end_col)),
+    ref = as.character(get(ref_col)),
+    alt = as.character(get(alt_col))
+  )])
+
+  attr(out, "conseguiR_input_type") <- "somatic_maf_minimal"
+  out
+}
+
+validate_somatic_maf_path <- function(maf_path, show_progress = FALSE) {
+  if (!file.exists(maf_path)) {
+    stop("Somatic MAF file does not exist: ", maf_path)
+  }
+
+  dt <- read_validation_preview(maf_path, show_progress = show_progress)
+  validate_somatic_maf(dt)
+}
+
+prepare_dndscv_input <- function(maf) {
+  dt <- validate_somatic_maf(maf)
+
+  out <- dt[, .(
+    sampleID = sample_id,
+    chr = chromosome,
+    pos = start_position,
+    ref = ref,
+    mut = alt
+  )]
+
+  attr(out, "conseguiR_input_type") <- "dndscv_input"
+  out
+}
+
+prepare_fishhook_input <- function(maf) {
+  dt <- validate_somatic_maf(maf)
+
+  out <- dt[, .(
+    Tumor_Sample_Barcode = sample_id,
+    Chromosome = chromosome,
+    Start_Position = start_position,
+    End_Position = end_position,
+    Reference_Allele = ref,
+    Tumor_Seq_Allele2 = alt
+  )]
+
+  attr(out, "conseguiR_input_type") <- "fishhook_input"
+  out
+}
+
+validate_regulatory_element_reference <- function(reg_ref_path, nrows = Inf) {
+  if (!file.exists(reg_ref_path)) {
+    stop("Regulatory element reference file does not exist: ", reg_ref_path)
+  }
+
+  reg_dt <- fread(reg_ref_path, header = FALSE, nrows = nrows)
+
+  if (ncol(reg_dt) < 4) {
+    stop("Regulatory element reference must have at least 4 columns: reg_elem_id, chrom, start, end.")
+  }
+
+  base_names <- c("reg_elem_id", "chrom", "start_raw", "end_raw", "strand", "reg_elem_name")
+  setnames(reg_dt, names(reg_dt)[seq_len(min(length(base_names), ncol(reg_dt)))], base_names[seq_len(min(length(base_names), ncol(reg_dt)))])
+
+  reg_dt[, seqname := ifelse(grepl("^chr", chrom), chrom, paste0("chr", chrom))]
+  reg_dt[, start := as.integer(start_raw)]
+  reg_dt[, end := as.integer(end_raw)]
+
+  has_zero_start <- any(reg_dt$start == 0L, na.rm = TRUE)
+  if (has_zero_start) {
+    reg_dt[, start := start + 1L]
+  }
+
+  reg_dt <- reg_dt[
+    !is.na(reg_elem_id) & reg_elem_id != "" &
+    !is.na(seqname) & seqname != "" &
+    !is.na(start) & !is.na(end) &
+    start > 0L & end >= start
+  ]
+
+  if (nrow(reg_dt) == 0) {
+    stop("Regulatory element reference has no usable rows after cleaning.")
+  }
+
+  reg_gr <- GRanges(
+    seqnames = reg_dt$seqname,
+    ranges = IRanges(start = reg_dt$start, end = reg_dt$end),
+    strand = "*"
+  )
+
+  mcols(reg_gr)$reg_elem_id <- as.character(reg_dt$reg_elem_id)
+  if ("reg_elem_name" %in% names(reg_dt)) {
+    mcols(reg_gr)$reg_elem_name <- as.character(reg_dt$reg_elem_name)
+  }
+
+  attr(reg_gr, "conseguiR_input_type") <- "regulatory_element_reference"
+  reg_gr
+}
+
+validate_epigenomic_tracks <- function(track_paths) {
+  if (length(track_paths) == 0L) {
+    stop("No epigenomic track paths were provided.")
+  }
+
+  missing_tracks <- track_paths[!file.exists(track_paths)]
+  if (length(missing_tracks) > 0L) {
+    stop("Epigenomic track file does not exist: ", missing_tracks[[1]])
+  }
+
+  valid_tracks <- vapply(
+    track_paths,
+    FUN.VALUE = logical(1),
+    FUN = function(track_path) {
+      tryCatch(
+        {
+          seqinfo(BigWigFile(track_path))
+          TRUE
+        },
+        error = function(e) {
+          stop("Failed to validate bigWig file `", track_path, "`: ", conditionMessage(e))
+        }
+      )
+    }
+  )
+
+  out <- unname(track_paths[valid_tracks])
+  attr(out, "conseguiR_input_type") <- "epigenomic_bigwig_tracks"
+  out
+}
+
+validate_epigenomic_bigwigs <- function(
+  bw_files,
+  reg_gr,
+  exclude_patterns = NULL,
+  verbose = FALSE
+) {
+  if (length(bw_files) == 1L && dir.exists(bw_files)) {
+    bw_files <- list.files(bw_files, pattern = "\\.(bw|bigWig|bigwig)$", full.names = TRUE)
+  }
+
+  if (length(exclude_patterns) > 0) {
+    exclude_regex <- paste(exclude_patterns, collapse = "|")
+    bw_files <- bw_files[!grepl(exclude_regex, basename(bw_files))]
+  }
+
+  if (length(bw_files) < 3) {
+    stop("Need at least three bigWig files after filtering.")
+  }
+
+  missing_files <- bw_files[!file.exists(bw_files)]
+  if (length(missing_files) > 0) {
+    stop("These bigWig files do not exist: ", paste(missing_files, collapse = ", "))
+  }
+
+  reg_gr_test <- reg_gr
+  file_summaries <- vector("list", length(bw_files))
+  pb <- if (isTRUE(verbose)) utils::txtProgressBar(min = 0, max = length(bw_files), style = 3) else NULL
+  on.exit(if (!is.null(pb)) close(pb), add = TRUE)
+
+  for (i in seq_along(bw_files)) {
+    bw_path <- bw_files[[i]]
+    if (isTRUE(verbose)) {
+      message("Checking bigWig ", i, "/", length(bw_files), ": ", basename(bw_path))
+    }
+
+    bw_info <- tryCatch(
+      seqinfo(BigWigFile(bw_path)),
+      error = function(e) {
+        stop("Could not read bigWig header for ", bw_path, ": ", conditionMessage(e))
+      }
+    )
+
+    seqlevelsStyle(reg_gr_test) <- "UCSC"
+    common_seqlevels <- intersect(seqlevels(reg_gr_test), seqlevels(bw_info))
+
+    if (length(common_seqlevels) == 0) {
+      stop("No overlapping seqlevels between regulatory elements and bigWig file: ", bw_path)
+    }
+
+    reg_subset <- keepSeqlevels(reg_gr_test, common_seqlevels, pruning.mode = "coarse")
+    if (length(reg_subset) == 0) {
+      stop("No regulatory elements remain after seqlevel harmonization for bigWig file: ", bw_path)
+    }
+
+    file_summaries[[i]] <- data.table(
+      file = bw_path,
+      n_common_seqlevels = length(common_seqlevels),
+      n_test_intervals = NA_integer_
+    )
+    if (!is.null(pb)) utils::setTxtProgressBar(pb, i)
+  }
+
+  out <- rbindlist(file_summaries)
+  attr(out, "conseguiR_input_type") <- "epigenomic_bigwig_validation"
+  out
+}
+
+validate_epigenomic_inputs <- function(
+  bw_files,
+  reg_ref_path,
+  exclude_patterns = NULL,
+  verbose = FALSE
+) {
+  reg_gr <- validate_regulatory_element_reference(
+    reg_ref_path,
+    nrows = 1000L
+  )
+  bw_summary <- validate_epigenomic_bigwigs(
+    bw_files = bw_files,
+    reg_gr = reg_gr,
+    exclude_patterns = exclude_patterns,
+    verbose = verbose
+  )
+
+  list(
+    reg_gr = reg_gr,
+    bigwig_summary = bw_summary
+  )
+}
