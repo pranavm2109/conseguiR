@@ -70,6 +70,10 @@ In plain language:
 mutations when estimating the background model.
 \item \code{fishhook_covariate_data} is where users typically supply replication,
 accessibility, mappability, or GC-like covariates if they have them.
+\item when fishHook returns directional significance columns, \code{conseguiR}
+extracts regulatory scores from enrichment-side \code{p} and depletion-side
+\code{p.neg} directly rather than reconstructing direction later from a generic
+p-value.
 \item if you do not have a custom territory or covariates yet, \code{eligible_gr = NULL} and \code{fishhook_covariate_data = NULL} are reasonable starting points.
 \item \code{idcol} should match the sample identifier column name used in the somatic
 mutation table after harmonization. In most MAF-based workflows the

@@ -683,6 +683,8 @@ save_graph_outputs <- function(graph, nodes, edges, reg_target_labels, output_pr
 }
 
 prepare_gene_reg_graph <- function(config = default_config) {
+  config <- utils::modifyList(default_config, config)
+
   reg_elements_raw <- read_encode_ccres(config$reg_elements_path)
   gene_loc_raw <- read_gene_loc_table(config$gene_loc_path)
 

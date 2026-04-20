@@ -78,6 +78,18 @@ the gene-level somatic score.
 Weight applied to incoming epigenomic regulatory signal before combining it
 with the gene-level epigenomic score.
 
+### `integration_weight_germline`
+
+Germline weight used in the signed cross-modality integration step.
+
+### `integration_weight_somatic`
+
+Somatic weight used in the signed cross-modality integration step.
+
+### `integration_weight_epigenomic`
+
+Epigenomic weight used in the signed cross-modality integration step.
+
 ### `positive_only`
 
 Logical flag controlling whether only positive incoming regulatory signal is
@@ -100,3 +112,18 @@ Number of top-ranked genes written to the separate top-gene diffusion output.
 Deprecated and ignored.
 
 Diffusion now runs inside the package-managed `basilisk` Python environment.
+
+## Output Semantics
+
+The diffusion output keeps three score families:
+
+- `prediff_norm` / `post_norm`: legacy Euclidean norms kept for auditing
+- `prediff_vulnerability` / `post_vulnerability`: nonnegative magnitude-style
+  summaries
+- `prediff_integrated` / `post_integrated`: signed integrated scores used for
+  the main package rankings
+
+The integrated scores are computed with a weighted signed Stouffer-style
+combination across the germline, somatic, and epigenomic modality scores.
+Negative modality contributions are therefore preserved and can lower the final
+rank rather than being removed by a norm.

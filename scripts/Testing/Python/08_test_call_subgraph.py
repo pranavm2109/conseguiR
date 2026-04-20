@@ -63,6 +63,14 @@ def make_diffusion_fixture(tmpdir: Path, n_genes: int = 80) -> Path:
         + diffusion["post_somatic"] ** 2
         + diffusion["post_epigenomic"] ** 2
     ) ** 0.5
+    diffusion["post_vulnerability"] = (
+        diffusion["post_germline"].clip(lower=0) ** 2
+        + diffusion["post_somatic"].clip(lower=0) ** 2
+        + diffusion["post_epigenomic"].abs() ** 2
+    ) ** 0.5
+    diffusion["post_integrated"] = (
+        diffusion["post_germline"] + diffusion["post_somatic"] + diffusion["post_epigenomic"]
+    ) / (3 ** 0.5)
 
     diffusion_path = tmpdir / "gene_reg_graph_diffusion_all_genes.tsv"
     diffusion.to_csv(diffusion_path, sep="\t", index=False)
@@ -100,7 +108,7 @@ def test_run_cardinality_subgraph_calling_live():
     selected_edges = result["selected_edges"]
 
     assert selected_nodes.shape[0] == 12, "Selected node cardinality does not match the request."
-    assert {"node_id", "gene_name", "prize"}.issubset(selected_nodes.columns)
+    assert {"node_id", "gene_name", "prize", "post_integrated"}.issubset(selected_nodes.columns)
     assert {"gene_u", "gene_v"}.issubset(selected_edges.columns)
     assert Path(result["output_paths"]["nodes_path"]).exists()
     assert Path(result["output_paths"]["edges_path"]).exists()
@@ -156,6 +164,7 @@ def test_run_cardinality_subgraph_calling_negative_no_overlap():
         {
             "node_id": [f"NOT_A_REAL_GENE_{i}" for i in range(20)],
             "gene_name": [f"NOT_A_REAL_GENE_{i}" for i in range(20)],
+            "post_vulnerability": [1.0 + i for i in range(20)],
             "post_norm": [1.0 + i for i in range(20)],
         }
     )

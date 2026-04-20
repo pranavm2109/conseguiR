@@ -65,6 +65,13 @@ contribute to one gene before dndscv filters them down.
 coding analysis.
 \item the most common advanced dndscv passthrough is \code{sm}, which controls the
 substitution model, for example \verb{\\"192r_3w\\"}.
+\item by default, \code{conseguiR} asks \code{dndscv()} for one-sided positive and
+negative selection tests when that API surface is available. In practice
+this means the package prefers directional columns such as \code{ppos_cv} and
+\code{pneg_cv} for score extraction.
+\item if those one-sided columns are not present, \code{conseguiR} falls back to the
+older signed two-sided extraction path so older \code{dndscv} outputs still
+work.
 \item if you supply \code{cv}, it should already be formatted the way \code{dndscv()}
 expects it. \code{conseguiR} does not reshape arbitrary covariate tables into a
 dndscv-ready object for you.

@@ -36,7 +36,7 @@ default_subgraph_config <- list(
   max_time_seconds = 600L,
   num_workers = 8L,
   random_seed = 42L,
-  prize_column = "post_norm",
+  prize_column = "post_integrated",
   confidence_column = "confidence",
   edge_cost_column = "weight"
 )

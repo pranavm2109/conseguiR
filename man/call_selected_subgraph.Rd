@@ -23,7 +23,7 @@ call_selected_subgraph(
   max_time_seconds = 600L,
   num_workers = 8L,
   random_seed = 42L,
-  prize_column = "post_norm",
+  prize_column = "post_integrated",
   confidence_column = "confidence",
   edge_cost_column = "weight",
   python_path = NULL,
@@ -102,8 +102,9 @@ names present in the input tables
 
 Practical column examples:
 \itemize{
-\item \code{prize_column = "post_norm"} means optimize using the post-diffusion gene
-score column
+\item \code{prize_column = "post_integrated"} means optimize using the signed
+post-diffusion integrated score, which rewards positive modality support
+and penalizes negative modality support
 \item \code{confidence_column = "confidence"} means use the confidence column from
 the backend gene-gene edge table
 \item \code{edge_cost_column = "weight"} means use the edge-cost/penalty column from

@@ -157,8 +157,9 @@ standardize_gene_score_table <- function(scores, modality_name) {
     zstat = as.numeric(zstat)
   )][!is.na(gene_id) & gene_id != "" & !is.na(zstat)]
 
-  dt[, abs_zstat := abs(zstat)]
-  dt <- dt[order(-abs_zstat)][, .SD[1], by = gene_id][, abs_zstat := NULL]
+  # If duplicate rows are supplied for the same feature, keep the most
+  # vulnerability-aligned entry rather than the largest-magnitude signed score.
+  dt <- dt[order(-zstat)][, .SD[1], by = gene_id]
 
   dt
 }
@@ -186,8 +187,7 @@ standardize_reg_score_table <- function(scores, modality_name) {
     zstat = as.numeric(zstat)
   )][!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(zstat)]
 
-  dt[, abs_zstat := abs(zstat)]
-  dt <- dt[order(-abs_zstat)][, .SD[1], by = reg_elem_id][, abs_zstat := NULL]
+  dt <- dt[order(-zstat)][, .SD[1], by = reg_elem_id]
 
   dt
 }

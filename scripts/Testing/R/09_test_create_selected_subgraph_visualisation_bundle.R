@@ -51,7 +51,8 @@ test_prepare_selected_subgraph_visualisation_bundle_live_outputs <- function(pri
 
   if (isTRUE(print_bundle)) {
     message("Top bundled subgraph nodes for plotting:")
-    print(bundle$nodes[order(-prize)][1:min(10L, .N), .(node_id, gene_name, prize, post_norm)])
+    show_cols <- intersect(c("node_id", "gene_name", "prize", "post_integrated", "post_vulnerability", "post_norm"), names(bundle$nodes))
+    print(bundle$nodes[order(-prize)][1:min(10L, .N), ..show_cols])
   }
 
   invisible(bundle)

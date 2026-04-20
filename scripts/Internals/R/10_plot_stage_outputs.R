@@ -1152,6 +1152,8 @@ prepare_locus_plot_bundle <- function(
     post_germline = if ("post_germline" %in% names(.SD)) safe_numeric(post_germline) else NA_real_,
     post_somatic = if ("post_somatic" %in% names(.SD)) safe_numeric(post_somatic) else NA_real_,
     post_epigenomic = if ("post_epigenomic" %in% names(.SD)) safe_numeric(post_epigenomic) else NA_real_,
+    post_integrated = if ("post_integrated" %in% names(.SD)) safe_numeric(post_integrated) else NA_real_,
+    post_vulnerability = if ("post_vulnerability" %in% names(.SD)) safe_numeric(post_vulnerability) else NA_real_,
     post_norm = if ("post_norm" %in% names(.SD)) safe_numeric(post_norm) else NA_real_
   )]
 
@@ -1171,7 +1173,13 @@ prepare_locus_plot_bundle <- function(
     epigenomic_score = safe_numeric(epigenomic_score)
   )]
 
-  graph_gene_scores <- safe_numeric(nodes_dt[node_type == "gene", post_norm])
+  graph_gene_scores <- safe_numeric(
+    if ("post_integrated" %in% names(nodes_dt)) {
+      nodes_dt[node_type == "gene", post_integrated]
+    } else {
+      nodes_dt[node_type == "gene", post_norm]
+    }
+  )
   gene_score_limits <- range(graph_gene_scores[is.finite(graph_gene_scores)], na.rm = TRUE)
   if (!all(is.finite(gene_score_limits))) {
     gene_score_limits <- c(0, 1)
@@ -1248,13 +1256,23 @@ prepare_locus_plot_bundle <- function(
       "Reg element germline z",
       "GWAS locus SNPs",
       "Reg elements",
-      "Genes (post-diffusion)"
+      "Genes (post-diffusion integrated)"
     ),
     track_id = 6:1
   )
 
   gene_long <- data.table::rbindlist(list(
-    gene_nodes[, .(feature_type = "gene", feature_id, feature_label, feature_start, feature_end, track_name = "Genes (post-diffusion)", score = post_norm, linked_label = feature_label, highlighted)]
+    gene_nodes[, .(
+      feature_type = "gene",
+      feature_id,
+      feature_label,
+      feature_start,
+      feature_end,
+      track_name = "Genes (post-diffusion integrated)",
+      score = fifelse(!is.na(post_integrated), post_integrated, post_norm),
+      linked_label = feature_label,
+      highlighted
+    )]
   ), use.names = TRUE)
 
   reg_long <- data.table::rbindlist(list(
@@ -1476,7 +1494,7 @@ create_locus_context_plot <- function(
   features_dt[feature_type == "reg", xmid := (feature_start + feature_end) / 2]
   features_dt[feature_type == "snp", xmid := feature_start]
   reg_track_id <- bundle$tracks[track_name == "Reg elements", track_id][[1]]
-  gene_track_id <- bundle$tracks[track_name == "Genes (post-diffusion)", track_id][[1]]
+  gene_track_id <- bundle$tracks[track_name == "Genes (post-diffusion integrated)", track_id][[1]]
   links_dt[, reg_y := reg_track_id - 0.02]
   links_dt[, gene_y := gene_track_id - 0.05]
 

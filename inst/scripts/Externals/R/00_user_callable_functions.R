@@ -1082,11 +1082,31 @@ build_scored_gene_reg_graph <- function(
 #' @param beta_germline Germline contribution weight.
 #' @param beta_somatic Somatic contribution weight.
 #' @param beta_epigenomic Epigenomic contribution weight.
+#' @param integration_weight_germline Germline weight used in the signed
+#'   cross-modality integration score.
+#' @param integration_weight_somatic Somatic weight used in the signed
+#'   cross-modality integration score.
+#' @param integration_weight_epigenomic Epigenomic weight used in the signed
+#'   cross-modality integration score.
 #' @param positive_only Whether to restrict to positive regulatory signal.
 #' @param reg_signal_clip Regulatory signal clip value.
 #' @param top_n_to_save Number of top genes to save separately.
 #' @param python_path Deprecated and ignored. Python is managed internally via
 #'   `basilisk`.
+#'
+#' @details
+#' The diffusion output keeps three score families:
+#'
+#' - legacy Euclidean norms (`prediff_norm`, `post_norm`) for auditing
+#' - nonnegative magnitude summaries (`prediff_vulnerability`,
+#'   `post_vulnerability`) for quick inspection
+#' - signed integrated scores (`prediff_integrated`, `post_integrated`) used
+#'   for the main ranking columns
+#'
+#' The signed integrated scores are computed with a weighted signed
+#' Stouffer-style combination across germline, somatic, and epigenomic
+#' post-diffusion modality scores. Negative modality contributions are therefore
+#' preserved and can lower the final rank rather than being removed by a norm.
 #'
 #' @return A diffusion bundle containing full and top-gene diffusion tables.
 run_gene_reg_diffusion <- function(
@@ -1100,6 +1120,9 @@ run_gene_reg_diffusion <- function(
   beta_germline = 0.5,
   beta_somatic = 0.5,
   beta_epigenomic = 0.7,
+  integration_weight_germline = 1.0,
+  integration_weight_somatic = 1.0,
+  integration_weight_epigenomic = 1.0,
   positive_only = FALSE,
   reg_signal_clip = 5.0,
   top_n_to_save = 50L,
@@ -1133,6 +1156,9 @@ run_gene_reg_diffusion <- function(
         beta_germline = beta_germline,
         beta_somatic = beta_somatic,
         beta_epigenomic = beta_epigenomic,
+        integration_weight_germline = integration_weight_germline,
+        integration_weight_somatic = integration_weight_somatic,
+        integration_weight_epigenomic = integration_weight_epigenomic,
         positive_only = positive_only,
         reg_signal_clip = reg_signal_clip,
         top_n_to_save = top_n_to_save,
@@ -1171,6 +1197,9 @@ run_gene_reg_diffusion <- function(
     beta_germline = beta_germline,
     beta_somatic = beta_somatic,
     beta_epigenomic = beta_epigenomic,
+    integration_weight_germline = integration_weight_germline,
+    integration_weight_somatic = integration_weight_somatic,
+    integration_weight_epigenomic = integration_weight_epigenomic,
     positive_only = positive_only,
     reg_signal_clip = reg_signal_clip,
     top_n_to_save = top_n_to_save,
@@ -1233,6 +1262,11 @@ run_gene_reg_diffusion <- function(
 #' @param python_path Deprecated and ignored. Python is managed internally via
 #'   `basilisk`.
 #'
+#' @details
+#' `prize_column = "post_integrated"` is the package default. This uses the
+#' signed post-diffusion integrated score, which rewards concordant positive
+#' cross-modality support and penalizes negative modality contributions.
+#'
 #' @return A selected subgraph bundle.
 call_selected_subgraph <- function(
   diffusion = NULL,
@@ -1253,7 +1287,7 @@ call_selected_subgraph <- function(
   max_time_seconds = 600L,
   num_workers = 8L,
   random_seed = 42L,
-  prize_column = "post_norm",
+  prize_column = "post_integrated",
   confidence_column = "confidence",
   edge_cost_column = "weight",
   python_path = NULL,
@@ -1635,7 +1669,14 @@ resolve_plot_edges <- function(scored_graph = NULL, edges_path = NULL) {
 merge_postdiff_scores_into_nodes <- function(nodes_dt, diffusion_dt = NULL) {
   nodes_dt <- data.table::as.data.table(data.table::copy(nodes_dt))
 
-  for (col in c("post_germline", "post_somatic", "post_epigenomic", "post_norm")) {
+  for (col in c(
+    "post_germline",
+    "post_somatic",
+    "post_epigenomic",
+    "post_integrated",
+    "post_vulnerability",
+    "post_norm"
+  )) {
     if (!col %in% names(nodes_dt)) {
       nodes_dt[, (col) := NA_real_]
     }
@@ -1647,7 +1688,15 @@ merge_postdiff_scores_into_nodes <- function(nodes_dt, diffusion_dt = NULL) {
 
   diffusion_dt <- data.table::as.data.table(data.table::copy(diffusion_dt))
   diffusion_dt[, gene_name := as.character(gene_name)]
-  keep_cols <- intersect(c("gene_name", "post_germline", "post_somatic", "post_epigenomic", "post_norm"), names(diffusion_dt))
+  keep_cols <- intersect(c(
+    "gene_name",
+    "post_germline",
+    "post_somatic",
+    "post_epigenomic",
+    "post_integrated",
+    "post_vulnerability",
+    "post_norm"
+  ), names(diffusion_dt))
   if (!"gene_name" %in% keep_cols) {
     return(nodes_dt)
   }
@@ -1680,7 +1729,7 @@ resolve_postdiff_gene_reg_graph <- function(
   if (!is.null(nodes_dt) && !is.null(edges_dt)) {
     nodes_dt <- data.table::as.data.table(nodes_dt)
     edges_dt <- data.table::as.data.table(edges_dt)
-    if (!"post_norm" %in% names(nodes_dt)) {
+    if (!"post_integrated" %in% names(nodes_dt) && !"post_norm" %in% names(nodes_dt)) {
       diffusion_dt <- resolve_bundle_component(postdiff_gene_reg_graph, "all_genes")
       nodes_dt <- merge_postdiff_scores_into_nodes(nodes_dt, diffusion_dt)
     }

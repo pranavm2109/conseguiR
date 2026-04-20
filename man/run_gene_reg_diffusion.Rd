@@ -15,6 +15,9 @@ run_gene_reg_diffusion(
   beta_germline = 0.5,
   beta_somatic = 0.5,
   beta_epigenomic = 0.7,
+  integration_weight_germline = 1,
+  integration_weight_somatic = 1,
+  integration_weight_epigenomic = 1,
   positive_only = FALSE,
   reg_signal_clip = 5,
   top_n_to_save = 50L,
@@ -43,6 +46,15 @@ run_gene_reg_diffusion(
 
 \item{beta_epigenomic}{Epigenomic contribution weight.}
 
+\item{integration_weight_germline}{Germline weight used in the signed
+cross-modality integration score.}
+
+\item{integration_weight_somatic}{Somatic weight used in the signed
+cross-modality integration score.}
+
+\item{integration_weight_epigenomic}{Epigenomic weight used in the signed
+cross-modality integration score.}
+
 \item{positive_only}{Whether to restrict to positive regulatory signal.}
 
 \item{reg_signal_clip}{Regulatory signal clip value.}
@@ -70,7 +82,9 @@ Exact formatting:
 you are not passing \code{scored_graph}
 \item \code{top_k}: a positive integer
 \item \code{confidence_power}, \code{beta_germline}, \code{beta_somatic},
-\code{beta_epigenomic}, \code{reg_signal_clip}: numeric scalars
+\code{beta_epigenomic}, \code{integration_weight_germline},
+\code{integration_weight_somatic}, \code{integration_weight_epigenomic},
+\code{reg_signal_clip}: numeric scalars
 \item \code{positive_only}: a single logical value
 }
 
@@ -80,12 +94,24 @@ In plain language:
 each gene's update step
 \item \code{beta_germline}, \code{beta_somatic}, and \code{beta_epigenomic} control how much
 each modality contributes to the regulatory signal that is propagated
+\item \code{integration_weight_germline}, \code{integration_weight_somatic}, and
+\code{integration_weight_epigenomic} control the weighted signed Stouffer-style
+combination used to integrate post-diffusion modality scores into the main
+ranking columns
 \item \code{confidence_power} upweights or downweights high-confidence regulatory
 links relative to weaker ones
 \item \code{positive_only = TRUE} suppresses negative regulatory signal before
 diffusion
 \item \code{reg_signal_clip} caps extreme regulatory signal before propagation so one
 extreme feature does not dominate the update
+\item the output diffusion table keeps the legacy Euclidean norm
+(\code{prediff_norm}, \code{post_norm}) and a nonnegative magnitude-style
+vulnerability summary (\code{prediff_vulnerability}, \code{post_vulnerability}) for
+auditing, but the main ranking columns (\code{prediff_rank}, \code{post_rank}) are
+based on signed integrated scores (\code{prediff_integrated},
+\code{post_integrated}) computed with a weighted signed Stouffer-style
+combination so negative modality contributions are penalized rather than
+clipped away
 }
 }
 \examples{

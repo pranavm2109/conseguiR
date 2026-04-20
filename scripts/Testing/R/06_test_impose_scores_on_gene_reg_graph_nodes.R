@@ -148,6 +148,23 @@ test_standardize_score_tables_negative_cases <- function() {
   )
 }
 
+test_standardize_score_tables_prefer_positive_duplicates <- function() {
+  gene_scores <- data.table(
+    gene_id = c("TP53", "TP53", "KRAS"),
+    zstat = c(-5, 2, 1)
+  )
+  reg_scores <- data.table(
+    reg_elem_id = c("EH1", "EH1", "EH2"),
+    zstat = c(-4, 1.5, 0.5)
+  )
+
+  gene_out <- standardize_gene_score_table(gene_scores, "somatic")
+  reg_out <- standardize_reg_score_table(reg_scores, "epigenomic")
+
+  expect_equal(gene_out[gene_id == "TP53", zstat], 2)
+  expect_equal(reg_out[reg_elem_id == "EH1", zstat], 1.5)
+}
+
 test_validate_gene_reg_graph_nodes_negative_cases <- function() {
   expect_error(
     validate_gene_reg_graph_nodes(data.table(node_id = "TP53", node_type = "gene")),
@@ -219,6 +236,10 @@ main <- function() {
 
   test_that("score-table validators report clear errors for malformed score tables", {
     test_standardize_score_tables_negative_cases()
+  })
+
+  test_that("duplicate score rows keep the most positive z-score", {
+    test_standardize_score_tables_prefer_positive_duplicates()
   })
 
   test_that("gene-reg node validators report clear errors for broken node tables", {

@@ -21,6 +21,9 @@ class DiffusionConfig:
     beta_germline: float = 0.5
     beta_somatic: float = 0.5
     beta_epigenomic: float = 0.7
+    integration_weight_germline: float = 1.0
+    integration_weight_somatic: float = 1.0
+    integration_weight_epigenomic: float = 1.0
     positive_only: bool = False
     reg_signal_clip: float = 5.0
     top_n_to_save: int = 50
@@ -95,6 +98,33 @@ def safe_zscore(values: np.ndarray) -> np.ndarray:
     if not np.isfinite(sd) or sd == 0:
         return np.zeros_like(values, dtype=float)
     return (values - mu) / sd
+
+
+def positive_part(values: np.ndarray) -> np.ndarray:
+    return np.maximum(np.asarray(values, dtype=float), 0.0)
+
+
+def magnitude(values: np.ndarray) -> np.ndarray:
+    return np.abs(np.asarray(values, dtype=float))
+
+
+def signed_stouffer(
+    first: np.ndarray,
+    second: np.ndarray,
+    third: np.ndarray,
+    w_first: float,
+    w_second: float,
+    w_third: float,
+) -> np.ndarray:
+    weights = np.asarray([w_first, w_second, w_third], dtype=float)
+    denom = float(np.sqrt(np.sum(np.square(weights))))
+    if not np.isfinite(denom) or denom <= 0:
+        raise ValueError("Integration weights must contain at least one finite non-zero value.")
+    return (
+        weights[0] * np.asarray(first, dtype=float)
+        + weights[1] * np.asarray(second, dtype=float)
+        + weights[2] * np.asarray(third, dtype=float)
+    ) / denom
 
 
 def split_gene_and_reg_nodes(nodes: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -247,6 +277,41 @@ def run_controlled_re_to_gene_diffusion(
     prediff_norm = np.sqrt(prediff_germline**2 + prediff_somatic**2 + prediff_epigenomic**2)
     post_norm = np.sqrt(post_germline**2 + post_somatic**2 + post_epigenomic**2)
 
+    prediff_germline_enrichment = positive_part(prediff_germline)
+    prediff_somatic_enrichment = positive_part(prediff_somatic)
+    prediff_epigenomic_strength = magnitude(prediff_epigenomic)
+    post_germline_enrichment = positive_part(post_germline)
+    post_somatic_enrichment = positive_part(post_somatic)
+    post_epigenomic_strength = magnitude(post_epigenomic)
+
+    prediff_vulnerability = np.sqrt(
+        prediff_germline_enrichment**2
+        + prediff_somatic_enrichment**2
+        + prediff_epigenomic_strength**2
+    )
+    post_vulnerability = np.sqrt(
+        post_germline_enrichment**2
+        + post_somatic_enrichment**2
+        + post_epigenomic_strength**2
+    )
+
+    prediff_integrated = signed_stouffer(
+        prediff_germline,
+        prediff_somatic,
+        prediff_epigenomic,
+        config.integration_weight_germline,
+        config.integration_weight_somatic,
+        config.integration_weight_epigenomic,
+    )
+    post_integrated = signed_stouffer(
+        post_germline,
+        post_somatic,
+        post_epigenomic,
+        config.integration_weight_germline,
+        config.integration_weight_somatic,
+        config.integration_weight_epigenomic,
+    )
+
     gene_label_col = "node_id"
     if "name" in gene_nodes.columns:
         gene_label_col = "name"
@@ -261,6 +326,11 @@ def run_controlled_re_to_gene_diffusion(
     out["prediff_somatic"] = prediff_somatic
     out["prediff_epigenomic"] = prediff_epigenomic
     out["prediff_norm"] = prediff_norm
+    out["prediff_germline_enrichment"] = prediff_germline_enrichment
+    out["prediff_somatic_enrichment"] = prediff_somatic_enrichment
+    out["prediff_epigenomic_strength"] = prediff_epigenomic_strength
+    out["prediff_vulnerability"] = prediff_vulnerability
+    out["prediff_integrated"] = prediff_integrated
 
     out["incoming_germline_raw"] = incoming_germline_raw
     out["incoming_somatic_raw"] = incoming_somatic_raw
@@ -274,12 +344,24 @@ def run_controlled_re_to_gene_diffusion(
     out["post_somatic"] = post_somatic
     out["post_epigenomic"] = post_epigenomic
     out["post_norm"] = post_norm
+    out["post_germline_enrichment"] = post_germline_enrichment
+    out["post_somatic_enrichment"] = post_somatic_enrichment
+    out["post_epigenomic_strength"] = post_epigenomic_strength
+    out["post_vulnerability"] = post_vulnerability
+    out["post_integrated"] = post_integrated
 
-    out["prediff_rank"] = out["prediff_norm"].rank(ascending=False, method="average")
-    out["post_rank"] = out["post_norm"].rank(ascending=False, method="average")
+    out["prediff_norm_rank"] = out["prediff_norm"].rank(ascending=False, method="average")
+    out["post_norm_rank"] = out["post_norm"].rank(ascending=False, method="average")
+    out["prediff_vulnerability_rank"] = out["prediff_vulnerability"].rank(ascending=False, method="average")
+    out["post_vulnerability_rank"] = out["post_vulnerability"].rank(ascending=False, method="average")
+    out["prediff_rank"] = out["prediff_integrated"].rank(ascending=False, method="average")
+    out["post_rank"] = out["post_integrated"].rank(ascending=False, method="average")
     out["rank_shift"] = out["prediff_rank"] - out["post_rank"]
 
-    out = out.sort_values("post_norm", ascending=False).reset_index(drop=True)
+    out = out.sort_values(
+        ["post_integrated", "post_vulnerability", "post_norm"],
+        ascending=[False, False, False],
+    ).reset_index(drop=True)
     return out
 
 
@@ -347,7 +429,7 @@ def main() -> None:
     print(
         diffusion_df.loc[
             : min(9, len(diffusion_df) - 1),
-            ["node_id", "gene_name", "prediff_norm", "post_norm", "rank_shift"],
+            ["node_id", "gene_name", "prediff_integrated", "post_integrated", "rank_shift"],
         ]
     )
     print("\nSaved outputs:")

@@ -39,7 +39,7 @@ class SubgraphConfig:
     max_time_seconds: int = 600
     num_workers: int = 8
     random_seed: int = 42
-    prize_column: str = "post_norm"
+    prize_column: str = "post_integrated"
     confidence_column: str = "confidence"
     edge_cost_column: str = "weight"
 
@@ -145,8 +145,18 @@ def compute_node_prizes(
     prize_column: str,
 ) -> pd.DataFrame:
     work = diffusion.copy()
+    fallback_column = None
     if prize_column in work.columns:
-        work["prize"] = pd.to_numeric(work[prize_column], errors="coerce")
+        fallback_column = prize_column
+    elif "post_integrated" in work.columns:
+        fallback_column = "post_integrated"
+    elif "post_vulnerability" in work.columns:
+        fallback_column = "post_vulnerability"
+    elif "post_norm" in work.columns:
+        fallback_column = "post_norm"
+
+    if fallback_column is not None:
+        work["prize"] = pd.to_numeric(work[fallback_column], errors="coerce")
     else:
         work["prize"] = np.sqrt(
             np.square(pd.to_numeric(work["post_germline"], errors="coerce"))
@@ -173,7 +183,10 @@ def attach_diffusion_prizes_to_gene_graph(
     gg_nodes: pd.DataFrame,
     diffusion: pd.DataFrame,
 ) -> pd.DataFrame:
-    diffusion = compute_node_prizes(diffusion, prize_column="prize" if "prize" in diffusion.columns else "post_norm")
+    diffusion = compute_node_prizes(
+        diffusion,
+        prize_column="prize" if "prize" in diffusion.columns else "post_integrated",
+    )
     diff_by_node = diffusion.drop_duplicates(subset=["node_id"]).copy()
 
     if "name" not in gg_nodes.columns:
@@ -187,7 +200,11 @@ def attach_diffusion_prizes_to_gene_graph(
                     "node_id",
                     "gene_name",
                     "prize",
+                    "prediff_integrated",
+                    "prediff_vulnerability",
                     "prediff_norm",
+                    "post_integrated",
+                    "post_vulnerability",
                     "post_norm",
                     "post_germline",
                     "post_somatic",
@@ -425,7 +442,11 @@ def make_selected_node_output(selected_nodes: pd.DataFrame) -> pd.DataFrame:
             "gene_name",
             "prize",
             "node_obj",
+            "prediff_integrated",
+            "prediff_vulnerability",
             "prediff_norm",
+            "post_integrated",
+            "post_vulnerability",
             "post_norm",
             "post_germline",
             "post_somatic",

@@ -77,7 +77,7 @@ test_validate_scored_gene_reg_nodes_negative_missing_col <- function() {
 
   expect_error(
     validate_scored_gene_reg_nodes(bad_nodes),
-    expected = "Scored gene-reg node table is missing required columns",
+    regexp = "Scored gene-reg node table is missing required columns",
     fixed = TRUE
   )
 }
@@ -93,7 +93,7 @@ test_validate_scored_gene_reg_nodes_negative_bad_type <- function() {
 
   expect_error(
     validate_scored_gene_reg_nodes(bad_nodes),
-    expected = "Unsupported node_type values found in scored gene-reg nodes",
+    regexp = "Unsupported node_type values found in scored gene-reg nodes",
     fixed = TRUE
   )
 }
@@ -107,7 +107,7 @@ test_validate_scored_gene_reg_edges_negative <- function() {
 
   expect_error(
     validate_scored_gene_reg_edges(bad_edges),
-    expected = "Scored gene-reg edge table contains missing endpoint identifiers.",
+    regexp = "Scored gene-reg edge table contains missing endpoint identifiers.",
     fixed = TRUE
   )
 }

@@ -88,6 +88,14 @@ Use this when:
 - you want to tune the regulatory somatic model beyond the default wrapper
   surface
 
+Important score-extraction note:
+
+- when fishHook output contains both enrichment-side `p` and depletion-side
+  `p.neg`, `conseguiR` uses those directional p-values directly for regulatory
+  z-score extraction
+- only if those directional columns are absent does the package fall back to an
+  older signed conversion path
+
 ## How This Appears in the External API
 
 ### `run_somatic_regulatory_scoring()`

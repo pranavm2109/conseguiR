@@ -173,6 +173,12 @@ The key MAGMA idea is:
 
 The somatic branch is split into a gene model and a regulatory model.
 
+In the current package defaults, the gene branch asks `dndscv` for one-sided
+positive and negative selection output when that API surface is available, and
+the regulatory branch uses fishHook's directional `p` and `p.neg` columns when
+present. That keeps score extraction aligned with the underlying statistical
+tests rather than reconstructing direction from a generic two-sided p-value.
+
 ```{r somatic-code, eval=FALSE}
 somatic_scores <- prepare_somatic_scores(
   maf = somatic_maf_path,
@@ -245,6 +251,9 @@ diffusion <- run_gene_reg_diffusion(
   beta_germline = 0.5,
   beta_somatic = 0.5,
   beta_epigenomic = 0.7,
+  integration_weight_germline = 1.0,
+  integration_weight_somatic = 1.0,
+  integration_weight_epigenomic = 1.0,
   reg_signal_clip = 5.0,
   verbose = TRUE
 )
@@ -252,6 +261,11 @@ diffusion <- run_gene_reg_diffusion(
 
 This stage turns the pre-diffusion graph scores into a gene-centered
 post-diffusion ranking that incorporates regulatory context.
+
+The main ranking columns now use a weighted signed Stouffer-style integration
+across the three post-diffusion modalities. That means positive germline,
+somatic, and epigenomic support reinforce one another, while negative modality
+contributions are carried forward and can reduce the final integrated score.
 
 # Step 5: selected subgraph calling
 

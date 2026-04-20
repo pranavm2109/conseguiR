@@ -82,6 +82,14 @@ Use this when:
   argument
 - you want to override or extend the default gene-scoring call
 
+Important default:
+
+- unless the user overrides it explicitly, `conseguiR` requests
+  `onesided = TRUE` when the installed `dndscv` version supports that
+  argument
+- when one-sided output columns such as `ppos_cv` and `pneg_cv` are returned,
+  `conseguiR` uses those directional p-values directly for z-score extraction
+
 ## How This Appears in the External API
 
 ### `run_somatic_gene_scoring()`

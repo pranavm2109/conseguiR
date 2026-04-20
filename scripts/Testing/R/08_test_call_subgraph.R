@@ -5,6 +5,7 @@ suppressPackageStartupMessages({
   library(testthat)
 })
 
+source("scripts/Internals/R/06b_python_basilisk.R")
 source("scripts/Internals/R/08_call_subgraph.R")
 default_step8_test_output_dir <- "data/processed/test_outputs/step8"
 
@@ -43,7 +44,7 @@ python_module_available <- function(module_name) {
 }
 
 make_diffusion_fixture <- function() {
-  data.table(
+  dt <- data.table(
     node_id = c("G1", "G2", "G3"),
     gene_name = c("G1", "G2", "G3"),
     post_norm = c(1.0, 1.5, 0.8),
@@ -51,6 +52,13 @@ make_diffusion_fixture <- function() {
     post_somatic = c(0.2, 0.3, 0.2),
     post_epigenomic = c(0.5, 0.6, 0.4)
   )
+  dt[, post_vulnerability := sqrt(
+    pmax(post_germline, 0)^2 +
+      pmax(post_somatic, 0)^2 +
+      abs(post_epigenomic)^2
+  )]
+  dt[, post_integrated := (post_germline + post_somatic + post_epigenomic) / sqrt(3)]
+  dt
 }
 
 make_gene_gene_graph_fixture <- function() {
@@ -91,7 +99,7 @@ python_ortools_available <- function() {
 
 test_validate_diffusion_results <- function() {
   diffusion <- make_diffusion_fixture()
-  validated <- validate_diffusion_results(diffusion, prize_column = "post_norm")
+  validated <- validate_diffusion_results(diffusion, prize_column = "post_integrated")
 
   expect_true(is.data.table(validated))
   expect_equal(nrow(validated), 3L)
@@ -101,7 +109,7 @@ test_validate_diffusion_results_negative <- function() {
   bad_diffusion <- data.table(node_id = "G1", post_norm = 1.0)
   expect_error(
     validate_diffusion_results(bad_diffusion, prize_column = "post_norm"),
-    expected = "Diffusion results are missing required columns",
+    regexp = "Diffusion results are missing required columns",
     fixed = TRUE
   )
 }
@@ -119,14 +127,14 @@ test_validate_gene_gene_graph_inputs_negative <- function() {
   bad_nodes <- data.table(node_id = "G1", node_type = "protein")
   expect_error(
     validate_gene_gene_nodes(bad_nodes),
-    expected = "Gene-gene node table contains unsupported node_type values",
+    regexp = "Gene-gene node table contains unsupported node_type values",
     fixed = TRUE
   )
 
   bad_edges <- data.table(from = "G1", to = "G2", weight = 1.0)
   expect_error(
     validate_gene_gene_edges(bad_edges),
-    expected = "Gene-gene edge table is missing required columns",
+    regexp = "Gene-gene edge table is missing required columns",
     fixed = TRUE
   )
 }

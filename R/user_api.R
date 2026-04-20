@@ -631,6 +631,13 @@ prepare_germline_scores <- function(
 #'   coding analysis.
 #' - the most common advanced dndscv passthrough is `sm`, which controls the
 #'   substitution model, for example `\"192r_3w\"`.
+#' - by default, `conseguiR` asks `dndscv()` for one-sided positive and
+#'   negative selection tests when that API surface is available. In practice
+#'   this means the package prefers directional columns such as `ppos_cv` and
+#'   `pneg_cv` for score extraction.
+#' - if those one-sided columns are not present, `conseguiR` falls back to the
+#'   older signed two-sided extraction path so older `dndscv` outputs still
+#'   work.
 #' - if you supply `cv`, it should already be formatted the way `dndscv()`
 #'   expects it. `conseguiR` does not reshape arbitrary covariate tables into a
 #'   dndscv-ready object for you.
@@ -722,6 +729,10 @@ run_somatic_gene_scoring <- function(
 #'   mutations when estimating the background model.
 #' - `fishhook_covariate_data` is where users typically supply replication,
 #'   accessibility, mappability, or GC-like covariates if they have them.
+#' - when fishHook returns directional significance columns, `conseguiR`
+#'   extracts regulatory scores from enrichment-side `p` and depletion-side
+#'   `p.neg` directly rather than reconstructing direction later from a generic
+#'   p-value.
 #' - if you do not have a custom territory or covariates yet, `eligible_gr =
 #'   NULL` and `fishhook_covariate_data = NULL` are reasonable starting points.
 #' - `idcol` should match the sample identifier column name used in the somatic
@@ -826,6 +837,9 @@ run_somatic_regulatory_scoring <- function(
 #' - it runs a gene-oriented dndscv branch and a regulatory-element-oriented
 #'   fishHook branch separately
 #' - then it returns both score tables together as one somatic bundle
+#' - in the current package defaults, dndscv score extraction is one-sided when
+#'   supported by the installed dndscv version, while fishHook extraction uses
+#'   directional `p`/`p.neg` output when available
 #'
 #' Formatting notes for covariate-bearing inputs:
 #'
@@ -1094,6 +1108,12 @@ build_scored_gene_reg_graph <- function(
 #' @param beta_germline Germline contribution weight.
 #' @param beta_somatic Somatic contribution weight.
 #' @param beta_epigenomic Epigenomic contribution weight.
+#' @param integration_weight_germline Germline weight used in the signed
+#'   cross-modality integration score.
+#' @param integration_weight_somatic Somatic weight used in the signed
+#'   cross-modality integration score.
+#' @param integration_weight_epigenomic Epigenomic weight used in the signed
+#'   cross-modality integration score.
 #' @param positive_only Whether to restrict to positive regulatory signal.
 #' @param reg_signal_clip Regulatory signal clip value.
 #' @param top_n_to_save Number of top genes to save separately.
@@ -1110,7 +1130,9 @@ build_scored_gene_reg_graph <- function(
 #'   you are not passing `scored_graph`
 #' - `top_k`: a positive integer
 #' - `confidence_power`, `beta_germline`, `beta_somatic`,
-#'   `beta_epigenomic`, `reg_signal_clip`: numeric scalars
+#'   `beta_epigenomic`, `integration_weight_germline`,
+#'   `integration_weight_somatic`, `integration_weight_epigenomic`,
+#'   `reg_signal_clip`: numeric scalars
 #' - `positive_only`: a single logical value
 #'
 #' In plain language:
@@ -1119,12 +1141,24 @@ build_scored_gene_reg_graph <- function(
 #'   each gene's update step
 #' - `beta_germline`, `beta_somatic`, and `beta_epigenomic` control how much
 #'   each modality contributes to the regulatory signal that is propagated
+#' - `integration_weight_germline`, `integration_weight_somatic`, and
+#'   `integration_weight_epigenomic` control the weighted signed Stouffer-style
+#'   combination used to integrate post-diffusion modality scores into the main
+#'   ranking columns
 #' - `confidence_power` upweights or downweights high-confidence regulatory
 #'   links relative to weaker ones
 #' - `positive_only = TRUE` suppresses negative regulatory signal before
 #'   diffusion
 #' - `reg_signal_clip` caps extreme regulatory signal before propagation so one
 #'   extreme feature does not dominate the update
+#' - the output diffusion table keeps the legacy Euclidean norm
+#'   (`prediff_norm`, `post_norm`) and a nonnegative magnitude-style
+#'   vulnerability summary (`prediff_vulnerability`, `post_vulnerability`) for
+#'   auditing, but the main ranking columns (`prediff_rank`, `post_rank`) are
+#'   based on signed integrated scores (`prediff_integrated`,
+#'   `post_integrated`) computed with a weighted signed Stouffer-style
+#'   combination so negative modality contributions are penalized rather than
+#'   clipped away
 #'
 #' @examples
 #' names(formals(run_gene_reg_diffusion))
@@ -1142,6 +1176,9 @@ run_gene_reg_diffusion <- function(
   beta_germline = 0.5,
   beta_somatic = 0.5,
   beta_epigenomic = 0.7,
+  integration_weight_germline = 1.0,
+  integration_weight_somatic = 1.0,
+  integration_weight_epigenomic = 1.0,
   positive_only = FALSE,
   reg_signal_clip = 5.0,
   top_n_to_save = 50L,
@@ -1159,6 +1196,9 @@ run_gene_reg_diffusion <- function(
     beta_germline = beta_germline,
     beta_somatic = beta_somatic,
     beta_epigenomic = beta_epigenomic,
+    integration_weight_germline = integration_weight_germline,
+    integration_weight_somatic = integration_weight_somatic,
+    integration_weight_epigenomic = integration_weight_epigenomic,
     positive_only = positive_only,
     reg_signal_clip = reg_signal_clip,
     top_n_to_save = top_n_to_save,
@@ -1213,8 +1253,9 @@ run_gene_reg_diffusion <- function(
 #'
 #' Practical column examples:
 #'
-#' - `prize_column = "post_norm"` means optimize using the post-diffusion gene
-#'   score column
+#' - `prize_column = "post_integrated"` means optimize using the signed
+#'   post-diffusion integrated score, which rewards positive modality support
+#'   and penalizes negative modality support
 #' - `confidence_column = "confidence"` means use the confidence column from
 #'   the backend gene-gene edge table
 #' - `edge_cost_column = "weight"` means use the edge-cost/penalty column from
@@ -1255,7 +1296,7 @@ call_selected_subgraph <- function(
   max_time_seconds = 600L,
   num_workers = 8L,
   random_seed = 42L,
-  prize_column = "post_norm",
+  prize_column = "post_integrated",
   confidence_column = "confidence",
   edge_cost_column = "weight",
   python_path = NULL,

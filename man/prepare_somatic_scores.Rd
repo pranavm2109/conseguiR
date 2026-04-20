@@ -85,6 +85,9 @@ A good mental model is:
 \item it runs a gene-oriented dndscv branch and a regulatory-element-oriented
 fishHook branch separately
 \item then it returns both score tables together as one somatic bundle
+\item in the current package defaults, dndscv score extraction is one-sided when
+supported by the installed dndscv version, while fishHook extraction uses
+directional \code{p}/\code{p.neg} output when available
 }
 
 Formatting notes for covariate-bearing inputs:

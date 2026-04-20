@@ -56,6 +56,60 @@ compute_signed_z_from_p <- function(p_value, effect_direction = NULL, min_p = 1e
   cap_extreme_z(zstat, min_p = min_p)
 }
 
+compute_one_sided_z_from_p <- function(p_value, sign_value = 1, min_p = 1e-300) {
+  p_value <- as.numeric(p_value)
+  p_value[p_value <= 0] <- min_p
+  p_value[p_value > 1] <- NA_real_
+
+  zstat <- stats::qnorm(p_value, lower.tail = FALSE)
+  zstat <- zstat * sign(as.numeric(sign_value))
+
+  cap_extreme_z(zstat, min_p = min_p)
+}
+
+pick_signed_p_value <- function(pos_p, neg_p, sign_value = NULL) {
+  pos_p <- as.numeric(pos_p)
+  neg_p <- as.numeric(neg_p)
+
+  if (!is.null(sign_value)) {
+    sign_value <- as.numeric(sign_value)
+    out <- ifelse(sign_value < 0, neg_p, pos_p)
+    no_sign <- is.na(sign_value)
+    if (any(no_sign)) {
+      out[no_sign] <- fifelse(
+        !is.na(pos_p[no_sign]) & (is.na(neg_p[no_sign]) | pos_p[no_sign] <= neg_p[no_sign]),
+        pos_p[no_sign],
+        neg_p[no_sign]
+      )
+    }
+    return(out)
+  }
+
+  fifelse(!is.na(pos_p) & (is.na(neg_p) | pos_p <= neg_p), pos_p, neg_p)
+}
+
+compute_signed_z_from_one_sided_ps <- function(pos_p, neg_p, sign_value = NULL, min_p = 1e-300) {
+  pos_p <- as.numeric(pos_p)
+  neg_p <- as.numeric(neg_p)
+
+  if (!is.null(sign_value)) {
+    sign_value <- as.numeric(sign_value)
+    chosen_p <- pick_signed_p_value(pos_p, neg_p, sign_value = sign_value)
+    out_sign <- ifelse(is.na(sign_value), 1, sign(sign_value))
+    out_sign[is.na(out_sign) | out_sign == 0] <- 1
+    return(compute_one_sided_z_from_p(chosen_p, sign_value = out_sign, min_p = min_p))
+  }
+
+  pos_z <- compute_one_sided_z_from_p(pos_p, sign_value = 1, min_p = min_p)
+  neg_z <- compute_one_sided_z_from_p(neg_p, sign_value = -1, min_p = min_p)
+  use_pos <- !is.na(pos_p) & (is.na(neg_p) | pos_p <= neg_p)
+  fifelse(use_pos, pos_z, neg_z)
+}
+
+effect_direction_from_ratio <- function(effect_value, null_value = 1) {
+  as.numeric(effect_value) - null_value
+}
+
 detect_dndscv_refdb_chr_style <- function(refdb) {
   if (is.null(refdb) || !is.character(refdb) || length(refdb) != 1L || !file.exists(refdb)) {
     return(NULL)
@@ -115,24 +169,55 @@ harmonize_dndscv_chr_style <- function(mutation_dt, refdb) {
 extract_dndscv_gene_scores <- function(
   dndscv_result,
   gene_col = c("gene_name", "gene", "symbol"),
+  pos_p_col = c("ppos_cv", "ppos_loc"),
+  neg_p_col = c("pneg_cv", "pneg_loc"),
   p_col = c("pallsubs_cv", "pglobal_cv", "pmis_cv"),
   effect_col = c("wall_cv", "wmis_cv")
 ) {
   dt <- as.data.table(dndscv_result)
 
   gene_col <- pick_first_existing_column(dt, gene_col, "dndscv gene identifier")
-  p_col <- pick_first_existing_column(dt, p_col, "dndscv p-value")
   effect_col <- intersect(effect_col, names(dt))
   effect_col <- if (length(effect_col) > 0) effect_col[[1]] else NULL
+  pos_p_col <- intersect(pos_p_col, names(dt))
+  pos_p_col <- if (length(pos_p_col) > 0) pos_p_col[[1]] else NULL
+  neg_p_col <- intersect(neg_p_col, names(dt))
+  neg_p_col <- if (length(neg_p_col) > 0) neg_p_col[[1]] else NULL
 
-  out <- dt[, .(
-    gene_id = as.character(get(gene_col)),
-    p_value = as.numeric(get(p_col)),
-    zstat = compute_signed_z_from_p(
-      p_value = get(p_col),
-      effect_direction = if (!is.null(effect_col)) get(effect_col) - 1 else NULL
+  if (is.null(pos_p_col) || is.null(neg_p_col)) {
+    p_col <- pick_first_existing_column(dt, p_col, "dndscv p-value")
+  }
+
+  effect_direction <- if (!is.null(effect_col)) {
+    effect_direction_from_ratio(dt[[effect_col]], null_value = 1)
+  } else {
+    NULL
+  }
+
+  if (!is.null(pos_p_col) && !is.null(neg_p_col)) {
+    out <- data.table(
+      gene_id = as.character(dt[[gene_col]]),
+      p_value = pick_signed_p_value(
+        pos_p = dt[[pos_p_col]],
+        neg_p = dt[[neg_p_col]],
+        sign_value = effect_direction
+      ),
+      zstat = compute_signed_z_from_one_sided_ps(
+        pos_p = dt[[pos_p_col]],
+        neg_p = dt[[neg_p_col]],
+        sign_value = effect_direction
+      )
     )
-  )]
+  } else {
+    out <- data.table(
+      gene_id = as.character(dt[[gene_col]]),
+      p_value = as.numeric(dt[[p_col]]),
+      zstat = compute_signed_z_from_p(
+        p_value = dt[[p_col]],
+        effect_direction = effect_direction
+      )
+    )
+  }
 
   out <- unique(out[!is.na(gene_id) & gene_id != "" & !is.na(zstat) & !is.na(p_value)])
   out[, gene_id := toupper(gene_id)]
@@ -143,27 +228,57 @@ extract_fishhook_reg_scores <- function(
   fishhook_result,
   reg_col = c("id", "reg_elem_id", "element_id", "name"),
   p_col = c("p", "pvalue", "p_value", "p.val"),
+  neg_p_col = c("p.neg", "p_neg", "pneg"),
   effect_col = c("effectsize", "zscore", "z", "coef", "beta", "observed_over_expected")
 ) {
   dt <- as.data.table(fishhook_result)
 
   reg_col <- pick_first_existing_column(dt, reg_col, "fishHook regulatory element identifier")
   p_col <- pick_first_existing_column(dt, p_col, "fishHook p-value")
+  neg_p_col <- intersect(neg_p_col, names(dt))
+  neg_p_col <- if (length(neg_p_col) > 0) neg_p_col[[1]] else NULL
   effect_col <- intersect(effect_col, names(dt))
   effect_col <- if (length(effect_col) > 0) effect_col[[1]] else NULL
 
-  out <- dt[, .(
-    reg_elem_id = as.character(get(reg_col)),
-    p_value = as.numeric(get(p_col)),
-    zstat = if (!is.null(effect_col) && effect_col %in% c("zscore", "z")) {
-      cap_extreme_z(get(effect_col))
+  effect_direction <- NULL
+  if (!is.null(effect_col)) {
+    if (effect_col %in% c("effectsize", "observed_over_expected")) {
+      effect_direction <- effect_direction_from_ratio(dt[[effect_col]], null_value = 1)
     } else {
-      compute_signed_z_from_p(
-        p_value = get(p_col),
-        effect_direction = if (!is.null(effect_col)) get(effect_col) else NULL
-      )
+      effect_direction <- as.numeric(dt[[effect_col]])
     }
-  )]
+  }
+
+  if (!is.null(neg_p_col)) {
+    out <- data.table(
+      reg_elem_id = as.character(dt[[reg_col]]),
+      p_value = pick_signed_p_value(
+        pos_p = dt[[p_col]],
+        neg_p = dt[[neg_p_col]],
+        sign_value = effect_direction
+      ),
+      zstat = compute_signed_z_from_one_sided_ps(
+        pos_p = dt[[p_col]],
+        neg_p = dt[[neg_p_col]],
+        sign_value = effect_direction
+      )
+    )
+  } else if (!is.null(effect_col) && effect_col %in% c("zscore", "z")) {
+    out <- data.table(
+      reg_elem_id = as.character(dt[[reg_col]]),
+      p_value = as.numeric(dt[[p_col]]),
+      zstat = cap_extreme_z(dt[[effect_col]])
+    )
+  } else {
+    out <- data.table(
+      reg_elem_id = as.character(dt[[reg_col]]),
+      p_value = as.numeric(dt[[p_col]]),
+      zstat = compute_signed_z_from_p(
+        p_value = dt[[p_col]],
+        effect_direction = effect_direction
+      )
+    )
+  }
 
   out <- unique(out[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(zstat) & !is.na(p_value)])
   out
@@ -334,9 +449,14 @@ run_dndscv_gene_scoring <- function(
     cv = cv,
     refdb = refdb,
     max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
-    max_coding_muts_per_sample = max_coding_muts_per_sample,
-    ...
+    max_coding_muts_per_sample = max_coding_muts_per_sample
   )
+
+  extra_args <- list(...)
+  if ("onesided" %in% names(formals(dndscv::dndscv)) && is.null(extra_args$onesided)) {
+    extra_args$onesided <- TRUE
+  }
+  dndscv_args <- c(dndscv_args, extra_args)
 
   conseguiR_verbose_message(verbose, "Running dndscv gene scoring...")
   dndscv_fit <- if (isTRUE(verbose)) {

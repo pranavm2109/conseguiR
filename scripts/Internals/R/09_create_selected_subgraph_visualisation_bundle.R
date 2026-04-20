@@ -260,7 +260,14 @@ create_selected_subgraph_plot <- function(
 
   plot_nodes <- cbind(data.table::copy(node_dt), coords_dt)
   plot_nodes[, plot_label := ifelse(node_id %in% label_ids, gene_name, NA_character_)]
-  plot_nodes[, plot_post_norm := post_norm]
+  plot_score_col <- if ("post_integrated" %in% names(plot_nodes)) {
+    "post_integrated"
+  } else if ("post_vulnerability" %in% names(plot_nodes)) {
+    "post_vulnerability"
+  } else {
+    "post_norm"
+  }
+  plot_nodes[, plot_score := safe_numeric(get(plot_score_col))]
 
   edge_dt <- as.data.table(bundle$edges)
   edge_plot <- merge(
@@ -307,7 +314,7 @@ create_selected_subgraph_plot <- function(
     ) +
     ggplot2::geom_point(
       data = plot_nodes,
-      ggplot2::aes(x = x, y = y, fill = plot_post_norm),
+      ggplot2::aes(x = x, y = y, fill = plot_score),
       size = 6.2,
       shape = 21,
       colour = "#1f2937",
@@ -338,7 +345,7 @@ create_selected_subgraph_plot <- function(
     ggplot2::scale_fill_gradient(
       low = "#d9e6f2",
       high = "#8a1538",
-      name = "Post Overall"
+      name = "Post Integrated"
     ) +
     ggplot2::scale_alpha_continuous(
       range = c(0.12, 0.8),

@@ -8,9 +8,14 @@ suppressPackageStartupMessages({
 
 source("scripts/Internals/R/01_prepare_gene_reg_graph.R")
 
-encode_reg_elements_path <- "data/raw/ENCODE/GRCh38-cCREs.bed"
-encode_gene_links_zip_path <- "data/raw/ENCODE/Human-Gene-Links.zip"
-default_gene_loc_path <- "data/raw/NCBI38/NCBI38.gene.loc"
+fixture_dir <- "scripts/Testing/fixtures/encode_gene_reg"
+encode_reg_elements_path <- file.path(fixture_dir, "GRCh38-cCREs-tiny.bed")
+default_gene_loc_path <- file.path(fixture_dir, "NCBI38.gene.loc.tiny")
+default_gene_link_members <- c(
+  "V4-hg38.Gene-Links.3D-Chromatin.txt",
+  "V4-hg38.Gene-Links.CRISPR.txt",
+  "V4-hg38.Gene-Links.eQTLs.txt"
+)
 default_gene_reg_test_output_dir <- "data/processed/test_outputs/gene_reg_graph"
 
 make_gene_reg_test_path <- function(stem, ext = "") {
@@ -21,35 +26,7 @@ make_gene_reg_test_path <- function(stem, ext = "") {
   )
 }
 
-make_gene_reg_test_inputs <- function() {
-  linked_ccres <- fread(
-    cmd = sprintf(
-      "unzip -p %s %s",
-      shQuote(encode_gene_links_zip_path),
-      shQuote(default_config$gene_link_members[[1]])
-    ),
-    header = FALSE,
-    sep = "\t",
-    fill = Inf,
-    quote = "",
-    nrows = 3000,
-    showProgress = FALSE
-  )
-  reg_ids <- unique(as.character(linked_ccres$V1))
-  reg_elements <- fread(encode_reg_elements_path, showProgress = FALSE)
-  reg_elements <- reg_elements[as.character(V5) %in% reg_ids]
-  reg_subset_path <- make_gene_reg_test_path("encode_ccres_subset", ".bed")
-  fwrite(reg_elements, reg_subset_path, sep = "\t", col.names = FALSE)
-
-  list(
-    reg_elements_path = reg_subset_path,
-    gene_links_zip_path = encode_gene_links_zip_path,
-    gene_loc_path = default_gene_loc_path,
-    reg_subset_ids = reg_ids
-  )
-}
-
-subset_gene_links_zip <- function(zip_path, members, reg_ids, output_zip_path) {
+build_fixture_gene_links_zip <- function(members, output_zip_path) {
   tmp_dir <- make_gene_reg_test_path("encode_gene_links_dir")
   dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE)
   repo_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
@@ -60,16 +37,11 @@ subset_gene_links_zip <- function(zip_path, members, reg_ids, output_zip_path) {
   }
 
   for (member in members) {
-    dt <- fread(
-      cmd = sprintf("unzip -p %s %s", shQuote(zip_path), shQuote(member)),
-      header = FALSE,
-      sep = "\t",
-      fill = Inf,
-      quote = "",
-      showProgress = FALSE
+    file.copy(
+      from = file.path(fixture_dir, member),
+      to = file.path(tmp_dir, member),
+      overwrite = TRUE
     )
-    dt <- dt[as.character(V1) %in% reg_ids]
-    fwrite(dt, file.path(tmp_dir, member), sep = "\t", col.names = FALSE)
   }
 
   old_wd <- getwd()
@@ -80,20 +52,18 @@ subset_gene_links_zip <- function(zip_path, members, reg_ids, output_zip_path) {
 }
 
 test_prepare_gene_reg_graph <- function() {
-  inputs <- make_gene_reg_test_inputs()
   output_prefix <- make_gene_reg_test_path("gene_reg_graph_test")
   gene_links_zip_subset <- make_gene_reg_test_path("gene_links_subset", ".zip")
-  gene_links_zip_subset <- subset_gene_links_zip(
-    zip_path = inputs$gene_links_zip_path,
-    members = default_config$gene_link_members,
-    reg_ids = inputs$reg_subset_ids,
+  gene_links_zip_subset <- build_fixture_gene_links_zip(
+    members = default_gene_link_members,
     output_zip_path = gene_links_zip_subset
   )
 
   result <- prepare_gene_reg_graph(config = list(
-    reg_elements_path = inputs$reg_elements_path,
+    reg_elements_path = encode_reg_elements_path,
     gene_links_zip_path = gene_links_zip_subset,
-    gene_loc_path = inputs$gene_loc_path,
+    gene_loc_path = default_gene_loc_path,
+    gene_link_members = default_gene_link_members,
     output_prefix = output_prefix,
     min_link_value = 0,
     keep_self_loops = FALSE,

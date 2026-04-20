@@ -87,7 +87,7 @@ test_run_dndscv_gene_scoring_negative_missing_refdb <- function() {
 
   expect_error(
     run_dndscv_gene_scoring(maf = maf, refdb = NULL),
-    expected = "`refdb` is required for dndscv scoring",
+    regexp = "`refdb` is required for dndscv scoring",
     fixed = TRUE
   )
 }
@@ -99,7 +99,7 @@ test_run_dndscv_gene_scoring_negative_bad_refdb <- function() {
 
   expect_error(
     run_dndscv_gene_scoring(maf = maf, refdb = "data/raw/Testing/not_a_real_refdb.rda"),
-    expected = "dndscv `refdb` file does not exist",
+    regexp = "dndscv `refdb` file does not exist",
     fixed = TRUE
   )
 }
@@ -120,7 +120,7 @@ test_run_fishhook_reg_scoring_negative_missing_covariate_column <- function() {
       reg_ref_path = "data/raw/Testing/reg_elements_valid.loc",
       fishhook_covariate_data = bad_covariates
     ),
-    expected = "fishHook covariate data is missing required columns",
+    regexp = "fishHook covariate data is missing required columns",
     fixed = TRUE
   )
 }
@@ -136,7 +136,7 @@ test_run_fishhook_reg_scoring_negative_bad_reg_reference <- function() {
       maf = maf,
       reg_ref_path = "data/raw/Testing/does_not_exist.loc"
     ),
-    expected = "Regulatory element reference file does not exist",
+    regexp = "Regulatory element reference file does not exist",
     fixed = TRUE
   )
 }
@@ -167,7 +167,7 @@ test_validate_somatic_maf_negative_case <- function(path, label, expected_text) 
 
   expect_error(
     validate_somatic_maf(maf_raw),
-    expected = expected_text,
+    regexp = expected_text,
     fixed = TRUE,
     info = label
   )
@@ -189,6 +189,22 @@ test_extract_dndscv_gene_scores <- function() {
   invisible(scores)
 }
 
+test_extract_dndscv_gene_scores_onesided <- function() {
+  dndscv_mock <- data.table(
+    gene_name = c("TP53", "FBXW7"),
+    ppos_cv = c(1e-6, 0.8),
+    pneg_cv = c(0.9, 1e-4),
+    wall_cv = c(2.4, 0.6)
+  )
+
+  scores <- extract_dndscv_gene_scores(dndscv_mock)
+
+  expect_true(scores[gene_id == "TP53", zstat] > 0)
+  expect_true(scores[gene_id == "FBXW7", zstat] < 0)
+  expect_equal(scores[gene_id == "TP53", p_value], 1e-6)
+  expect_equal(scores[gene_id == "FBXW7", p_value], 1e-4)
+}
+
 test_extract_fishhook_reg_scores <- function() {
   fishhook_mock <- data.table(
     reg_elem_id = c("EH38E0080197", "EH38E2084302"),
@@ -203,6 +219,22 @@ test_extract_fishhook_reg_scores <- function() {
   expect_true(all(scores$p_value > 0))
   expect_true(all(scores$zstat > 0))
   invisible(scores)
+}
+
+test_extract_fishhook_reg_scores_directional <- function() {
+  fishhook_mock <- data.table(
+    reg_elem_id = c("EH38E0080197", "EH38E2084302"),
+    p = c(1e-4, 0.9),
+    p.neg = c(0.9, 1e-5),
+    effectsize = c(2.1, 0.6)
+  )
+
+  scores <- extract_fishhook_reg_scores(fishhook_mock)
+
+  expect_true(scores[reg_elem_id == "EH38E0080197", zstat] > 0)
+  expect_true(scores[reg_elem_id == "EH38E2084302", zstat] < 0)
+  expect_equal(scores[reg_elem_id == "EH38E0080197", p_value], 1e-4)
+  expect_equal(scores[reg_elem_id == "EH38E2084302", p_value], 1e-5)
 }
 
 test_somatic_extreme_scores_are_capped <- function() {
@@ -355,10 +387,12 @@ main <- function() {
 
   test_that("somatic score extraction works for dndscv genes", {
     test_extract_dndscv_gene_scores()
+    test_extract_dndscv_gene_scores_onesided()
   })
 
   test_that("somatic score extraction works for fishHook regulatory elements", {
     test_extract_fishhook_reg_scores()
+    test_extract_fishhook_reg_scores_directional()
   })
 
   test_that("somatic extreme z-scores are capped to finite values", {

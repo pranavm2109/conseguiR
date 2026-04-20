@@ -434,7 +434,7 @@ How to think about the main knobs:
 - `edge_cost_weight` penalizes expensive edges
 
 Column-format examples:
-- `prize_column = "post_norm"`
+- `prize_column = "post_integrated"`
 - `confidence_column = "confidence"`
 - `edge_cost_column = "weight"`
 

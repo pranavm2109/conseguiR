@@ -112,6 +112,10 @@ Solver random seed.
 
 Diffusion column used as the node prize.
 
+Current default:
+
+- `post_integrated`
+
 ### `confidence_column`
 
 Gene-gene edge column interpreted as connection confidence.
@@ -128,3 +132,14 @@ Deprecated and ignored.
 
 Selected-subgraph calling now runs inside the package-managed `basilisk`
 Python environment.
+
+## Prize Semantics
+
+The default node prize is the signed post-diffusion integrated score:
+
+- `prize_column = "post_integrated"`
+
+This score rewards concordant positive cross-modality support and penalizes
+negative modality contributions in the ranking stage. The optimization stage
+still clips negative prizes to zero before solving, so negatively scored genes
+are not rewarded in the selected-subgraph objective.
