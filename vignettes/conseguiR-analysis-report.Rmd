@@ -1,15 +1,14 @@
 ---
-title: "conseguiR Worked Example Report"
+title: "conseguiR Worked Example: SLE, Lymphoid Mutations, and DLBCL Epigenomics"
 author: "The conseguiR authors"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
-  BiocStyle::html_document:
-    toc: true
-    toc_float: true
+  pdf_document:
+    toc: false
     number_sections: true
-    df_print: paged
+    latex_engine: xelatex
 vignette: >
-  %\VignetteIndexEntry{conseguiR Worked Example Report}
+  %\VignetteIndexEntry{conseguiR Worked Example: SLE, Lymphoid Mutations, and DLBCL Epigenomics}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -54,11 +53,15 @@ h1, h2, h3 {
 # Executive summary
 
 <div class="lead">
-This report presents a worked <code>conseguiR</code> analysis using a Sjogren
-syndrome GWAS, a lymphoma-focused PCAWG somatic mutation dataset, and a set of
-selected epigenomic bigWig tracks. The goal is not only to show the code, but
-also to explain what each stage is contributing and what the resulting figures
-look like along the way.
+This report presents a worked <code>conseguiR</code> analysis built around a
+practical three-modality question: how do germline risk, somatic mutation
+enrichment, and regulatory variability combine on a shared gene-regulatory
+graph? For the vignette we use an SLE GWAS, a PCAWG lymphoid-malignancy MAF
+with CLL excluded, and a deliberately small three-track DLBCL H3K27ac panel.
+The motivating biological hypothesis is that <code>NAMPT</code> may represent a
+shared metabolic vulnerability linking autoimmune dysregulation and lymphoma
+biology. We use that hypothesis as a focused narrative thread rather than as a
+claim that the vignette alone definitively proves.
 </div>
 
 At a high level, the workflow proceeds in six stages:
@@ -72,8 +75,9 @@ At a high level, the workflow proceeds in six stages:
 
 Because some compute stages are intentionally heavy, the code below is shown as
 runnable analysis code but is not evaluated during document render. The figures
-shown later in the report come from generated outputs already present in the
-project.
+embedded later in the report are generated outputs saved from the worked
+analysis path, so the document still reads like an analysis report rather than
+just an API listing.
 
 # Example inputs
 
@@ -85,30 +89,41 @@ somatic_maf_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcg
 reg_ref_path <- "data/processed/GRCh38-cCREs.loc"
 refdb_path <- "data/raw/Testing/RefCDS_human_GRCh38.p12.rda"
 reference_bfile <- "data/raw/g1000_eur/g1000_eur"
-track_dir <- "data/raw/Testing"
+aid_covariate_path <- "data/raw/Testing/2026-01-26_all_reg_elems_sample_level_mut_frac_comparison_bet_only_memory_b_normal_and_non_cll_malig_b_cells.rds"
 sample_size <- 399917L
 
-all_bw_files <- list.files(track_dir, pattern = "\\.(bw|bigWig)$", full.names = TRUE)
-all_bw_files <- all_bw_files[!grepl("^\\._", basename(all_bw_files))]
-bw_files <- all_bw_files[!grepl("(_BL_|_FL_|broken_signal_track)", basename(all_bw_files))]
+bw_files <- c(
+  "data/raw/Testing/SRR1020516_DLBCL_P286_H3K27ac_ChIPseq.bw",
+  "data/raw/Testing/SRR1554599_DLBCL_DHL6_H3K27ac_ChIPseq.bw",
+  "data/raw/Testing/SRR7758629_DLBCL_U2932_H3K27ac_ChIPseq.bw"
+)
 
 data.table(
-  object = c("GWAS", "Somatic MAF", "Regulatory reference", "dndscv reference", "PLINK reference", "Selected bigWig tracks"),
+  object = c(
+    "GWAS",
+    "Somatic MAF",
+    "Regulatory reference",
+    "dndscv reference",
+    "PLINK reference",
+    "fishHook covariate data",
+    "Selected bigWig tracks"
+  ),
   value = c(
     gwas_path,
     somatic_maf_path,
     reg_ref_path,
     refdb_path,
     reference_bfile,
-    paste(length(bw_files), "tracks")
+    aid_covariate_path,
+    paste(basename(bw_files), collapse = ", ")
   )
 )
 ```
 
 <div class="callout">
-For this report we keep the epigenomic track filtering explicit in user code.
-That makes the vignette easier to read and keeps the package API focused on
-general behavior rather than on one lab-specific filtering rule.
+For the vignette we intentionally keep the epigenomic branch small. The three
+DLBCL tracks above were chosen to give a clean, lymphoma-centered example while
+still making the cross-track variability step easy to understand.
 </div>
 
 # Step 1: validate the inputs
@@ -140,7 +155,9 @@ It is not meant to fully dry-run MAGMA, dndscv, fishHook, or diffusion.
 ## Germline scoring with MAGMA
 
 The germline branch uses MAGMA twice, once for genes and once for regulatory
-elements.
+elements. In this worked example the input GWAS is an SLE summary-statistics
+table, so the germline layer represents inherited autoimmune risk rather than a
+lymphoma-only signal.
 
 ```{r germline-code, eval=FALSE}
 germline_scores <- prepare_germline_scores(
@@ -180,6 +197,8 @@ present. That keeps score extraction aligned with the underlying statistical
 tests rather than reconstructing direction from a generic two-sided p-value.
 
 ```{r somatic-code, eval=FALSE}
+covariate_dt <- readRDS(aid_covariate_path)
+
 somatic_scores <- prepare_somatic_scores(
   maf = somatic_maf_path,
   refdb = refdb_path,
@@ -191,24 +210,47 @@ somatic_scores <- prepare_somatic_scores(
 )
 ```
 
-When fishHook covariates are used, the practical table shape is:
+For this vignette the fishHook covariate is a precomputed **AID-per-base**
+background measure supplied in a ready-to-use table. Biologically, it
+represents expected local exposure to activation-induced cytidine deaminase
+(AID) mutagenesis. That matters in B-cell malignancies because some regulatory
+elements accumulate mutations partly because they sit in an AID-exposed
+background, not necessarily because they are under stronger positive selection.
+
+Using a precomputed covariate keeps the vignette light: fishHook receives a
+table that is already aligned to the regulatory-element universe instead of
+recomputing sequence or sample-level summaries during document execution.
+
+The practical table shape is still simple:
 
 ```{r fishhook-example, eval=FALSE}
+head(covariate_dt[, c("reg_elem_id", "n_samples_mut_norm")])
+
 covariate_dt <- data.frame(
   reg_elem_id = c("EH38E0080197", "EH38E2084302"),
-  accessibility = c(1.2, 0.4),
-  replication_timing = c(0.7, -0.1),
-  gc_content = c(0.44, 0.51)
+  n_samples_mut_norm = c(3.8, 0.9)
 )
 ```
 
 That is, one row per regulatory element, a regulatory-element identifier, and
-the covariates you want fishHook to model.
+the covariate values fishHook should model. Inside `conseguiR`, that table is
+converted into a fishHook-ready AID-per-base covariate after matching each
+regulatory element back onto the ENCODE cCRE universe.
 
 ## Epigenomic scoring from bigWig tracks
 
 The epigenomic score in `conseguiR` is best interpreted as a **cross-track
-variability score**, not a generic activity score.
+variability score**, not a generic activity score. For the vignette we keep
+this branch intentionally small and DLBCL-centered by using three H3K27ac
+tracks:
+
+- `SRR1020516_DLBCL_P286_H3K27ac_ChIPseq.bw`
+- `SRR1554599_DLBCL_DHL6_H3K27ac_ChIPseq.bw`
+- `SRR7758629_DLBCL_U2932_H3K27ac_ChIPseq.bw`
+
+This makes the example easier to follow than a much larger track panel while
+still preserving the idea that regulatory elements are being ranked by how much
+their activity changes across related malignant contexts.
 
 ```{r epigenomic-code, eval=FALSE}
 epigenomic_scores <- prepare_epigenomic_scores(
@@ -286,8 +328,9 @@ more interpretable network.
 
 # Step 6: figures and interpretation
 
-Below we show representative outputs from the workflow. The code used to
-generate each figure is shown directly above it.
+In a full analysis these plotting calls would be evaluated and saved to disk.
+For the package vignette we keep the code visible, and then show the generated
+figure artifact immediately after each call.
 
 ## Germline gene plot
 
@@ -300,12 +343,12 @@ plot_germline_gene_scores(
 )
 ```
 
-```{r fig-germline, echo=FALSE}
-include_graphics("data/processed/figures/_audit_germline_gene_pre.png")
-```
-
 This plot gives us a quick read on which genes are leading the germline signal
 before diffusion.
+
+```{r fig-germline, echo=FALSE, out.width='95%'}
+knitr::include_graphics("../data/processed/figures/germline_genes_pre_rank.pdf")
+```
 
 ## Somatic gene plot
 
@@ -318,28 +361,31 @@ plot_somatic_gene_scores(
 )
 ```
 
-```{r fig-somatic-gene, echo=FALSE}
-include_graphics("data/processed/figures/_audit_somatic_gene_pre.png")
-```
+This is where we can see which genes dominate the somatic branch before
+regulatory context is allowed to propagate by diffusion.
 
-This is where we can see which genes dominate the somatic branch.
+```{r fig-somatic-gene, echo=FALSE, out.width='95%'}
+knitr::include_graphics("../data/processed/figures/somatic_genes_pre_volcano.pdf")
+```
 
 ## Epigenomic regulatory plot
 
 ```{r code-epi-plot, eval=FALSE}
 plot_epigenomic_reg_scores(
   epigenomic_scores = epigenomic_scores,
-  label_features = c("MYC", "BCL2"),
+  label_features = c("NAMPT"),
   plot_file_path = "epigenomic_regs.pdf"
 )
 ```
 
-```{r fig-epi-reg, echo=FALSE}
-include_graphics("data/processed/figures/_audit_epi_reg.png")
-```
-
 This figure emphasizes the regulatory elements that are most variable across
-the selected epigenomic tracks.
+the selected DLBCL epigenomic tracks. In this vignette, that epigenomic branch
+is meant to support a focused lymphoma narrative rather than to exhaustively
+profile every available bigWig.
+
+```{r fig-epi-reg, echo=FALSE, out.width='95%'}
+knitr::include_graphics("../data/processed/figures/epigenomic_regs.pdf")
+```
 
 ## Selected subgraph plot
 
@@ -350,42 +396,51 @@ plot_selected_subgraph(
 )
 ```
 
-```{r fig-subgraph, echo=FALSE}
-include_graphics("data/processed/figures/_audit_subgraph_tightened.png")
-```
-
 This is usually the point where the workflow becomes easiest to discuss with
 other people, because we have moved from long ranked tables to a smaller and
 more interpretable network view.
+
+```{r fig-subgraph, echo=FALSE, out.width='95%'}
+knitr::include_graphics("../data/processed/figures/gene_gene_selected_subgraph_plot.pdf")
+```
 
 ## Locus-level plot
 
 ```{r code-locus-plot, eval=FALSE}
 plot_locus_context(
-  chromosome = "8",
-  start = 127200000,
-  end = 128200000,
+  chromosome = "7",
+  start = 106200000,
+  end = 106330000,
   scored_graph = scored_graph,
   diffusion = diffusion,
   gwas_sumstats = gwas_path,
   label_top_lit_snps = 3L,
-  label_features = c("MYC"),
-  plot_file_path = "sjogren_MYC_locus_context.pdf",
+  label_features = c("NAMPT"),
+  plot_file_path = "SLE_NAMPT_locus_context.pdf",
   verbose = TRUE
 )
 ```
 
-```{r fig-locus, echo=FALSE}
-include_graphics("data/processed/figures/MYC_locus_context_10labels.png")
-```
-
 The locus plot is where the package becomes especially useful for biological
-storytelling. It lets us connect:
+storytelling. In this worked example, it gives us a direct way to inspect the
+`NAMPT` neighborhood while keeping the three input modalities in the same view.
+It lets us connect:
 
 - regulatory-element scores
 - post-diffusion gene scores
 - regulatory interactions
 - and cited SNPs that overlap the locus
+
+```{r fig-nampt-locus, echo=FALSE, out.width='98%'}
+knitr::include_graphics("../data/processed/figures/NAMPT_locus_context.pdf")
+```
+
+In that sense, `NAMPT` functions as a scientifically plausible shared
+metabolic-vulnerability candidate in the report: the germline branch asks
+whether autoimmune risk accumulates in the region, the somatic branch asks
+whether lymphoid mutations are enriched beyond background expectation, and the
+epigenomic branch asks whether the linked regulatory landscape is variable
+across malignant DLBCL states.
 
 # Closing thoughts
 
