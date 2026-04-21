@@ -203,17 +203,23 @@
     stop("ENCODE cCRE BED must have at least 5 columns to create a loc file.")
   }
 
-  loc_dt <- unique(ccre_dt[, .(
-    reg_elem_id = as.character(V5),
-    chrom = sub("^chr", "", as.character(V1)),
-    start = as.integer(V2) + 1L,
-    end = as.integer(V3),
-    reg_elem_name = if (ncol(ccre_dt) >= 6L) as.character(V6) else NA_character_
-  )])
+  reg_elem_name <- if (ncol(ccre_dt) >= 6L) {
+    as.character(ccre_dt[[6L]])
+  } else {
+    rep(NA_character_, nrow(ccre_dt))
+  }
+  loc_dt <- data.table::data.table(
+    reg_elem_id = as.character(ccre_dt[[5L]]),
+    chrom = sub("^chr", "", as.character(ccre_dt[[1L]])),
+    start = as.integer(ccre_dt[[2L]]) + 1L,
+    end = as.integer(ccre_dt[[3L]]),
+    reg_elem_name = reg_elem_name
+  )
+  loc_dt <- unique(loc_dt)
   loc_dt <- loc_dt[
-    !is.na(reg_elem_id) & reg_elem_id != "" &
-      !is.na(chrom) & chrom != "" &
-      !is.na(start) & !is.na(end)
+    !is.na(loc_dt[["reg_elem_id"]]) & loc_dt[["reg_elem_id"]] != "" &
+      !is.na(loc_dt[["chrom"]]) & loc_dt[["chrom"]] != "" &
+      !is.na(loc_dt[["start"]]) & !is.na(loc_dt[["end"]])
   ]
   data.table::fwrite(loc_dt, loc_path, sep = "\t", col.names = FALSE)
   normalizePath(loc_path, winslash = "/", mustWork = TRUE)
