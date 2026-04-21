@@ -74,7 +74,6 @@
   )
 }
 
-#' @keywords internal
 .conseguiR_pipeline_paths <- function(
   graph_rds_path = NULL,
   gg_nodes_path = NULL,
@@ -1306,32 +1305,12 @@ call_selected_subgraph <- function(
     gg_nodes_path = gg_nodes_path,
     gg_edges_path = gg_edges_path
   )
+  args <- as.list(environment())
+  args$gg_nodes_path <- backend_paths$gg_nodes_path
+  args$gg_edges_path <- backend_paths$gg_edges_path
+  args$backend_paths <- NULL
 
-  .conseguiR_call_external("call_selected_subgraph", list(
-    diffusion = diffusion,
-    diffusion_path = diffusion_path,
-    gg_nodes_path = backend_paths$gg_nodes_path,
-    gg_edges_path = backend_paths$gg_edges_path,
-    output_dir = output_dir,
-    output_stem = output_stem,
-    target_genes = target_genes,
-    candidate_pool_size = candidate_pool_size,
-    min_confidence = min_confidence,
-    max_edges_in_model = max_edges_in_model,
-    node_prize_weight = node_prize_weight,
-    edge_conf_weight = edge_conf_weight,
-    edge_cost_weight = edge_cost_weight,
-    node_scale = node_scale,
-    edge_scale = edge_scale,
-    max_time_seconds = max_time_seconds,
-    num_workers = num_workers,
-    random_seed = random_seed,
-    prize_column = prize_column,
-    confidence_column = confidence_column,
-    edge_cost_column = edge_cost_column,
-    python_path = python_path,
-    verbose = verbose
-  ))
+  .conseguiR_call_external("call_selected_subgraph", args)
 }
 
 #' Plot score tables from scoring or diffusion outputs
@@ -1837,33 +1816,7 @@ plot_locus_context <- function(
   save_plot = !is.null(plot_file_path),
   verbose = FALSE
 ) {
-  .conseguiR_call_external("plot_locus_context", list(
-    chromosome = chromosome,
-    start = start,
-    end = end,
-    postdiff_gene_reg_graph = postdiff_gene_reg_graph,
-    scored_graph = scored_graph,
-    diffusion = diffusion,
-    selected_subgraph = selected_subgraph,
-    nodes_path = nodes_path,
-    edges_path = edges_path,
-    diffusion_path = diffusion_path,
-    selected_nodes_path = selected_nodes_path,
-    label_features = label_features,
-    gwas_sumstats = gwas_sumstats,
-    label_top_gwas_snp = label_top_gwas_snp,
-    rsid_pmid = rsid_pmid,
-    label_top_lit_snps = label_top_lit_snps,
-    pmid_query = pmid_query,
-    pmid_page_size = pmid_page_size,
-    plot_file_path = plot_file_path,
-    title = title,
-    width = width,
-    height = height,
-    dpi = dpi,
-    save_plot = save_plot,
-    verbose = verbose
-  ))
+  .conseguiR_call_external("plot_locus_context", as.list(environment()))
 }
 
 #' Plot a selected subgraph and build a visualization bundle

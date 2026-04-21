@@ -545,6 +545,28 @@
   status
 }
 
+#' @keywords internal
+.conseguiR_backend_init_cached_result <- function(
+  init_cache_key,
+  paths,
+  build_gene_reg,
+  build_gene_gene,
+  force,
+  quiet
+) {
+  if (isTRUE(force)) {
+    return(NULL)
+  }
+
+  .conseguiR_cached_backend_init(
+    init_cache_key = init_cache_key,
+    paths = paths,
+    build_gene_reg = build_gene_reg,
+    build_gene_gene = build_gene_gene,
+    quiet = quiet
+  )
+}
+
 .conseguiR_initialize_backend_graphs <- function(
   backend_dir = NULL,
   build_gene_reg = TRUE,
@@ -564,17 +586,16 @@
   backend_dir <- context$backend_dir
   init_cache_key <- context$init_cache_key
 
-  if (!isTRUE(force)) {
-    cached <- .conseguiR_cached_backend_init(
-      init_cache_key = init_cache_key,
-      paths = paths,
-      build_gene_reg = build_gene_reg,
-      build_gene_gene = build_gene_gene,
-      quiet = quiet
-    )
-    if (!is.null(cached)) {
-      return(cached)
-    }
+  cached <- .conseguiR_backend_init_cached_result(
+    init_cache_key = init_cache_key,
+    paths = paths,
+    build_gene_reg = build_gene_reg,
+    build_gene_gene = build_gene_gene,
+    force = force,
+    quiet = quiet
+  )
+  if (!is.null(cached)) {
+    return(cached)
   }
 
   status <- .conseguiR_backend_init_status(
