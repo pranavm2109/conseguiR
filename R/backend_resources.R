@@ -48,6 +48,84 @@
 }
 
 #' @keywords internal
+.conseguiR_backend_graph_cache_key <- function(kind, backend_dir = .conseguiR_backend_dir(create = TRUE)) {
+  paths <- .conseguiR_backend_paths(backend_dir)
+  graph_path <- switch(
+    kind,
+    gene_reg = paths$gene_reg_graph_rds,
+    gene_gene = paths$gene_gene_graph_rds,
+    stop("Unsupported backend graph kind: ", kind)
+  )
+  paste0(kind, "::", normalizePath(graph_path, winslash = "/", mustWork = FALSE))
+}
+
+#' @keywords internal
+.conseguiR_cache_backend_graph <- function(kind, graph, backend_dir = .conseguiR_backend_dir(create = TRUE)) {
+  if (!inherits(graph, "igraph")) {
+    stop("Expected an igraph object when caching backend graph `", kind, "`.")
+  }
+  cache_key <- .conseguiR_backend_graph_cache_key(kind, backend_dir = backend_dir)
+  assign(cache_key, graph, envir = .conseguiR_backend_cache)
+  invisible(graph)
+}
+
+#' @keywords internal
+.conseguiR_cached_backend_graph <- function(kind, backend_dir = .conseguiR_backend_dir(create = TRUE)) {
+  cache_key <- .conseguiR_backend_graph_cache_key(kind, backend_dir = backend_dir)
+  if (!exists(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
+    return(NULL)
+  }
+
+  graph <- get(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)
+  if (!inherits(graph, "igraph")) {
+    rm(list = cache_key, envir = .conseguiR_backend_cache)
+    return(NULL)
+  }
+  graph
+}
+
+#' @keywords internal
+.conseguiR_load_backend_graph <- function(kind = c("gene_reg", "gene_gene"), backend_dir = .conseguiR_backend_dir(create = TRUE)) {
+  kind <- match.arg(kind)
+  cached <- .conseguiR_cached_backend_graph(kind, backend_dir = backend_dir)
+  if (!is.null(cached)) {
+    return(cached)
+  }
+
+  paths <- .conseguiR_backend_paths(backend_dir)
+  graph_path <- switch(
+    kind,
+    gene_reg = paths$gene_reg_graph_rds,
+    gene_gene = paths$gene_gene_graph_rds
+  )
+  if (!file.exists(graph_path)) {
+    return(NULL)
+  }
+
+  graph <- readRDS(graph_path)
+  if (!inherits(graph, "igraph")) {
+    stop("Expected an igraph object at backend graph path: ", graph_path)
+  }
+  .conseguiR_cache_backend_graph(kind, graph, backend_dir = backend_dir)
+}
+
+#' @keywords internal
+.conseguiR_prime_backend_graph_cache <- function(
+  paths,
+  backend_dir,
+  build_gene_reg = TRUE,
+  build_gene_gene = TRUE
+) {
+  if (isTRUE(build_gene_reg) && file.exists(paths$gene_reg_graph_rds)) {
+    .conseguiR_load_backend_graph("gene_reg", backend_dir = backend_dir)
+  }
+  if (isTRUE(build_gene_gene) && file.exists(paths$gene_gene_graph_rds)) {
+    .conseguiR_load_backend_graph("gene_gene", backend_dir = backend_dir)
+  }
+  invisible(TRUE)
+}
+
+#' @keywords internal
 .conseguiR_existing_graph_paths <- function(paths) {
   flat <- unlist(paths, use.names = FALSE)
   flat[file.exists(flat)]
@@ -108,8 +186,21 @@
   }
 
   existing <- .conseguiR_backend_resource_dirs(include_cache = TRUE)
-  seed_dir <- if (length(existing) > 0L) {
-    normalizePath(existing[[1]], winslash = "/", mustWork = TRUE)
+  has_seed <- function(dir_path) {
+    any(file.exists(file.path(dir_path, c(
+      "gene_reg_graph_no_scores_nodes.tsv.gz",
+      "gene_reg_graph_no_scores_edges.tsv.gz",
+      "gene_reg_graph_no_scores_nodes_compact.tsv.xz",
+      "gene_reg_graph_no_scores_edges_compact.tsv.xz",
+      "gene_gene_graph_nodes.tsv.gz",
+      "gene_gene_graph_edges.tsv.gz",
+      "gene_gene_graph_nodes_compact.tsv.xz",
+      "gene_gene_graph_edges_compact.tsv.xz"
+    ))))
+  }
+  seeded_dirs <- existing[vapply(existing, has_seed, logical(1))]
+  seed_dir <- if (length(seeded_dirs) > 0L) {
+    normalizePath(seeded_dirs[[1]], winslash = "/", mustWork = TRUE)
   } else {
     NULL
   }
@@ -226,11 +317,110 @@
 }
 
 #' @keywords internal
+.conseguiR_reg_loc_from_nodes <- function(nodes) {
+  dt <- data.table::as.data.table(nodes)
+  if (!"node_type" %in% names(dt) || !"node_id" %in% names(dt)) {
+    stop("Node table must contain `node_type` and `node_id` to derive a regulatory loc file.")
+  }
+
+  reg_dt <- dt[node_type == "reg"]
+  if (nrow(reg_dt) == 0L) {
+    return(data.table::data.table(
+      reg_elem_id = character(),
+      chrom = character(),
+      start = integer(),
+      end = integer(),
+      reg_elem_name = character()
+    ))
+  }
+
+  chr_col <- if ("reg_chr" %in% names(reg_dt)) {
+    data.table::fifelse(!is.na(reg_dt$reg_chr) & reg_dt$reg_chr != "", reg_dt$reg_chr, reg_dt$chr)
+  } else if ("chr" %in% names(reg_dt)) {
+    reg_dt$chr
+  } else {
+    rep(NA_character_, nrow(reg_dt))
+  }
+
+  start_col <- if ("reg_start" %in% names(reg_dt)) {
+    data.table::fifelse(!is.na(reg_dt$reg_start), reg_dt$reg_start, reg_dt$start)
+  } else if ("start" %in% names(reg_dt)) {
+    reg_dt$start
+  } else {
+    rep(NA_integer_, nrow(reg_dt))
+  }
+
+  end_col <- if ("reg_end" %in% names(reg_dt)) {
+    data.table::fifelse(!is.na(reg_dt$reg_end), reg_dt$reg_end, reg_dt$end)
+  } else if ("end" %in% names(reg_dt)) {
+    reg_dt$end
+  } else {
+    rep(NA_integer_, nrow(reg_dt))
+  }
+
+  reg_name_col <- if ("node_label" %in% names(reg_dt)) {
+    as.character(reg_dt$node_label)
+  } else {
+    rep(NA_character_, nrow(reg_dt))
+  }
+
+  loc_dt <- data.table::data.table(
+    reg_elem_id = as.character(reg_dt$node_id),
+    chrom = sub("^chr", "", as.character(chr_col)),
+    start = as.integer(start_col),
+    end = as.integer(end_col),
+    reg_elem_name = reg_name_col
+  )
+  unique(loc_dt)[
+    !is.na(reg_elem_id) & reg_elem_id != "" &
+      !is.na(chrom) & chrom != "" &
+      !is.na(start) & !is.na(end)
+  ]
+}
+
+#' @keywords internal
+.conseguiR_write_reg_loc <- function(nodes, loc_path) {
+  loc_dt <- .conseguiR_reg_loc_from_nodes(nodes)
+  dir.create(dirname(loc_path), recursive = TRUE, showWarnings = FALSE)
+  data.table::fwrite(loc_dt, loc_path, sep = "\t", col.names = FALSE)
+  normalizePath(loc_path, winslash = "/", mustWork = TRUE)
+}
+
+#' @keywords internal
+.conseguiR_backend_reg_loc_path <- function(backend_dir = .conseguiR_backend_dir(create = TRUE)) {
+  loc_path <- file.path(backend_dir, "GRCh38-cCREs.loc")
+  if (file.exists(loc_path) && file.info(loc_path)$size > 0L) {
+    return(normalizePath(loc_path, winslash = "/", mustWork = TRUE))
+  }
+
+  nodes_path <- file.path(backend_dir, "gene_reg_graph_no_scores_nodes.tsv.gz")
+  if (file.exists(nodes_path)) {
+    nodes <- data.table::as.data.table(data.table::fread(nodes_path, showProgress = FALSE))
+    return(.conseguiR_write_reg_loc(nodes, loc_path))
+  }
+
+  seed_dir <- .conseguiR_backend_seed_dir()
+  if (!is.null(seed_dir)) {
+    compact_nodes <- file.path(seed_dir, "gene_reg_graph_no_scores_nodes_compact.tsv.xz")
+    if (file.exists(compact_nodes)) {
+      nodes <- .conseguiR_read_backend_table(compact_nodes)
+      return(.conseguiR_write_reg_loc(nodes, loc_path))
+    }
+  }
+
+  NULL
+}
+
+#' @keywords internal
 .conseguiR_default_reg_loc_path <- function() {
   encode_ccre_path <- .conseguiR_default_encode_ccre_path()
   encode_loc_path <- .conseguiR_materialize_encode_reg_loc(encode_ccre_path)
   if (!is.null(encode_loc_path)) {
     return(encode_loc_path)
+  }
+  backend_loc_path <- .conseguiR_backend_reg_loc_path()
+  if (!is.null(backend_loc_path)) {
+    return(backend_loc_path)
   }
   .conseguiR_backend_resource_path("GRCh38-cCREs.loc")
 }
@@ -243,7 +433,17 @@
     return(FALSE)
   }
 
-  files <- switch(kind,
+  compact_materialized <- switch(
+    kind,
+    gene_reg = .conseguiR_materialize_compact_gene_reg_seed(seed_dir, backend_dir),
+    gene_gene = .conseguiR_materialize_compact_gene_gene_seed(seed_dir, backend_dir)
+  )
+  if (isTRUE(compact_materialized)) {
+    return(TRUE)
+  }
+
+  files <- switch(
+    kind,
     gene_reg = c(
       "gene_reg_graph_no_scores_nodes.tsv.gz",
       "gene_reg_graph_no_scores_edges.tsv.gz",
@@ -266,6 +466,245 @@
   dir.create(backend_dir, recursive = TRUE, showWarnings = FALSE)
   ok <- file.copy(existing_src, dest, overwrite = TRUE)
   all(ok)
+}
+
+#' @keywords internal
+.conseguiR_read_backend_table <- function(path) {
+  if (grepl("\\.xz$", path, ignore.case = TRUE)) {
+    con <- xzfile(path, open = "rt")
+    on.exit(close(con), add = TRUE)
+    return(
+      data.table::as.data.table(
+        utils::read.delim(
+          con,
+          sep = "\t",
+          stringsAsFactors = FALSE,
+          check.names = FALSE
+        )
+      )
+    )
+  }
+
+  data.table::as.data.table(data.table::fread(path, showProgress = FALSE))
+}
+
+#' @keywords internal
+.conseguiR_compact_seed_paths <- function(kind = c("gene_reg", "gene_gene"), seed_dir) {
+  kind <- match.arg(kind)
+  switch(
+    kind,
+    gene_reg = list(
+      nodes = file.path(seed_dir, "gene_reg_graph_no_scores_nodes_compact.tsv.xz"),
+      edges = file.path(seed_dir, "gene_reg_graph_no_scores_edges_compact.tsv.xz"),
+      rds = file.path(seed_dir, "gene_reg_graph_no_scores.rds")
+    ),
+    gene_gene = list(
+      nodes = file.path(seed_dir, "gene_gene_graph_nodes_compact.tsv.xz"),
+      edges = file.path(seed_dir, "gene_gene_graph_edges_compact.tsv.xz"),
+      rds = file.path(seed_dir, "gene_gene_graph.rds")
+    )
+  )
+}
+
+#' @keywords internal
+.conseguiR_compact_node_index <- function(nodes) {
+  dt <- data.table::copy(data.table::as.data.table(nodes))
+  if (!"node_index" %in% names(dt)) {
+    dt[, node_index := seq_len(.N)]
+  }
+  dt[, node_index := as.integer(node_index)]
+  dt
+}
+
+#' @keywords internal
+.conseguiR_write_materialized_graph <- function(graph, nodes, edges, paths) {
+  dir.create(dirname(paths$nodes), recursive = TRUE, showWarnings = FALSE)
+  data.table::fwrite(nodes, paths$nodes, sep = "\t")
+  data.table::fwrite(edges, paths$edges, sep = "\t")
+  saveRDS(graph, paths$rds)
+  invisible(paths)
+}
+
+#' @keywords internal
+.conseguiR_materialize_compact_gene_reg_seed <- function(seed_dir, backend_dir) {
+  compact <- .conseguiR_compact_seed_paths("gene_reg", seed_dir)
+  if (!file.exists(compact$nodes) || !file.exists(compact$edges)) {
+    return(FALSE)
+  }
+
+  nodes <- .conseguiR_compact_node_index(
+    .conseguiR_read_backend_table(compact$nodes)
+  )
+  edges_compact <- .conseguiR_read_backend_table(compact$edges)
+  required_edge_cols <- c("from_idx", "to_idx", "confidence")
+  missing_edge_cols <- setdiff(required_edge_cols, names(edges_compact))
+  if (length(missing_edge_cols) > 0L) {
+    stop(
+      "Compact gene-reg seed edges are missing required columns: ",
+      paste(missing_edge_cols, collapse = ", ")
+    )
+  }
+
+  node_lookup <- nodes[, .(
+    node_index,
+    node_id = as.character(node_id),
+    node_type = as.character(node_type),
+    chr = if ("chr" %in% names(nodes)) as.character(chr) else NA_character_,
+    start = if ("start" %in% names(nodes)) as.integer(start) else NA_integer_,
+    end = if ("end" %in% names(nodes)) as.integer(end) else NA_integer_,
+    reg_chr = if ("reg_chr" %in% names(nodes)) as.character(reg_chr) else NA_character_,
+    reg_start = if ("reg_start" %in% names(nodes)) as.integer(reg_start) else NA_integer_,
+    reg_end = if ("reg_end" %in% names(nodes)) as.integer(reg_end) else NA_integer_
+  )]
+
+  reg_lookup <- node_lookup[node_type == "reg", .(
+    from_idx = node_index,
+    from = node_id,
+    reg_chr = data.table::fifelse(!is.na(reg_chr) & reg_chr != "", reg_chr, chr),
+    reg_start = data.table::fifelse(!is.na(reg_start), reg_start, start),
+    reg_end = data.table::fifelse(!is.na(reg_end), reg_end, end)
+  )]
+  gene_lookup <- node_lookup[node_type == "gene", .(
+    to_idx = node_index,
+    to = node_id,
+    gene_chr = chr,
+    gene_start = start,
+    gene_end = end
+  )]
+
+  edges <- merge(edges_compact, reg_lookup, by = "from_idx", all.x = TRUE, sort = FALSE)
+  edges <- merge(edges, gene_lookup, by = "to_idx", all.x = TRUE, sort = FALSE)
+  if (!"weight" %in% names(edges)) {
+    edges[, weight := data.table::fifelse(
+      is.na(confidence),
+      NA_real_,
+      1 / (1 + as.numeric(confidence))
+    )]
+  }
+  if (!"link_score" %in% names(edges)) {
+    edges[, link_score := as.numeric(confidence)]
+  }
+  if (!"link_method" %in% names(edges)) {
+    edges[, link_method := NA_character_]
+  }
+  edges <- edges[, .(
+    from,
+    to,
+    weight = as.numeric(weight),
+    confidence = as.numeric(confidence),
+    link_score = as.numeric(link_score),
+    link_method = as.character(link_method),
+    reg_chr,
+    reg_start = as.integer(reg_start),
+    reg_end = as.integer(reg_end),
+    gene_chr,
+    gene_start = as.integer(gene_start),
+    gene_end = as.integer(gene_end)
+  )]
+  reg_target_labels <- edges[, .(
+    label = paste(sort(unique(to)), collapse = "|")
+  ), by = .(reg_elem_id = from)]
+
+  vertices <- as.data.frame(nodes[, !"node_index"])
+  if (!"name" %in% names(vertices)) {
+    vertices$name <- vertices$node_id
+  }
+  graph <- igraph::graph_from_data_frame(
+    d = as.data.frame(edges),
+    vertices = vertices,
+    directed = TRUE
+  )
+
+  .conseguiR_write_materialized_graph(
+    graph = graph,
+    nodes = nodes[, !"node_index"],
+    edges = edges,
+    paths = list(
+      nodes = file.path(backend_dir, "gene_reg_graph_no_scores_nodes.tsv.gz"),
+      edges = file.path(backend_dir, "gene_reg_graph_no_scores_edges.tsv.gz"),
+      rds = file.path(backend_dir, "gene_reg_graph_no_scores.rds")
+    )
+  )
+  .conseguiR_write_reg_loc(
+    nodes = nodes[, !"node_index"],
+    loc_path = file.path(backend_dir, "GRCh38-cCREs.loc")
+  )
+  data.table::fwrite(
+    reg_target_labels,
+    file.path(backend_dir, "reg_target_labels.tsv.gz"),
+    sep = "\t"
+  )
+  TRUE
+}
+
+#' @keywords internal
+.conseguiR_materialize_compact_gene_gene_seed <- function(seed_dir, backend_dir) {
+  compact <- .conseguiR_compact_seed_paths("gene_gene", seed_dir)
+  if (!file.exists(compact$nodes) || !file.exists(compact$edges)) {
+    return(FALSE)
+  }
+
+  nodes <- .conseguiR_compact_node_index(
+    .conseguiR_read_backend_table(compact$nodes)
+  )
+  edges_compact <- .conseguiR_read_backend_table(compact$edges)
+  required_edge_cols <- c("from_idx", "to_idx", "confidence")
+  missing_edge_cols <- setdiff(required_edge_cols, names(edges_compact))
+  if (length(missing_edge_cols) > 0L) {
+    stop(
+      "Compact gene-gene seed edges are missing required columns: ",
+      paste(missing_edge_cols, collapse = ", ")
+    )
+  }
+
+  lookup <- nodes[, .(
+    node_index,
+    node_id = as.character(node_id)
+  )]
+  from_lookup <- lookup[, .(from_idx = node_index, from = node_id)]
+  to_lookup <- lookup[, .(to_idx = node_index, to = node_id)]
+
+  edges <- merge(edges_compact, from_lookup, by = "from_idx", all.x = TRUE, sort = FALSE)
+  edges <- merge(edges, to_lookup, by = "to_idx", all.x = TRUE, sort = FALSE)
+  if (!"weight" %in% names(edges)) {
+    edges[, weight := data.table::fifelse(
+      is.na(confidence),
+      NA_real_,
+      1 / (1 + as.numeric(confidence))
+    )]
+  }
+  if (!"n_protein_edges" %in% names(edges)) {
+    edges[, n_protein_edges := NA_integer_]
+  }
+  edges <- edges[, .(
+    from,
+    to,
+    confidence = as.numeric(confidence),
+    weight = as.numeric(weight),
+    n_protein_edges = as.integer(n_protein_edges)
+  )]
+
+  vertices <- as.data.frame(nodes[, !"node_index"])
+  if (!"name" %in% names(vertices)) {
+    vertices$name <- vertices$node_id
+  }
+  graph <- igraph::graph_from_data_frame(
+    d = as.data.frame(edges),
+    vertices = vertices,
+    directed = FALSE
+  )
+
+  .conseguiR_write_materialized_graph(
+    graph = graph,
+    nodes = nodes[, !"node_index"],
+    edges = edges,
+    paths = list(
+      nodes = file.path(backend_dir, "gene_gene_graph_nodes.tsv.gz"),
+      edges = file.path(backend_dir, "gene_gene_graph_edges.tsv.gz"),
+      rds = file.path(backend_dir, "gene_gene_graph.rds")
+    )
+  )
+  TRUE
 }
 
 #' @keywords internal
@@ -355,6 +794,13 @@
     message("Backend graph initialization complete.")
   }
 
+  .conseguiR_prime_backend_graph_cache(
+    paths = paths,
+    backend_dir = paths$backend_dir,
+    build_gene_reg = build_gene_reg,
+    build_gene_gene = build_gene_gene
+  )
+
   cached
 }
 
@@ -374,35 +820,13 @@
     return("reused")
   }
 
-  encode_ccre_path <- .conseguiR_default_encode_ccre_path()
-  encode_gene_links_path <- .conseguiR_default_encode_gene_links_path()
-  gene_loc_path <- .conseguiR_default_gene_loc_path()
-
-  if (
-    !is.null(encode_ccre_path) &&
-      !is.null(encode_gene_links_path) &&
-      !is.null(gene_loc_path)
-  ) {
-    env <- .conseguiR_internal_script_env(
-      "scripts/Internals/R/01_prepare_gene_reg_graph.R"
-    )
-    config <- env$default_config
-    config$reg_elements_path <- encode_ccre_path
-    config$gene_links_zip_path <- encode_gene_links_path
-    config$gene_loc_path <- gene_loc_path
-    config$output_prefix <- file.path(backend_dir, "gene_reg_graph_no_scores")
-    env$prepare_gene_reg_graph(config = config)
-    return("built")
-  }
-
   if (.conseguiR_seed_backend_graph("gene_reg", backend_dir = backend_dir)) {
     return("seeded")
   }
 
   msg <- paste(
-    "Unable to initialize the backend gene-regulatory graph because the",
-    "required ENCODE resources were not found and no packaged seed graph",
-    "was available."
+    "Unable to initialize the backend gene-regulatory graph because no",
+    "packaged backend seed was available."
   )
   if (isTRUE(strict)) {
     stop(msg)
@@ -430,33 +854,14 @@
     return("seeded")
   }
 
-  links_path <- .conseguiR_find_data_path(
-    "data/raw/STRING/9606.protein.links.v12.0.txt"
+  msg <- paste(
+    "Unable to initialize the backend gene-gene graph because no",
+    "packaged backend seed was available."
   )
-  info_path <- .conseguiR_find_data_path(
-    "data/raw/STRING/9606.protein.info.v12.0.txt"
-  )
-
-  if (is.null(links_path) || is.null(info_path)) {
-    msg <- paste(
-      "Unable to initialize the backend gene-gene graph because the",
-      "required STRING resources were not found."
-    )
-    if (isTRUE(strict)) {
-      stop(msg)
-    }
-    return("skipped")
+  if (isTRUE(strict)) {
+    stop(msg)
   }
-
-  env <- .conseguiR_internal_script_env(
-    "scripts/Internals/R/02_prepare_gene_gene_graph.R"
-  )
-  config <- env$default_config
-  config$protein_links_path <- links_path
-  config$protein_info_path <- info_path
-  config$output_prefix <- file.path(backend_dir, "gene_gene_graph")
-  env$prepare_gene_gene_graph(config = config)
-  "built"
+  "skipped"
 }
 
 #' @keywords internal
@@ -610,6 +1015,13 @@
   if (!isTRUE(quiet)) {
     message("Backend graph initialization complete.")
   }
+
+  .conseguiR_prime_backend_graph_cache(
+    paths = paths,
+    backend_dir = backend_dir,
+    build_gene_reg = build_gene_reg,
+    build_gene_gene = build_gene_gene
+  )
 
   .conseguiR_backend_init_result(
     backend_dir = backend_dir,

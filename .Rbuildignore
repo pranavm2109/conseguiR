@@ -24,4 +24,6 @@
 ^conseguiR_.*\.tar\.gz$
 ^vignettes/.*\.md$
 ^vignettes/conseguiR-analysis-report\.Rmd$
+^vignettes/conseguiR-analysis-report\.pdf$
+^vignettes/bookmark\.sty$
 (^|/)\._.*$

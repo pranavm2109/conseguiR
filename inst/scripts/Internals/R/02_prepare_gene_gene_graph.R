@@ -19,6 +19,20 @@ ensure_parent_dir <- function(path) {
   invisible(path)
 }
 
+write_compact_table_xz <- function(dt, path) {
+  ensure_parent_dir(path)
+  con <- xzfile(path, open = "wt")
+  on.exit(close(con), add = TRUE)
+  utils::write.table(
+    as.data.frame(dt),
+    file = con,
+    sep = "\t",
+    row.names = FALSE,
+    quote = FALSE
+  )
+  invisible(path)
+}
+
 read_string_links <- function(path) {
   message("Reading STRING links from: ", path)
   fread(path)
@@ -97,12 +111,17 @@ collapse_string_to_gene_level <- function(mapped_links) {
   ), by = .(gene_a, gene_b)]
 }
 
-build_gene_gene_nodes <- function(mapped_links) {
-  dt <- as.data.table(mapped_links)
-  gene_ids <- sort(unique(c(dt$gene1, dt$gene2)))
+build_gene_gene_nodes <- function(gene_links) {
+  dt <- as.data.table(gene_links)
+  gene_ids <- if (all(c("gene_a", "gene_b") %in% names(dt))) {
+    sort(unique(c(dt$gene_a, dt$gene_b)))
+  } else {
+    sort(unique(c(dt$gene1, dt$gene2)))
+  }
   gene_ids <- gene_ids[!is.na(gene_ids) & gene_ids != ""]
 
   data.table(
+    node_index = seq_along(gene_ids),
     name = gene_ids,
     node_id = gene_ids,
     node_type = "gene"
@@ -128,10 +147,34 @@ build_gene_gene_edges <- function(gene_level_links) {
   )])
 }
 
+compact_gene_gene_nodes <- function(nodes) {
+  dt <- copy(as.data.table(nodes))
+  if (!"node_index" %in% names(dt)) {
+    dt[, node_index := seq_len(.N)]
+  }
+  dt[, .(node_index, name, node_id, node_type)]
+}
+
+compact_gene_gene_edges <- function(edges, nodes) {
+  edge_dt <- copy(as.data.table(edges))
+  node_dt <- compact_gene_gene_nodes(nodes)[, .(node_index, node_id)]
+  from_lookup <- node_dt[, .(from = node_id, from_idx = node_index)]
+  to_lookup <- node_dt[, .(to = node_id, to_idx = node_index)]
+
+  edge_dt <- merge(edge_dt, from_lookup, by = "from", all.x = TRUE, sort = FALSE)
+  edge_dt <- merge(edge_dt, to_lookup, by = "to", all.x = TRUE, sort = FALSE)
+  edge_dt[, .(
+    from_idx = as.integer(from_idx),
+    to_idx = as.integer(to_idx),
+    confidence = as.numeric(confidence)
+  )]
+}
+
 build_gene_gene_graph <- function(nodes, edges, directed = FALSE) {
+  vertex_df <- as.data.frame(nodes[, !"node_index"])
   graph_from_data_frame(
     d = as.data.frame(edges),
-    vertices = as.data.frame(nodes),
+    vertices = vertex_df,
     directed = directed
   )
 }
@@ -140,8 +183,10 @@ save_graph_outputs <- function(graph, nodes, edges, output_prefix) {
   ensure_parent_dir(output_prefix)
 
   saveRDS(graph, paste0(output_prefix, ".rds"))
-  fwrite(nodes, paste0(output_prefix, "_nodes.tsv.gz"), sep = "\t")
+  fwrite(nodes[, !"node_index"], paste0(output_prefix, "_nodes.tsv.gz"), sep = "\t")
   fwrite(edges, paste0(output_prefix, "_edges.tsv.gz"), sep = "\t")
+  write_compact_table_xz(compact_gene_gene_nodes(nodes), paste0(output_prefix, "_nodes_compact.tsv.xz"))
+  write_compact_table_xz(compact_gene_gene_edges(edges, nodes), paste0(output_prefix, "_edges_compact.tsv.xz"))
 
   invisible(output_prefix)
 }
@@ -162,7 +207,7 @@ prepare_gene_gene_graph <- function(config = default_config) {
     stop("Only collapse_to_gene_level = TRUE is currently scaffolded.")
   }
 
-  nodes <- build_gene_gene_nodes(mapped_links)
+  nodes <- build_gene_gene_nodes(gene_level_links)
   edges <- build_gene_gene_edges(gene_level_links)
   graph <- build_gene_gene_graph(nodes, edges, directed = config$directed)
 

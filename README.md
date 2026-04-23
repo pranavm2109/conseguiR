@@ -11,9 +11,9 @@ The package is designed to be object-first:
   for saved outputs
 - plotting functions are the natural place to save figures
 
-This repository contains a first-draft end-to-end implementation of that
-workflow, including exported user-facing wrappers, internal pipeline stages,
-and plotting support.
+This repository contains the end-to-end implementation of that workflow,
+including exported user-facing wrappers, internal pipeline stages, and
+plotting support.
 
 ## Overview
 
@@ -29,12 +29,11 @@ The current package workflow is:
 8. build a visualization bundle and save a plotted graph
 9. optionally inspect intermediate score outputs and specific genomic loci
 
-The package ships prebuilt unscored backend graphs for:
-
-- the gene-regulatory graph
-- the gene-gene graph
-
-These are treated as package-owned resources rather than user-provided inputs.
+The package uses compact packaged backend graph seeds rather than asking normal
+users to rebuild backend graphs from raw ENCODE or STRING inputs.
+`initialize_backend_graphs()` materializes the available packaged seeds into a
+writable backend directory and primes an in-memory cache of the loaded graph
+objects for downstream scoring, diffusion, and subgraph stages.
 
 Diffusion and selected-subgraph calling are now run inside a managed Python
 environment via `basilisk`. That means Python is still required for those two
@@ -182,7 +181,7 @@ For installation and setup notes, see:
 
 ## Current status
 
-This is a strong research-grade draft rather than a polished release.
+This is a research-grade GitHub package rather than a polished CRAN release.
 
 The main remaining rough edges are:
 
@@ -192,5 +191,6 @@ The main remaining rough edges are:
   `run_gene_reg_diffusion()` and `call_selected_subgraph()` has been validated
   in this development environment and still deserves one clean-machine check
   before release
-- the package still needs some final polish around fresh-clone validation and
-  resource discovery
+- the ENCODE-backed gene-regulatory compact seed is still being finalized, so
+  the gene-gene backend path is currently the more mature of the two packaged
+  backend stories

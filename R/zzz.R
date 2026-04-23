@@ -1,6 +1,6 @@
 # Package startup support for optional Python-backed stages.
 # This file is intentionally not exported and should avoid expensive side effects
-# at load time so package startup remains lightweight and Bioconductor-friendly.
+# at load time so package startup remains lightweight and predictable.
 
 .conseguiR_state <- new.env(parent = emptyenv())
 .conseguiR_state$pkg_root <- NULL

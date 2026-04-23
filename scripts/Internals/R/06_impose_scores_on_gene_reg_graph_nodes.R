@@ -17,6 +17,34 @@ ensure_parent_dir <- function(path) {
 }
 
 read_gene_reg_graph_no_scores <- function(path = default_gene_reg_scoring_config$graph_rds_path) {
+  backend_loader <- tryCatch(
+    getFromNamespace(".conseguiR_load_backend_graph", "conseguiR"),
+    error = function(e) NULL
+  )
+  backend_dir_helper <- tryCatch(
+    getFromNamespace(".conseguiR_backend_dir", "conseguiR"),
+    error = function(e) NULL
+  )
+  default_backend_path <- NULL
+  backend_dir <- NULL
+  if (!is.null(backend_dir_helper)) {
+    backend_dir <- backend_dir_helper(create = TRUE)
+    default_backend_path <- file.path(backend_dir, "gene_reg_graph_no_scores.rds")
+  }
+  if (
+    !is.null(backend_loader) &&
+      !is.null(default_backend_path) &&
+      identical(
+        normalizePath(path, winslash = "/", mustWork = FALSE),
+        normalizePath(default_backend_path, winslash = "/", mustWork = FALSE)
+      )
+  ) {
+    cached_graph <- backend_loader("gene_reg", backend_dir = backend_dir)
+    if (inherits(cached_graph, "igraph")) {
+      return(cached_graph)
+    }
+  }
+
   if (file.exists(path)) {
     graph <- readRDS(path)
 

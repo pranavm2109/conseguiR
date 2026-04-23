@@ -7,6 +7,20 @@ Optional external tools are required for some analysis stages:
   `basilisk`. The required Python modules are provisioned through that
   environment rather than a user-managed interpreter.
 
+For development and HPC work, the repository also ships a reproducible conda
+specification:
+
+* `environment.yml`
+
+The intended environment name is:
+
+* `lymphoma_graph_env`
+
+Typical setup:
+
+* `conda env create -f environment.yml`
+* `conda activate lymphoma_graph_env`
+
 MAGMA is treated as a user-installed external dependency rather than a bundled
 package asset. `conseguiR` will look for it in this order:
 

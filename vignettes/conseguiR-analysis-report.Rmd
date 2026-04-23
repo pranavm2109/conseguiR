@@ -1,5 +1,5 @@
 ---
-title: "conseguiR Worked Example: SLE, Lymphoid Mutations, and DLBCL Epigenomics"
+title: "conseguiR Vignette: SLE, Lymphoid Mutations, and DLBCL Epigenomics"
 author: "The conseguiR authors"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
@@ -27,44 +27,23 @@ knitr::opts_chunk$set(
 ```{r libraries}
 library(conseguiR)
 library(data.table)
-library(knitr)
 ```
 
-<style>
-body {
-  line-height: 1.75;
-  font-size: 16px;
-}
-h1, h2, h3 {
-  font-weight: 700;
-}
-.lead {
-  font-size: 1.1em;
-  color: #4b5563;
-}
-.callout {
-  padding: 1rem 1.2rem;
-  border-left: 4px solid #2c7fb8;
-  background: #f7fbff;
-  margin: 1.2rem 0;
-}
-</style>
+# Introduction
 
-# Executive summary
+This vignette shows a lightweight worked analysis with `conseguiR` using three
+modalities:
 
-<div class="lead">
-This report presents a worked <code>conseguiR</code> analysis built around a
-practical three-modality question: how do germline risk, somatic mutation
-enrichment, and regulatory variability combine on a shared gene-regulatory
-graph? For the vignette we use an SLE GWAS, a PCAWG lymphoid-malignancy MAF
-with CLL excluded, and a deliberately small three-track DLBCL H3K27ac panel.
-The motivating biological hypothesis is that <code>NAMPT</code> may represent a
-shared metabolic vulnerability linking autoimmune dysregulation and lymphoma
-biology. We use that hypothesis as a focused narrative thread rather than as a
-claim that the vignette alone definitively proves.
-</div>
+- germline risk from an SLE GWAS
+- somatic mutation enrichment from a PCAWG lymphoid-malignancy MAF with CLL
+  excluded
+- regulatory variability from three DLBCL H3K27ac bigWig tracks
 
-At a high level, the workflow proceeds in six stages:
+The purpose of the vignette is to document how the package is used and how the
+three score branches fit together. The vignette keeps the epigenomic branch
+small on purpose so that the workflow remains readable and reproducible.
+
+At a high level, the workflow has six stages:
 
 1. validate the raw inputs
 2. compute germline, somatic, and epigenomic scores
@@ -74,10 +53,9 @@ At a high level, the workflow proceeds in six stages:
 6. inspect the results through score plots, network plots, and a locus plot
 
 Because some compute stages are intentionally heavy, the code below is shown as
-runnable analysis code but is not evaluated during document render. The figures
-embedded later in the report are generated outputs saved from the worked
-analysis path, so the document still reads like an analysis report rather than
-just an API listing.
+runnable analysis code but is not evaluated during document render. That keeps
+the vignette light while still recording the exact package calls used in the
+worked example.
 
 # Example inputs
 
@@ -120,13 +98,11 @@ data.table(
 )
 ```
 
-<div class="callout">
 For the vignette we intentionally keep the epigenomic branch small. The three
-DLBCL tracks above were chosen to give a clean, lymphoma-centered example while
+DLBCL tracks above were chosen to give a clean lymphoma-centered example while
 still making the cross-track variability step easy to understand.
-</div>
 
-# Step 1: validate the inputs
+# Step 1: Validate the Inputs
 
 Before running any heavy computation, we usually make sure the basic file and
 column structure is sound.
@@ -150,7 +126,7 @@ The validation stage is intentionally lightweight. It is meant to catch:
 
 It is not meant to fully dry-run MAGMA, dndscv, fishHook, or diffusion.
 
-# Step 2: compute the three score modalities
+# Step 2: Compute the Three Score Modalities
 
 ## Germline scoring with MAGMA
 
@@ -264,7 +240,7 @@ epigenomic_scores <- prepare_epigenomic_scores(
 )
 ```
 
-# Step 3: build the scored gene-regulatory graph
+# Step 3: Build the Scored Gene-Regulatory Graph
 
 ```{r graph-code, eval=FALSE}
 scored_graph <- build_scored_gene_reg_graph(
@@ -279,7 +255,7 @@ At this point, all three modalities have been imposed onto the graph. Missing
 modalities are zero-filled by default, which keeps the graph broad enough to
 retain biologically meaningful features even when one branch is absent.
 
-# Step 4: diffusion
+# Step 4: Diffusion
 
 As in the overview vignette, the diffusion and selected-subgraph stages are
 Python-backed internally but are run through conseguiR's managed `basilisk`
@@ -309,7 +285,7 @@ across the three post-diffusion modalities. That means positive germline,
 somatic, and epigenomic support reinforce one another, while negative modality
 contributions are carried forward and can reduce the final integrated score.
 
-# Step 5: selected subgraph calling
+# Step 5: Selected Subgraph Calling
 
 ```{r subgraph-code, eval=FALSE}
 selected_subgraph <- call_selected_subgraph(
@@ -326,11 +302,15 @@ selected_subgraph <- call_selected_subgraph(
 This is the step where the workflow shifts from a full graph to a smaller,
 more interpretable network.
 
-# Step 6: figures and interpretation
+# Step 6: Plotting the Results
 
-In a full analysis these plotting calls would be evaluated and saved to disk.
-For the package vignette we keep the code visible, and then show the generated
-figure artifact immediately after each call.
+The plotting functions below are the ones used to inspect each stage of the
+workflow. In this vignette they are shown as code only.
+
+The previously embedded figure artifacts have been removed here because the
+checked-in PDFs on disk predate the current ENCODE-backed SLE/DLBCL worked
+example and should not be presented as if they were generated from this exact
+setup.
 
 ## Germline gene plot
 
@@ -343,12 +323,8 @@ plot_germline_gene_scores(
 )
 ```
 
-This plot gives us a quick read on which genes are leading the germline signal
+This plot gives a quick read on which genes are leading the germline signal
 before diffusion.
-
-```{r fig-germline, echo=FALSE, out.width='95%'}
-knitr::include_graphics("../data/processed/figures/germline_genes_pre_rank.pdf")
-```
 
 ## Somatic gene plot
 
@@ -364,10 +340,6 @@ plot_somatic_gene_scores(
 This is where we can see which genes dominate the somatic branch before
 regulatory context is allowed to propagate by diffusion.
 
-```{r fig-somatic-gene, echo=FALSE, out.width='95%'}
-knitr::include_graphics("../data/processed/figures/somatic_genes_pre_volcano.pdf")
-```
-
 ## Epigenomic regulatory plot
 
 ```{r code-epi-plot, eval=FALSE}
@@ -379,13 +351,7 @@ plot_epigenomic_reg_scores(
 ```
 
 This figure emphasizes the regulatory elements that are most variable across
-the selected DLBCL epigenomic tracks. In this vignette, that epigenomic branch
-is meant to support a focused lymphoma narrative rather than to exhaustively
-profile every available bigWig.
-
-```{r fig-epi-reg, echo=FALSE, out.width='95%'}
-knitr::include_graphics("../data/processed/figures/epigenomic_regs.pdf")
-```
+the selected DLBCL epigenomic tracks.
 
 ## Selected subgraph plot
 
@@ -399,10 +365,6 @@ plot_selected_subgraph(
 This is usually the point where the workflow becomes easiest to discuss with
 other people, because we have moved from long ranked tables to a smaller and
 more interpretable network view.
-
-```{r fig-subgraph, echo=FALSE, out.width='95%'}
-knitr::include_graphics("../data/processed/figures/gene_gene_selected_subgraph_plot.pdf")
-```
 
 ## Locus-level plot
 
@@ -422,31 +384,26 @@ plot_locus_context(
 ```
 
 The locus plot is where the package becomes especially useful for biological
-storytelling. In this worked example, it gives us a direct way to inspect the
-`NAMPT` neighborhood while keeping the three input modalities in the same view.
-It lets us connect:
+interpretation. In this worked example it is the natural place to inspect the
+`NAMPT` neighborhood while keeping the three input modalities in one view. It
+lets us connect:
 
 - regulatory-element scores
 - post-diffusion gene scores
 - regulatory interactions
 - and cited SNPs that overlap the locus
 
-```{r fig-nampt-locus, echo=FALSE, out.width='98%'}
-knitr::include_graphics("../data/processed/figures/NAMPT_locus_context.pdf")
-```
-
-In that sense, `NAMPT` functions as a scientifically plausible shared
-metabolic-vulnerability candidate in the report: the germline branch asks
-whether autoimmune risk accumulates in the region, the somatic branch asks
-whether lymphoid mutations are enriched beyond background expectation, and the
+In this vignette, `NAMPT` is used as a motivating gene for interpretation
+rather than as a forced endpoint. The germline branch asks whether inherited
+autoimmune risk accumulates in the region, the somatic branch asks whether
+lymphoid mutations are enriched beyond background expectation, and the
 epigenomic branch asks whether the linked regulatory landscape is variable
 across malignant DLBCL states.
 
-# Closing thoughts
+# Closing Remarks
 
-This report is meant to read like an analysis narrative rather than a bare API
-listing. The important pattern across the workflow is that each stage adds a
-different layer of structure:
+The important pattern across the workflow is that each stage adds a different
+layer of structure:
 
 - input validation establishes trust in the raw data
 - scoring provides modality-specific signal

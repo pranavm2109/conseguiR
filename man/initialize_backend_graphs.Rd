@@ -24,8 +24,8 @@ backend graph resources are available.}
 \item{build_gene_gene}{Logical scalar. If \code{TRUE}, ensure the gene-gene
 backend graph resources are available.}
 
-\item{force}{Logical scalar. If \code{TRUE}, rebuild or reseed backend resources
-even when cached outputs already exist.}
+\item{force}{Logical scalar. If \code{TRUE}, re-materialize backend resources even
+when cached outputs already exist.}
 
 \item{strict}{Logical scalar. If \code{TRUE}, error when required backend inputs
 are unavailable. If \code{FALSE}, return a best-effort status object instead.}
@@ -38,11 +38,12 @@ status messages.}
 }
 \value{
 A backend-initialization result describing the backend directory,
-output paths, and graph build status.
+output paths, and graph materialization status.
 }
 \description{
-Builds the package's unscored backend graph resources when they are missing
-and the required raw graph resources are available.
+Materializes packaged backend graph seeds into a writable backend directory
+and primes an in-memory cache of the loaded graph objects for downstream
+stages.
 }
 \examples{
 initialize_backend_graphs()

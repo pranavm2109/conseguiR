@@ -1,7 +1,6 @@
 # Installation
 
-This document describes the current first-draft installation story for
-`conseguiR`.
+This document describes the current installation story for `conseguiR`.
 
 It is intentionally practical and honest: the package is usable, but the setup
 is not yet fully polished into a one-command install.
@@ -75,30 +74,41 @@ The recommended Python environment name is:
 
 - `lymphoma_graph_env`
 
+The repository now includes a matching conda specification:
+
+- `environment.yml`
+
+So on a fresh machine or HPC node, the intended first step is:
+
+```bash
+conda env create -f environment.yml
+conda activate lymphoma_graph_env
+```
+
 This environment is used primarily for:
 
 - diffusion
 - subgraph calling
+- developer and HPC execution of helper scripts such as backend-seed builders
 
-The package startup logic tries to discover the Python interpreter for this
-environment and record it in:
-
-- `getOption("conseguiR.python")`
-
-So in the current first draft, the easiest path is to ensure that
-`lymphoma_graph_env` exists and is visible to `conda`.
+So in the current workflow, the easiest path is to ensure that
+`lymphoma_graph_env` exists, is active for your shell session, and is visible
+to `conda`.
 
 ## 4. Ensure MAGMA is available
 
 The germline scoring stage uses MAGMA.
 
-The current internal defaults expect the executable at:
+`conseguiR` resolves MAGMA in this order:
 
-- `tools/magma_v1/magma`
+- the explicit `magma_path` argument passed to a germline scoring function
+- `options(conseguiR.magma_path = "/path/to/magma")`
+- `Sys.getenv("CONSEGUIR_MAGMA_PATH")`
+- `magma` on your system `PATH`
 
 So before running germline scoring, make sure that:
 
-- the MAGMA binary is present
+- a MAGMA 1.1 binary is available through one of those paths
 - it is executable
 - the related reference inputs you plan to use are available
 
@@ -116,8 +126,8 @@ On package load, `conseguiR` attempts to ensure these backend graph files exist
 in the working backend directory. If they are missing there, it first tries to
 seed them from the packaged backend graph resources.
 
-Only if those packaged backend graphs are unavailable does the package fall back
-to rebuilding them from raw backend resources.
+At the moment, the gene-gene packaged seed is ready and the ENCODE gene-reg
+compact seed is generated as a one-time developer step before distribution.
 
 ## 6. Sanity check package startup
 
@@ -125,11 +135,11 @@ After loading the package, a useful first check is:
 
 ```r
 library(conseguiR)
-getOption("conseguiR.python")
+check_conseguiR_runtime()
 ```
 
-If the Python setup is healthy, that option should resolve to a real Python
-binary.
+If the Python setup is healthy, the returned runtime status should report the
+managed Python stage as available.
 
 ## 7. Minimal workflow check
 
@@ -180,14 +190,14 @@ The ideal success state is:
 Useful follow-up checks:
 
 ```r
-getOption("conseguiR.runtime_status")
+check_conseguiR_runtime(quiet = TRUE)
 list.files(system.file("extdata", "backend", package = "conseguiR"))
 ```
 
 If you want to go one step further, then try one exported workflow function
 with real study inputs, for example `run_conseguiR(...)`.
 
-## 9. What is still rough in the first draft
+## 9. What is still rough right now
 
 The main installation-related caveats right now are:
 

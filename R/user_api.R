@@ -210,8 +210,9 @@ validate_inputs <- function(
 
 #' Initialize backend graph resources
 #'
-#' Builds the package's unscored backend graph resources when they are missing
-#' and the required raw graph resources are available.
+#' Materializes packaged backend graph seeds into a writable backend directory
+#' and primes an in-memory cache of the loaded graph objects for downstream
+#' stages.
 #'
 #' @param backend_dir Optional backend cache directory. When `NULL`,
 #'   `conseguiR` uses its default backend cache location.
@@ -219,8 +220,8 @@ validate_inputs <- function(
 #'   backend graph resources are available.
 #' @param build_gene_gene Logical scalar. If `TRUE`, ensure the gene-gene
 #'   backend graph resources are available.
-#' @param force Logical scalar. If `TRUE`, rebuild or reseed backend resources
-#'   even when cached outputs already exist.
+#' @param force Logical scalar. If `TRUE`, re-materialize backend resources even
+#'   when cached outputs already exist.
 #' @param strict Logical scalar. If `TRUE`, error when required backend inputs
 #'   are unavailable. If `FALSE`, return a best-effort status object instead.
 #' @param quiet Logical scalar. If `TRUE`, suppress non-essential backend
@@ -232,7 +233,7 @@ validate_inputs <- function(
 #' initialize_backend_graphs()
 #'
 #' @return A backend-initialization result describing the backend directory,
-#'   output paths, and graph build status.
+#'   output paths, and graph materialization status.
 #' @export
 initialize_backend_graphs <- function(
   backend_dir = NULL,

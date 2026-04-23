@@ -12,9 +12,33 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DIFFUSION_SCRIPT = REPO_ROOT / "scripts" / "Internals" / "Python" / "07_run_diffusion_on_gene_reg_graph.py"
-NO_SCORE_NODES = REPO_ROOT / "data" / "processed" / "gene_reg_graph_no_scores_nodes.tsv.gz"
-NO_SCORE_EDGES = REPO_ROOT / "data" / "processed" / "gene_reg_graph_no_scores_edges.tsv.gz"
 TEST_OUTPUT_ROOT = REPO_ROOT / "data" / "processed" / "test_outputs" / "python_step7"
+
+
+def default_backend_dir() -> Path:
+    return REPO_ROOT / "data" / "processed"
+
+
+def resolve_no_score_graph_paths() -> tuple[Path, Path]:
+    candidates = [
+        (
+            default_backend_dir() / "gene_reg_graph_no_scores_nodes.tsv.gz",
+            default_backend_dir() / "gene_reg_graph_no_scores_edges.tsv.gz",
+        ),
+        (
+            REPO_ROOT / "inst" / "extdata" / "backend" / "gene_reg_graph_no_scores_nodes.tsv.gz",
+            REPO_ROOT / "inst" / "extdata" / "backend" / "gene_reg_graph_no_scores_edges.tsv.gz",
+        ),
+    ]
+
+    for nodes_path, edges_path in candidates:
+        if nodes_path.exists() and edges_path.exists():
+            return nodes_path, edges_path
+
+    raise FileNotFoundError(
+        "Could not locate a materialized no-score gene-reg graph. "
+        "Run initialize_backend_graphs(build_gene_reg=TRUE) first."
+    )
 
 
 def load_diffusion_module():
@@ -34,8 +58,9 @@ def make_repo_test_dir(prefix: str) -> Path:
 
 
 def make_scored_graph_fixture(tmpdir: Path) -> tuple[Path, Path]:
-    nodes = pd.read_csv(NO_SCORE_NODES, sep="\t", low_memory=False)
-    edges = pd.read_csv(NO_SCORE_EDGES, sep="\t", low_memory=False)
+    no_score_nodes, no_score_edges = resolve_no_score_graph_paths()
+    nodes = pd.read_csv(no_score_nodes, sep="\t", low_memory=False)
+    edges = pd.read_csv(no_score_edges, sep="\t", low_memory=False)
 
     nodes["somatic_score"] = 0.0
     nodes["germline_score"] = 0.0

@@ -5,11 +5,16 @@ suppressPackageStartupMessages({
   library(testthat)
 })
 
+source("R/backend_resources.R")
 source("scripts/Internals/R/03_prepare_germline_scores.R")
 
 default_gwas_path <- "data/raw/Testing/34737426-GCST90043906-EFO_0000403.h.tsv"
 default_gene_loc_path <- "data/raw/NCBI38/NCBI38.gene.loc"
-default_reg_loc_path <- "data/processed/GRCh38-cCREs.loc"
+default_reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) {
+  .conseguiR_default_reg_loc_path()
+} else {
+  "data/processed/GRCh38-cCREs.loc"
+}
 default_reference_bfile <- "data/raw/g1000_eur/g1000_eur"
 default_sample_size <- 456348L
 default_germline_test_output_dir <- "data/processed/test_outputs/germline"

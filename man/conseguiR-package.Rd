@@ -19,7 +19,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: Pranav Mishra \email{pranav.mishra@yale.edu}
+\strong{Maintainer}: Pranav Mishra \email{pranavmishra2109@gmail.com}
 
 Authors:
 \itemize{

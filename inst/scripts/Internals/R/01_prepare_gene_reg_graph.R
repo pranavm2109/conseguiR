@@ -30,6 +30,20 @@ ensure_parent_dir <- function(path) {
   invisible(path)
 }
 
+write_compact_table_xz <- function(dt, path) {
+  ensure_parent_dir(path)
+  con <- xzfile(path, open = "wt")
+  on.exit(close(con), add = TRUE)
+  utils::write.table(
+    as.data.frame(dt),
+    file = con,
+    sep = "\t",
+    row.names = FALSE,
+    quote = FALSE
+  )
+  invisible(path)
+}
+
 read_encode_ccres <- function(path) {
   message("Reading ENCODE cCREs from: ", path)
   data.table::fread(path, header = FALSE, showProgress = FALSE)
@@ -37,14 +51,24 @@ read_encode_ccres <- function(path) {
 
 read_encode_gene_links <- function(zip_path, member) {
   message("Reading ENCODE gene links from: ", basename(zip_path), "::", member)
-  data.table::fread(
-    cmd = sprintf("unzip -p %s %s", shQuote(zip_path), shQuote(member)),
-    header = FALSE,
-    sep = "\t",
-    fill = Inf,
-    quote = "",
-    blank.lines.skip = TRUE,
-    showProgress = FALSE
+  extract_dir <- tempfile("conseguiR_encode_links_")
+  dir.create(extract_dir, recursive = TRUE, showWarnings = FALSE)
+  utils::unzip(zip_path, files = member, exdir = extract_dir)
+  extracted_path <- file.path(extract_dir, member)
+  if (!file.exists(extracted_path)) {
+    stop("Failed to extract ENCODE gene-link member: ", member)
+  }
+  data.table::as.data.table(
+    utils::read.delim(
+      extracted_path,
+      header = FALSE,
+      sep = "\t",
+      fill = TRUE,
+      quote = "",
+      comment.char = "",
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
   )
 }
 
@@ -558,7 +582,7 @@ build_gene_reg_nodes <- function(edges, reg_elements = NULL) {
   unique(
     rbindlist(list(gene_nodes, reg_nodes), fill = TRUE, use.names = TRUE),
     by = "node_id"
-  )
+  )[, node_index := seq_len(.N)]
 }
 
 build_gene_reg_edges <- function(edges) {
@@ -659,10 +683,35 @@ build_reg_target_labels <- function(edges) {
   ]
 }
 
+compact_gene_reg_nodes <- function(nodes) {
+  dt <- copy(as.data.table(nodes))
+  if (!"node_index" %in% names(dt)) {
+    dt[, node_index := seq_len(.N)]
+  }
+  dt
+}
+
+compact_gene_reg_edges <- function(edges, nodes) {
+  edge_dt <- copy(as.data.table(edges))
+  node_dt <- compact_gene_reg_nodes(nodes)[, .(node_index, node_id)]
+  from_lookup <- node_dt[, .(from = node_id, from_idx = node_index)]
+  to_lookup <- node_dt[, .(to = node_id, to_idx = node_index)]
+
+  edge_dt <- merge(edge_dt, from_lookup, by = "from", all.x = TRUE, sort = FALSE)
+  edge_dt <- merge(edge_dt, to_lookup, by = "to", all.x = TRUE, sort = FALSE)
+  edge_dt[, .(
+    from_idx = as.integer(from_idx),
+    to_idx = as.integer(to_idx),
+    confidence = as.numeric(confidence),
+    link_method = as.character(link_method)
+  )]
+}
+
 build_gene_reg_graph <- function(nodes, edges, directed = FALSE) {
+  vertex_df <- as.data.frame(nodes[, !"node_index"])
   graph_from_data_frame(
     d = as.data.frame(edges),
-    vertices = as.data.frame(nodes),
+    vertices = vertex_df,
     directed = directed
   )
 }
@@ -671,8 +720,10 @@ save_graph_outputs <- function(graph, nodes, edges, reg_target_labels, output_pr
   ensure_parent_dir(output_prefix)
 
   saveRDS(graph, paste0(output_prefix, ".rds"))
-  fwrite(nodes, paste0(output_prefix, "_nodes.tsv.gz"), sep = "\t")
+  fwrite(nodes[, !"node_index"], paste0(output_prefix, "_nodes.tsv.gz"), sep = "\t")
   fwrite(edges, paste0(output_prefix, "_edges.tsv.gz"), sep = "\t")
+  write_compact_table_xz(compact_gene_reg_nodes(nodes), paste0(output_prefix, "_nodes_compact.tsv.xz"))
+  write_compact_table_xz(compact_gene_reg_edges(edges, nodes), paste0(output_prefix, "_edges_compact.tsv.xz"))
   fwrite(
     reg_target_labels,
     file.path(dirname(output_prefix), "reg_target_labels.tsv.gz"),

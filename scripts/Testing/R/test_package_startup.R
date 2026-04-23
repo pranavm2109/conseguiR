@@ -6,21 +6,20 @@ suppressPackageStartupMessages({
 
 source("R/zzz.R")
 
-package_startup_leaves_python_unconfigured <- function() {
+package_startup_initializes_only_pkg_root <- function() {
   old_opts <- options(
-    conseguiR.python = NULL,
     conseguiR.conda_env = NULL
   )
   on.exit(options(old_opts), add = TRUE)
 
+  .conseguiR_state$pkg_root <- NULL
   .onLoad(NULL, NULL)
-  python_path <- getOption("conseguiR.python")
-  expect_null(python_path)
+  expect_null(.conseguiR_state$pkg_root)
 }
 
 main <- function() {
-  test_that("package startup avoids configuring Python implicitly", {
-    package_startup_leaves_python_unconfigured()
+  test_that("package startup avoids runtime side effects", {
+    package_startup_initializes_only_pkg_root()
   })
 }
 

@@ -13,12 +13,12 @@ data/processed/**
 !inst/
 !inst/extdata/
 !inst/extdata/backend/
-!inst/extdata/backend/gene_reg_graph_no_scores.rds
-!inst/extdata/backend/gene_reg_graph_no_scores_nodes.tsv.gz
-!inst/extdata/backend/gene_reg_graph_no_scores_edges.tsv.gz
-!inst/extdata/backend/gene_gene_graph.rds
-!inst/extdata/backend/gene_gene_graph_nodes.tsv.gz
-!inst/extdata/backend/gene_gene_graph_edges.tsv.gz
+!inst/extdata/backend/NCBI38.gene.loc
+!inst/extdata/backend/gene_gene_graph_nodes_compact.tsv.xz
+!inst/extdata/backend/gene_gene_graph_edges_compact.tsv.xz
+!inst/extdata/backend/gene_reg_graph_no_scores_nodes_compact.tsv.xz
+!inst/extdata/backend/gene_reg_graph_no_scores_edges_compact.tsv.xz
+!inst/extdata/backend/reg_target_labels.tsv.gz
 
 # macOS metadata and Python/R build junk
 .DS_Store
@@ -30,7 +30,8 @@ Rplots.pdf
 *.log.suppl
 
 # Local external tools used during development but not shipped with the package
-tools/magma_v1/magma
+tools/magma_v*/
+tools/magma_v*.*/
 
 # Local BiocCheck output
 conseguiR.BiocCheck/
