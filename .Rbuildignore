@@ -18,12 +18,8 @@
 ^conseguiR\.BiocCheck($|/)
 ^check_artifacts$
 ^check_artifacts($|/)
-^BIOCONDUCTOR_READINESS\.md$
-^INSTALLATION\.md$
+^INSTALL\.md$
 ^Rplots\.pdf$
 ^conseguiR_.*\.tar\.gz$
 ^vignettes/.*\.md$
-^vignettes/conseguiR-analysis-report\.Rmd$
-^vignettes/conseguiR-analysis-report\.pdf$
-^vignettes/bookmark\.sty$
 (^|/)\._.*$

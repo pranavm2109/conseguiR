@@ -4,6 +4,7 @@
 
 .conseguiR_state <- new.env(parent = emptyenv())
 .conseguiR_state$pkg_root <- NULL
+.conseguiR_state$basilisk_status <- NULL
 .conseguiR_default_conda_env <- function() {
   env <- getOption("conseguiR.conda_env", Sys.getenv("CONSEGUIR_CONDA_ENV", unset = ""))
   env <- trimws(as.character(env %||% ""))
@@ -136,6 +137,34 @@ consequIR_find_python <- function() {
 .onLoad <- function(libname, pkgname) {
   if (!is.null(libname) && !is.null(pkgname)) {
     .conseguiR_state$pkg_root <- file.path(libname, pkgname)
+  }
+
+  invisible()
+}
+
+.onAttach <- function(libname, pkgname) {
+  warm_python <- getOption(
+    "conseguiR.warm_python_on_attach",
+    Sys.getenv("CONSEGUIR_WARM_PYTHON_ON_ATTACH", unset = "true")
+  )
+  warm_python <- tolower(trimws(as.character(warm_python %||% "true")))
+  if (!(warm_python %in% c("true", "1", "yes", "y"))) {
+    return(invisible())
+  }
+
+  warmup <- tryCatch(
+    .conseguiR_basilisk_warmup(),
+    error = function(e) e
+  )
+
+  if (inherits(warmup, "error")) {
+    .conseguiR_state$basilisk_status <- list(
+      python_path = NULL,
+      python_ok = FALSE,
+      python_modules = stats::setNames(logical(), character()),
+      error = conditionMessage(warmup)
+    )
+    return(invisible())
   }
 
   invisible()

@@ -177,7 +177,7 @@ plot_locus_context(
 
 For installation and setup notes, see:
 
-- [INSTALL](INSTALL)
+- [INSTALL.md](INSTALL.md)
 
 ## Current status
 

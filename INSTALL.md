@@ -39,6 +39,15 @@ With the current `DESCRIPTION`, that should pull the package's declared R
 dependencies automatically, including the GitHub-hosted somatic-scoring
 packages declared in `Remotes`.
 
+After installation, a normal:
+
+```r
+library(conseguiR)
+```
+
+now quietly warms up the managed Python runtime used by
+diffusion and selected-subgraph calling.
+
 For local development inside a cloned repo, the usual alternatives still work:
 
 ```r
@@ -77,7 +86,7 @@ This environment is used primarily for:
 This conda environment is mainly for developer and HPC reproducibility. Normal
 end users do not need to activate it manually for diffusion or selected-subgraph
 calling, because those Python-backed stages run inside the package-managed
-`basilisk` environment.
+`basilisk` environment and are warmed up on package attach.
 
 ## 4. Ensure MAGMA is available
 

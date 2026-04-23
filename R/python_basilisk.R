@@ -65,6 +65,13 @@
 }
 
 #' @keywords internal
+.conseguiR_basilisk_warmup <- function(modules = c("numpy", "pandas", "ortools")) {
+    status <- .conseguiR_basilisk_python_status(modules = modules)
+    .conseguiR_state$basilisk_status <- status
+    status
+}
+
+#' @keywords internal
 .conseguiR_basilisk_run_python_module <- function(
   script_path,
   module_name,
