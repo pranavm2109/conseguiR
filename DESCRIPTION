@@ -15,32 +15,49 @@ BugReports: https://github.com/pranavm2109/conseguiR/issues
 Encoding: UTF-8
 Depends:
     R (>= 4.5.0)
+Remotes:
+    im3sanger/dndscv,
+    mskilab/fishHook,
+    mskilab/gUtils
 SystemRequirements: MAGMA (external prerequisite for germline scoring); Python
     (managed internally via basilisk for diffusion and selected-subgraph
     calling)
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports:
+    BSgenome.Hsapiens.UCSC.hg38,
     basilisk,
     data.table,
+    digest,
+    dndscv,
     dplyr,
+    fishHook,
+    gUtils,
+    ggrepel,
+    ggnewscale,
     jsonlite,
     igraph,
-    stats,
-    methods,
-    utils,
-    grDevices,
     ggplot2,
     GenomicRanges,
     IRanges,
     GenomeInfoDb,
     AnnotationDbi,
+    grid,
+    grDevices,
+    matrixStats,
+    methods,
+    rtracklayer,
+    scales,
     S4Vectors,
-    reticulate
+    reticulate,
+    stats,
+    utils
 Suggests:
-    testthat (>= 3.0.0),
     knitr,
+    org.Hs.eg.db,
+    RCy3,
     rmarkdown,
-    org.Hs.eg.db
+    testthat (>= 3.0.0),
+    tidygraph
 Config/testthat/edition: 3
 VignetteBuilder: knitr

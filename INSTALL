@@ -1,4 +1,10 @@
-This package can be installed with standard R package tools.
+Install the package from GitHub with dependency resolution turned on:
+
+* `remotes::install_github("pranavm2109/conseguiR", dependencies = TRUE)`
+
+With the current `DESCRIPTION`, that installation path should pull the R
+package dependencies automatically, including the GitHub-hosted somatic-scoring
+dependencies declared in `Remotes`.
 
 Optional external tools are required for some analysis stages:
 
@@ -39,6 +45,8 @@ available.
 Practical implications:
 
 * Users do not need to supply `python_path` for diffusion or subgraph calling.
+* The Python modules used by diffusion and selected-subgraph calling are
+  provisioned automatically by `basilisk`.
 * The first diffusion or selected-subgraph run may take longer because
   `basilisk` may need to create its managed environment.
 * Compute functions are designed to return R objects by default; users should

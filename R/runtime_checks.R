@@ -2,18 +2,23 @@
 .conseguiR_runtime_requirements <- function() {
   list(
     core_r_packages = c(
+      "BSgenome.Hsapiens.UCSC.hg38",
+      "basilisk",
+      "data.table",
+      "digest",
       "dndscv",
       "fishHook",
-      "rtracklayer",
-      "BSgenome.Hsapiens.UCSC.hg38",
-      "data.table",
-      "igraph",
-      "ggplot2",
+      "gUtils",
       "ggrepel",
-      "basilisk",
-      "reticulate"
+      "ggnewscale",
+      "ggplot2",
+      "igraph",
+      "matrixStats",
+      "reticulate",
+      "rtracklayer",
+      "scales"
     ),
-    optional_r_packages = character(),
+    optional_r_packages = c("RCy3", "tidygraph", "org.Hs.eg.db"),
     python_modules = c("ortools", "pandas", "numpy")
   )
 }

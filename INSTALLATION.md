@@ -27,42 +27,25 @@ git clone <your-repo-url>
 cd conseguiR
 ```
 
-## 2. Install the R package dependencies
+## 2. Install the R package and its R dependencies
 
-At minimum, the package metadata currently declares these core R dependencies:
+The intended GitHub-first install path is:
 
-- `data.table`
-- `dplyr`
-- `jsonlite`
-- `igraph`
-- `ggplot2`
-- `GenomicRanges`
-- `IRanges`
-- `GenomeInfoDb`
-- `AnnotationDbi`
-- `S4Vectors`
+```r
+remotes::install_github("pranavm2109/conseguiR", dependencies = TRUE)
+```
 
-And the workflow also relies on additional packages used in the scoring and
-plotting stages, including:
+With the current `DESCRIPTION`, that should pull the package's declared R
+dependencies automatically, including the GitHub-hosted somatic-scoring
+packages declared in `Remotes`.
 
-- `testthat`
-- `reticulate`
-- `ggrepel`
-- `tidygraph` (optional)
-- `RCy3` (optional, for Cytoscape export)
-- `rtracklayer`
-- `BSgenome.Hsapiens.UCSC.hg38`
-- `dndscv`
-- `fishHook`
-
-Depending on how you prefer to work, you can install the package in
-development mode with `devtools`:
+For local development inside a cloned repo, the usual alternatives still work:
 
 ```r
 devtools::load_all()
 ```
 
-or install it locally:
+or
 
 ```r
 devtools::install()
@@ -91,9 +74,10 @@ This environment is used primarily for:
 - subgraph calling
 - developer and HPC execution of helper scripts such as backend-seed builders
 
-So in the current workflow, the easiest path is to ensure that
-`lymphoma_graph_env` exists, is active for your shell session, and is visible
-to `conda`.
+This conda environment is mainly for developer and HPC reproducibility. Normal
+end users do not need to activate it manually for diffusion or selected-subgraph
+calling, because those Python-backed stages run inside the package-managed
+`basilisk` environment.
 
 ## 4. Ensure MAGMA is available
 
@@ -111,6 +95,9 @@ So before running germline scoring, make sure that:
 - a MAGMA 1.1 binary is available through one of those paths
 - it is executable
 - the related reference inputs you plan to use are available
+
+If MAGMA is missing, the germline-scoring functions should fail with a clear
+message explaining the accepted discovery routes.
 
 ## 5. Understand the current backend-resource expectation
 
