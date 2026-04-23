@@ -47,7 +47,29 @@ build_fixture_gene_links_zip <- function(members, output_zip_path) {
   old_wd <- getwd()
   on.exit(setwd(old_wd), add = TRUE)
   setwd(tmp_dir)
-  utils::zip(zipfile = output_zip_path_abs, files = members)
+  zip_cmd <- getOption("zip")
+  zip_available <- is.character(zip_cmd) &&
+    length(zip_cmd) == 1L &&
+    nzchar(zip_cmd) &&
+    nzchar(Sys.which(zip_cmd))
+
+  if (zip_available) {
+    utils::zip(zipfile = output_zip_path_abs, files = members)
+  } else {
+    python_cmd <- Sys.which("python3")
+    if (!nzchar(python_cmd)) {
+      python_cmd <- Sys.which("python")
+    }
+    if (!nzchar(python_cmd)) {
+      stop("Neither an external `zip` command nor Python is available to create fixture archives.")
+    }
+
+    zip_args <- c("-m", "zipfile", "-c", output_zip_path_abs, members)
+    status <- system2(python_cmd, args = zip_args)
+    if (!identical(status, 0L)) {
+      stop("Failed to create fixture gene-link zip with Python fallback.")
+    }
+  }
   normalizePath(output_zip_path_abs, winslash = "/", mustWork = TRUE)
 }
 

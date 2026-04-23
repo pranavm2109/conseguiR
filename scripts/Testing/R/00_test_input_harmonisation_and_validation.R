@@ -11,7 +11,7 @@ negative_test_cases <- list(
   list(
     path = "data/raw/Testing/gwas_missing_variant_identifier.tsv",
     label = "missing variant identifier",
-    expected_text = "variant identifier"
+    expected_text = "GWAS SNP identifiers"
   ),
   list(
     path = "data/raw/Testing/gwas_missing_chromosome.tsv",

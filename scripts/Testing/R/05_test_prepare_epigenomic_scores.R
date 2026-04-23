@@ -14,9 +14,10 @@ default_broken_bigwig_path <- "data/raw/Testing/broken_signal_track.bw"
 default_epigenomic_test_output_dir <- "data/processed/test_outputs/epigenomic"
 
 select_epigenomic_test_bigwigs <- function(track_dir) {
-  bw_files <- list_epigenomic_track_files(track_dir = track_dir)
+  bw_files <- list.files(track_dir, pattern = "\\.(bw|bigWig)$", full.names = TRUE)
   keep <- !grepl("(_BL_|_FL_|broken_signal_track)", basename(bw_files))
-  bw_files[keep]
+  bw_files <- bw_files[keep]
+  validate_epigenomic_tracks(bw_files)
 }
 
 make_epigenomic_test_path <- function(stem, ext = "") {
@@ -28,11 +29,7 @@ make_epigenomic_test_path <- function(stem, ext = "") {
 }
 
 make_epigenomic_live_fixture <- function(n_tracks = 3L, n_reg_elements = 500L) {
-  bw_files <- list_epigenomic_track_files(
-    track_dir = default_epigenomic_track_dir,
-    min_tracks = 3L
-  )
-  bw_files <- bw_files[!grepl("(_BL_|_FL_|broken_signal_track)", basename(bw_files))]
+  bw_files <- select_epigenomic_test_bigwigs(default_epigenomic_track_dir)
   bw_files <- bw_files[seq_len(min(n_tracks, length(bw_files)))]
 
   reg_dt <- fread(default_reg_ref_path, header = FALSE)
@@ -58,7 +55,7 @@ test_run_epigenomic_reg_scoring_negative_too_few_tracks <- function() {
       transform = "log1p",
       return_diagnostics = FALSE
     ),
-    expected = "At least 3 epigenomic bigWig tracks are required",
+    regexp = "At least 3 epigenomic bigWig tracks are required",
     fixed = TRUE
   )
 }
@@ -75,7 +72,7 @@ test_list_epigenomic_track_files_live <- function() {
 test_validate_epigenomic_tracks_negative_broken_bigwig <- function() {
   expect_error(
     validate_epigenomic_tracks(default_broken_bigwig_path),
-    expected = "Failed to validate bigWig file",
+    regexp = "Failed to validate bigWig file",
     fixed = TRUE
   )
 }

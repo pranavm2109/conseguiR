@@ -14,6 +14,25 @@ default_reg_ref_path <- .conseguiR_default_reg_loc_path()
 default_fishhook_covariate_path <- "data/raw/Testing/2026-01-26_all_reg_elems_sample_level_mut_frac_comparison_bet_only_memory_b_normal_and_non_cll_malig_b_cells.rds"
 default_dndscv_refdb <- "data/raw/Testing/RefCDS_human_GRCh38.p12.rda"
 
+fishhook_covariate_overlap_count <- function(reg_ref_path = default_reg_ref_path,
+                                             covariate_path = default_fishhook_covariate_path) {
+  if (!file.exists(reg_ref_path) || !file.exists(covariate_path)) {
+    return(0L)
+  }
+
+  reg_gr <- validate_regulatory_element_reference(reg_ref_path)
+  covariate_data <- readRDS(covariate_path)
+  cov_dt <- data.table(covariate_data)
+
+  if (!"reg_elem_id" %in% names(S4Vectors::mcols(reg_gr)) || !"reg_elem_id" %in% names(cov_dt)) {
+    return(0L)
+  }
+
+  reg_ids <- as.character(S4Vectors::mcols(reg_gr)$reg_elem_id)
+  cov_ids <- as.character(cov_dt$reg_elem_id)
+  sum(reg_ids %in% cov_ids)
+}
+
 make_dummy_maf <- function() {
   data.table(
     Tumor_Sample_Barcode = c("S1", "S1", "S2"),
@@ -309,6 +328,12 @@ test_run_fishhook_reg_scoring_live <- function() {
   skip_if_not_installed("fishHook")
   skip_if_not_installed("BSgenome.Hsapiens.UCSC.hg38")
 
+  overlap_n <- fishhook_covariate_overlap_count()
+  skip_if(
+    overlap_n == 0L,
+    "fishHook live covariate file does not overlap the current regulatory universe."
+  )
+
   maf <- fread(default_somatic_path, nrows = 1000L)
   fishhook_covariate_data <- readRDS(default_fishhook_covariate_path)
   result <- run_fishhook_reg_scoring(
@@ -333,6 +358,11 @@ test_run_somatic_scoring_pipeline_live <- function(
   skip_if_not_installed("fishHook")
   skip_if_not_installed("BSgenome.Hsapiens.UCSC.hg38")
   skip_if(is.null(refdb), "No hg38 dndscv RefCDS file found for the real hg38 MAF.")
+  overlap_n <- fishhook_covariate_overlap_count()
+  skip_if(
+    overlap_n == 0L,
+    "fishHook live covariate file does not overlap the current regulatory universe."
+  )
 
   maf <- fread(default_somatic_path, nrows = 1000L)
   fishhook_covariate_data <- readRDS(default_fishhook_covariate_path)
