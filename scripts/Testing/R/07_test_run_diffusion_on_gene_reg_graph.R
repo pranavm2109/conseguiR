@@ -3,8 +3,10 @@
 suppressPackageStartupMessages({
   library(data.table)
   library(testthat)
+  devtools::load_all(".", quiet = TRUE)
 })
 
+source("scripts/Internals/R/06b_python_basilisk.R")
 source("scripts/Internals/R/07_run_diffusion_on_gene_reg_graph.R")
 default_step7_test_output_dir <- "data/processed/test_outputs/step7"
 
@@ -43,6 +45,7 @@ python_module_available <- function(module_name) {
 }
 generate_scored_gene_reg_graph_fixtures <- function() {
   nodes <- data.table(
+    name = c("G1", "G2", "R1", "R2"),
     node_id = c("G1", "G2", "R1", "R2"),
     node_type = c("gene", "gene", "reg", "reg"),
     somatic_score = c(1.0, -0.5, 0.2, 0.3),
@@ -57,6 +60,19 @@ generate_scored_gene_reg_graph_fixtures <- function() {
   )
 
   list(nodes = nodes, edges = edges)
+}
+
+write_scored_gene_reg_fixture_files <- function() {
+  fixture <- generate_scored_gene_reg_graph_fixtures()
+  output_prefix <- make_step7_test_path("scored_gene_reg_fixture")
+  nodes_path <- paste0(output_prefix, "_nodes.tsv")
+  edges_path <- paste0(output_prefix, "_edges.tsv")
+  fwrite(fixture$nodes, nodes_path, sep = "\t")
+  fwrite(fixture$edges, edges_path, sep = "\t")
+  list(
+    nodes_path = nodes_path,
+    edges_path = edges_path
+  )
 }
 
 test_validate_scored_gene_reg_nodes <- function() {
@@ -121,8 +137,11 @@ test_run_gene_reg_diffusion_integration <- function() {
     skip("Required Python packages are not installed for step 7 integration testing.")
   }
 
+  fixture_paths <- write_scored_gene_reg_fixture_files()
   output_dir <- make_step7_test_path("conseguiR_step7")
   result <- run_gene_reg_diffusion(
+    nodes_path = fixture_paths$nodes_path,
+    edges_path = fixture_paths$edges_path,
     output_dir = output_dir,
     output_stem = "gene_reg_graph_diffusion_test",
     top_n_to_save = 5L
@@ -131,6 +150,9 @@ test_run_gene_reg_diffusion_integration <- function() {
   expect_true(file.exists(result$output_paths$all_genes_path))
   expect_true(file.exists(result$output_paths$top_genes_path))
   expect_equal(result$config$output_dir, output_dir)
+  diffusion_dt <- fread(result$output_paths$all_genes_path)
+  expect_true(all(c("node_id", "gene_name", "post_integrated") %in% names(diffusion_dt)))
+  expect_equal(nrow(diffusion_dt), 2L)
 }
 
 main <- function() {

@@ -106,7 +106,7 @@ consequIR_python_from_conda_prefix <- function() {
 consequIR_find_python <- function() {
   configured_env <- .conseguiR_default_conda_env()
   current_env <- Sys.getenv("CONDA_DEFAULT_ENV")
-  if (!is.null(configured_env) && identical(current_env, configured_env)) {
+  if ((!is.null(configured_env) && identical(current_env, configured_env)) || nzchar(Sys.getenv("CONDA_PREFIX"))) {
     python_path <- consequIR_python_from_conda_prefix()
     if (!is.null(python_path)) {
       return(python_path)

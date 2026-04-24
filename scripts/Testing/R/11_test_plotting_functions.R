@@ -5,7 +5,9 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
+source("R/zzz.R")
 source("R/user_api.R")
+.onLoad(libname = ".", pkgname = "conseguiR")
 
 plot_test_dir <- "data/processed/test_outputs/plotting"
 dir.create(plot_test_dir, recursive = TRUE, showWarnings = FALSE)
@@ -15,14 +17,14 @@ unlink(file.path(plot_test_dir, c(
 )))
 
 test_rank_plotting_works <- function() {
-  germline_path <- "data/processed/germline_gene_scores.tsv"
-  if (!file.exists(germline_path)) {
-    skip("Real germline score table is not available.")
-  }
+  tbl <- data.table(
+    gene_id = c("MYC", "BCL2", "PAX5", "IRF4"),
+    zstat = c(5.1, 3.4, 1.2, -0.7)
+  )
 
   output_path <- file.path(plot_test_dir, "germline_gene_scores_rank_plot.pdf")
   bundle <- plot_scores(
-    table = fread(germline_path),
+    table = tbl,
     plot_file_path = output_path,
     test_tail = "one_tailed",
     label_features = c("MYC", "BCL2"),
@@ -34,25 +36,25 @@ test_rank_plotting_works <- function() {
 }
 
 test_reg_rank_plotting_works <- function() {
-  reg_path <- "data/processed/germline_reg_scores.tsv"
-  if (!file.exists(reg_path)) {
-    skip("Real germline regulatory score table is not available.")
-  }
+  tbl <- data.table(
+    reg_elem_id = c("EH38E0080197", "EH38E2084302", "EH38E3951312", "EH38E2776544"),
+    zstat = c(4.3, 2.8, 1.1, -0.4)
+  )
 
   output_path <- file.path(plot_test_dir, "germline_reg_scores_rank_plot.pdf")
   bundle <- plot_scores(
-    table = fread(reg_path),
+    table = tbl,
     which = "reg_scores",
     plot_file_path = output_path,
     test_tail = "one_tailed",
-    label_features = c("MYC", "BCL2"),
+    label_features = c("EH38E0080197", "EH38E2084302"),
     save_plot = TRUE
   )
 
   expect_s3_class(bundle, "conseguiR_bundle")
   expect_true(file.exists(output_path))
   expect_true(any(bundle$objects$plot_data$should_label))
-  expect_true(all(bundle$objects$plot_data$matched_label[bundle$objects$plot_data$should_label] %in% c("MYC", "BCL2")))
+  expect_true(all(bundle$objects$plot_data$feature_id_plot[bundle$objects$plot_data$should_label] %in% c("EH38E0080197", "EH38E2084302")))
 }
 
 test_volcano_plotting_works <- function() {
@@ -81,7 +83,7 @@ test_plotting_requires_output_path_when_saving <- function() {
       table = data.frame(feature_id = c("A", "B"), zstat = c(1, 2)),
       save_plot = TRUE
     ),
-    "`plot_file_path` must be provided",
+    regexp = "`plot_file_path` must be provided",
     fixed = TRUE
   )
 }

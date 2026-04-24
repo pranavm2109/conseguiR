@@ -63,6 +63,27 @@ default_stage_plot_config <- list(
   if (is.null(x)) y else x
 }
 
+read_delimited_table <- function(path, ...) {
+  if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    extra_args <- list(...)
+    extra_args$showProgress <- NULL
+    con <- gzfile(path, open = "rt")
+    on.exit(close(con), add = TRUE)
+    return(data.table::as.data.table(do.call(
+      utils::read.delim,
+      c(list(
+        file = con,
+        sep = "\t",
+        header = TRUE,
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      ), extra_args)
+    )))
+  }
+
+  data.table::as.data.table(data.table::fread(path, ...))
+}
+
 read_backend_gene_label_map <- function() {
   if (exists("gene_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)) {
     return(data.table::copy(get("gene_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
@@ -97,7 +118,7 @@ read_backend_reg_label_map <- function() {
     return(data.table::data.table(reg_elem_id = character(), label = character()))
   }
 
-  dt <- data.table::as.data.table(data.table::fread(mapping_path, showProgress = FALSE))
+  dt <- read_delimited_table(mapping_path, showProgress = FALSE)
   out <- unique(dt[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(label) & label != ""], by = "reg_elem_id")
   assign("reg_label_map", out, envir = .conseguiR_plot_cache)
   data.table::copy(out)

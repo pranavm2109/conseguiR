@@ -8,10 +8,6 @@ suppressPackageStartupMessages({
 
 source("scripts/Internals/R/09_create_selected_subgraph_visualisation_bundle.R")
 
-default_selected_nodes_path <- "data/processed/gene_gene_selected_subgraph_nodes.tsv"
-default_selected_edges_path <- "data/processed/gene_gene_selected_subgraph_edges.tsv"
-default_selected_summary_path <- "data/processed/gene_gene_selected_subgraph_summary.tsv"
-default_selected_plot_path <- "data/processed/gene_gene_selected_subgraph_plot.pdf"
 default_selected_bundle_test_output_dir <- "data/processed/test_outputs/selected_subgraph_bundle"
 
 make_selected_bundle_test_path <- function(stem, ext = "") {
@@ -23,18 +19,37 @@ make_selected_bundle_test_path <- function(stem, ext = "") {
 }
 
 make_live_selected_subgraph_fixture <- function() {
+  nodes <- data.table(
+    node_id = c("G1", "G2", "G3"),
+    gene_name = c("GENE1", "GENE2", "GENE3"),
+    prize = c(5, 3, 2),
+    post_integrated = c(5, 3, 2),
+    post_vulnerability = c(5.2, 3.1, 2.1),
+    post_norm = c(5.3, 3.2, 2.2)
+  )
+  edges <- data.table(
+    gene_u = c("G1", "G2"),
+    gene_v = c("G2", "G3")
+  )
+  summary <- data.table(
+    solver_status = "OPTIMAL",
+    target_genes = 3L,
+    n_selected_nodes = 3L,
+    n_selected_edges = 2L
+  )
   list(
-    nodes = read_selected_subgraph_nodes(default_selected_nodes_path),
-    edges = read_selected_subgraph_edges(default_selected_edges_path),
-    summary = read_selected_subgraph_summary(default_selected_summary_path)
+    nodes = nodes,
+    edges = edges,
+    summary = summary
   )
 }
 
 test_prepare_selected_subgraph_visualisation_bundle_live_outputs <- function(print_bundle = TRUE) {
+  fixture <- make_live_selected_subgraph_fixture()
   bundle <- prepare_selected_subgraph_visualisation_bundle(
-    nodes_path = default_selected_nodes_path,
-    edges_path = default_selected_edges_path,
-    summary_path = default_selected_summary_path
+    nodes = fixture$nodes,
+    edges = fixture$edges,
+    summary = fixture$summary
   )
 
   expect_true(is.data.frame(bundle$nodes))
@@ -59,10 +74,11 @@ test_prepare_selected_subgraph_visualisation_bundle_live_outputs <- function(pri
 }
 
 test_save_selected_subgraph_visualisation_bundle_outputs <- function() {
+  fixture <- make_live_selected_subgraph_fixture()
   bundle <- prepare_selected_subgraph_visualisation_bundle(
-    nodes_path = default_selected_nodes_path,
-    edges_path = default_selected_edges_path,
-    summary_path = default_selected_summary_path
+    nodes = fixture$nodes,
+    edges = fixture$edges,
+    summary = fixture$summary
   )
   output_prefix <- make_selected_bundle_test_path("selected_subgraph_plot_bundle")
 
@@ -82,12 +98,13 @@ test_save_selected_subgraph_visualisation_bundle_outputs <- function() {
 }
 
 test_save_selected_subgraph_plot_on_real_outputs <- function(
-  file_path = default_selected_plot_path
+  file_path = make_selected_bundle_test_path("selected_subgraph_plot", ".pdf")
 ) {
+  fixture <- make_live_selected_subgraph_fixture()
   bundle <- prepare_selected_subgraph_visualisation_bundle(
-    nodes_path = default_selected_nodes_path,
-    edges_path = default_selected_edges_path,
-    summary_path = default_selected_summary_path
+    nodes = fixture$nodes,
+    edges = fixture$edges,
+    summary = fixture$summary
   )
 
   save_selected_subgraph_plot(
@@ -106,19 +123,19 @@ test_save_selected_subgraph_plot_on_real_outputs <- function(
 test_read_selected_subgraph_negative_missing_file <- function() {
   expect_error(
     read_selected_subgraph_nodes("data/processed/does_not_exist_nodes.tsv"),
-    expected = "Selected subgraph node file does not exist",
+    regexp = "Selected subgraph node file does not exist",
     fixed = TRUE
   )
 
   expect_error(
     read_selected_subgraph_edges("data/processed/does_not_exist_edges.tsv"),
-    expected = "Selected subgraph edge file does not exist",
+    regexp = "Selected subgraph edge file does not exist",
     fixed = TRUE
   )
 
   expect_error(
     read_selected_subgraph_summary("data/processed/does_not_exist_summary.tsv"),
-    expected = "Selected subgraph summary file does not exist",
+    regexp = "Selected subgraph summary file does not exist",
     fixed = TRUE
   )
 }
@@ -126,7 +143,7 @@ test_read_selected_subgraph_negative_missing_file <- function() {
 test_validate_selected_subgraph_negative_bad_nodes <- function() {
   expect_error(
     validate_selected_subgraph_nodes(data.table(node_id = "MYC", prize = 1)),
-    expected = "Selected subgraph node table is missing required columns",
+    regexp = "Selected subgraph node table is missing required columns",
     fixed = TRUE
   )
 
@@ -136,7 +153,7 @@ test_validate_selected_subgraph_negative_bad_nodes <- function() {
       gene_name = c("MYC", "MYC"),
       prize = c(1, 2)
     )),
-    expected = "duplicated `node_id` values",
+    regexp = "duplicated `node_id` values",
     fixed = TRUE
   )
 
@@ -146,7 +163,7 @@ test_validate_selected_subgraph_negative_bad_nodes <- function() {
       gene_name = c("MYC", "BCL6"),
       prize = c("bad", "1.2")
     )),
-    expected = "non-numeric `prize` values",
+    regexp = "non-numeric `prize` values",
     fixed = TRUE
   )
 }
@@ -154,13 +171,13 @@ test_validate_selected_subgraph_negative_bad_nodes <- function() {
 test_validate_selected_subgraph_negative_bad_edges <- function() {
   expect_error(
     validate_selected_subgraph_edges(data.table(gene_u = "MYC")),
-    expected = "Selected subgraph edge table is missing required columns",
+    regexp = "Selected subgraph edge table is missing required columns",
     fixed = TRUE
   )
 
   expect_error(
     validate_selected_subgraph_edges(data.table(gene_u = "MYC", gene_v = "")),
-    expected = "contains missing gene endpoints",
+    regexp = "contains missing gene endpoints",
     fixed = TRUE
   )
 }
@@ -168,7 +185,7 @@ test_validate_selected_subgraph_negative_bad_edges <- function() {
 test_validate_selected_subgraph_negative_bad_summary <- function() {
   expect_error(
     validate_selected_subgraph_summary(data.table(target_genes = 50)),
-    expected = "Selected subgraph summary table is missing required columns",
+    regexp = "Selected subgraph summary table is missing required columns",
     fixed = TRUE
   )
 }
@@ -179,21 +196,22 @@ test_prepare_subgraph_plot_edges_negative_no_overlap <- function() {
 
   expect_error(
     prepare_subgraph_plot_edges(bad_edges, fixture$nodes),
-    expected = "do not overlap the selected node identifiers",
+    regexp = "do not overlap the selected node identifiers",
     fixed = TRUE
   )
 }
 
 test_save_selected_subgraph_plot_negative_missing_file_path <- function() {
+  fixture <- make_live_selected_subgraph_fixture()
   bundle <- prepare_selected_subgraph_visualisation_bundle(
-    nodes_path = default_selected_nodes_path,
-    edges_path = default_selected_edges_path,
-    summary_path = default_selected_summary_path
+    nodes = fixture$nodes,
+    edges = fixture$edges,
+    summary = fixture$summary
   )
 
   expect_error(
     save_selected_subgraph_plot(bundle = bundle, file_path = ""),
-    expected = "`file_path` must be provided",
+    regexp = "`file_path` must be provided",
     fixed = TRUE
   )
 }

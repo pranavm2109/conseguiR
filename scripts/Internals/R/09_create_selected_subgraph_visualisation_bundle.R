@@ -5,6 +5,10 @@ suppressPackageStartupMessages({
   library(igraph)
 })
 
+safe_numeric <- function(x) {
+  suppressWarnings(as.numeric(x))
+}
+
 default_selected_subgraph_plot_config <- list(
   nodes_path = "data/processed/gene_gene_selected_subgraph_nodes.tsv",
   edges_path = "data/processed/gene_gene_selected_subgraph_edges.tsv",

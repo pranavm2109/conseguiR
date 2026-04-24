@@ -3,10 +3,12 @@
 suppressPackageStartupMessages({
   library(data.table)
   library(testthat)
+  devtools::load_all(".", quiet = TRUE)
 })
 
 source("scripts/Internals/R/06b_python_basilisk.R")
 source("scripts/Internals/R/08_call_subgraph.R")
+source("R/backend_resources.R")
 default_step8_test_output_dir <- "data/processed/test_outputs/step8"
 
 make_step8_test_path <- function(stem, ext = "") {
@@ -97,6 +99,23 @@ python_ortools_available <- function() {
   FALSE
 }
 
+write_subgraph_fixture_files <- function() {
+  diffusion <- make_diffusion_fixture()
+  gg <- make_gene_gene_graph_fixture()
+  output_prefix <- make_step8_test_path("subgraph_fixture")
+  diffusion_path <- paste0(output_prefix, "_diffusion.tsv")
+  gg_nodes_path <- paste0(output_prefix, "_gg_nodes.tsv")
+  gg_edges_path <- paste0(output_prefix, "_gg_edges.tsv")
+  fwrite(diffusion, diffusion_path, sep = "\t")
+  fwrite(gg$nodes, gg_nodes_path, sep = "\t")
+  fwrite(gg$edges, gg_edges_path, sep = "\t")
+  list(
+    diffusion_path = diffusion_path,
+    gg_nodes_path = gg_nodes_path,
+    gg_edges_path = gg_edges_path
+  )
+}
+
 test_validate_diffusion_results <- function() {
   diffusion <- make_diffusion_fixture()
   validated <- validate_diffusion_results(diffusion, prize_column = "post_integrated")
@@ -150,8 +169,12 @@ test_run_cardinality_subgraph_calling_integration <- function() {
     skip("OR-Tools is not available for live step 8 testing.")
   }
 
+  fixture_paths <- write_subgraph_fixture_files()
   output_dir <- make_step8_test_path("conseguiR_step8")
   result <- run_cardinality_subgraph_calling(
+    diffusion_path = fixture_paths$diffusion_path,
+    gg_nodes_path = fixture_paths$gg_nodes_path,
+    gg_edges_path = fixture_paths$gg_edges_path,
     output_dir = output_dir,
     output_stem = "gene_gene_selected_subgraph_test",
     target_genes = 2L,
@@ -165,6 +188,8 @@ test_run_cardinality_subgraph_calling_integration <- function() {
   expect_true(file.exists(result$output_paths$edges_path))
   expect_true(file.exists(result$output_paths$summary_path))
   expect_true(file.exists(result$output_paths$graphml_path))
+  nodes_dt <- fread(result$output_paths$nodes_path)
+  expect_equal(nrow(nodes_dt), 2L)
 }
 
 main <- function() {

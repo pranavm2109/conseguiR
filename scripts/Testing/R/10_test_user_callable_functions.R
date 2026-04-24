@@ -3,11 +3,16 @@
 suppressPackageStartupMessages({
   library(data.table)
   library(testthat)
+  library(devtools)
 })
 
+source("R/backend_resources.R")
+source("R/user_api.R")
+source("scripts/Internals/R/06_impose_scores_on_gene_reg_graph_nodes.R")
 source("R/zzz.R")
 # Manually trigger package initialization before sourcing the external wrapper layer.
 .onLoad(libname = ".", pkgname = "conseguiR")
+devtools::load_all(".", quiet = TRUE)
 
 source("scripts/Externals/R/00_user_callable_functions.R")
 
@@ -36,38 +41,43 @@ make_external_test_path <- function(stem, ext = "") {
   )
 }
 
+test_backend_dir <- file.path(tempdir(), "conseguiR_backend_test_10")
+options(conseguiR.backend_dir = test_backend_dir)
+.conseguiR_initialize_backend_graphs(
+  backend_dir = test_backend_dir,
+  build_gene_reg = TRUE,
+  build_gene_gene = TRUE,
+  force = TRUE,
+  strict = FALSE,
+  quiet = TRUE
+)
+
 make_existing_score_bundles <- function() {
+  graph <- read_gene_reg_graph_no_scores(.conseguiR_backend_paths(test_backend_dir)$gene_reg_graph_rds)
+  nodes <- extract_gene_reg_graph_nodes(graph)
+  gene_ids <- unique(nodes[node_type == "gene", node_id])[1:6]
+  reg_ids <- unique(nodes[node_type == "reg", node_id])[1:6]
+
   germline <- new_bundle(
     type = "germline_scores",
     objects = list(
-      gene_scores = fread("data/processed/germline_gene_scores.tsv"),
-      reg_scores = fread("data/processed/germline_reg_scores.tsv")
-    ),
-    output_paths = list(
-      gene_scores_path = "data/processed/germline_gene_scores.tsv",
-      reg_scores_path = "data/processed/germline_reg_scores.tsv"
+      gene_scores = data.table(gene_id = gene_ids, zstat = c(2.2, 1.7, 0.9, -0.4, 0.3, -0.2)),
+      reg_scores = data.table(reg_elem_id = reg_ids, zstat = c(1.8, 0.7, -0.6, 0.4, 0.2, -0.1))
     )
   )
 
   somatic <- new_bundle(
     type = "somatic_scores",
     objects = list(
-      gene_scores = fread("data/processed/somatic_gene_scores.tsv"),
-      reg_scores = fread("data/processed/somatic_reg_scores.tsv")
-    ),
-    output_paths = list(
-      gene_scores_path = "data/processed/somatic_gene_scores.tsv",
-      reg_scores_path = "data/processed/somatic_reg_scores.tsv"
+      gene_scores = data.table(gene_id = gene_ids, zstat = c(1.9, -1.1, 0.8, 0.5, -0.2, 0.1)),
+      reg_scores = data.table(reg_elem_id = reg_ids, zstat = c(1.4, -0.5, 0.9, 0.3, -0.1, 0.2))
     )
   )
 
   epigenomic <- new_bundle(
     type = "epigenomic_scores",
     objects = list(
-      reg_scores = fread("data/processed/epigenomic_reg_scores.tsv")
-    ),
-    output_paths = list(
-      reg_scores_path = "data/processed/epigenomic_reg_scores.tsv"
+      reg_scores = data.table(reg_elem_id = reg_ids, zstat = c(2.8, -1.5, 1.0, 0.6, -0.3, 0.4))
     )
   )
 
@@ -75,6 +85,22 @@ make_existing_score_bundles <- function() {
     germline = germline,
     somatic = somatic,
     epigenomic = epigenomic
+  )
+}
+
+materialize_plaintext_gene_gene_paths <- function() {
+  backend_paths <- .conseguiR_backend_paths(test_backend_dir)
+  graph <- readRDS(backend_paths$gene_gene_graph_rds)
+
+  nodes_path <- make_external_test_path("gene_gene_nodes_plain", ".tsv")
+  edges_path <- make_external_test_path("gene_gene_edges_plain", ".tsv")
+
+  fwrite(as.data.table(igraph::as_data_frame(graph, what = "vertices")), nodes_path, sep = "\t")
+  fwrite(as.data.table(igraph::as_data_frame(graph, what = "edges")), edges_path, sep = "\t")
+
+  list(
+    gg_nodes_path = nodes_path,
+    gg_edges_path = edges_path
   )
 }
 
@@ -136,8 +162,11 @@ test_external_graph_to_plot_chain_live <- function(print_outputs = TRUE) {
 
   subgraph_dir <- make_external_test_path("external_subgraph_dir")
   dir.create(subgraph_dir, recursive = TRUE, showWarnings = FALSE)
+  gene_gene_paths <- materialize_plaintext_gene_gene_paths()
   selected <- call_selected_subgraph(
     diffusion = diffusion,
+    gg_nodes_path = gene_gene_paths$gg_nodes_path,
+    gg_edges_path = gene_gene_paths$gg_edges_path,
     output_dir = subgraph_dir,
     output_stem = "external_selected_subgraph",
     target_genes = 12L,
@@ -193,7 +222,7 @@ test_validate_inputs_external_negative_missing_reg_ref_for_epigenomic <- functio
     validate_inputs(
       epigenomic_tracks = default_external_bw_files
     ),
-    expected = "`reg_ref_path` is required when validating epigenomic tracks.",
+    regexp = "`reg_ref_path` is required when validating epigenomic tracks.",
     fixed = TRUE
   )
 }
@@ -204,7 +233,7 @@ test_build_scored_gene_reg_graph_external_negative_bad_scores <- function() {
       gene_germline_scores = data.table(gene = "MYC", value = 1.2),
       save_outputs = FALSE
     ),
-    expected = "Gene germline score table is missing required columns",
+    regexp = "Gene germline score table is missing required columns",
     fixed = TRUE
   )
 }
@@ -217,7 +246,7 @@ test_run_gene_reg_diffusion_external_negative_missing_paths <- function() {
       output_dir = make_external_test_path("bad_diffusion_dir"),
       output_stem = "bad_diffusion"
     ),
-    expected = "Scored gene-reg node file does not exist",
+    regexp = "Scored gene-reg node file does not exist",
     fixed = TRUE
   )
 }
@@ -229,7 +258,7 @@ test_call_selected_subgraph_external_negative_missing_diffusion <- function() {
       output_dir = make_external_test_path("bad_subgraph_dir"),
       output_stem = "bad_subgraph"
     ),
-    expected = "Diffusion results file does not exist",
+    regexp = "Diffusion results file does not exist",
     fixed = TRUE
   )
 }
@@ -238,14 +267,24 @@ test_plot_selected_subgraph_external_negative_missing_plot_path <- function() {
   fixture <- new_bundle(
     type = "selected_subgraph",
     objects = list(
-      nodes = read_selected_subgraph_nodes(),
-      edges = read_selected_subgraph_edges(),
-      summary = read_selected_subgraph_summary()
-    ),
-    output_paths = list(
-      nodes_path = default_selected_subgraph_plot_config$nodes_path,
-      edges_path = default_selected_subgraph_plot_config$edges_path,
-      summary_path = default_selected_subgraph_plot_config$summary_path
+      nodes = data.table(
+        node_id = c("G1", "G2"),
+        gene_name = c("GENE1", "GENE2"),
+        prize = c(2, 1),
+        post_integrated = c(2.0, 1.0),
+        post_vulnerability = c(2.1, 1.1),
+        post_norm = c(2.2, 1.2)
+      ),
+      edges = data.table(
+        gene_u = "G1",
+        gene_v = "G2"
+      ),
+      summary = data.table(
+        solver_status = "OPTIMAL",
+        target_genes = 2L,
+        n_selected_nodes = 2L,
+        n_selected_edges = 1L
+      )
     )
   )
 
@@ -255,7 +294,7 @@ test_plot_selected_subgraph_external_negative_missing_plot_path <- function() {
       save_plot = TRUE,
       plot_file_path = ""
     ),
-    expected = "`plot_file_path` must be provided when `save_plot = TRUE`.",
+    regexp = "`plot_file_path` must be provided when `save_plot = TRUE`.",
     fixed = TRUE
   )
 }

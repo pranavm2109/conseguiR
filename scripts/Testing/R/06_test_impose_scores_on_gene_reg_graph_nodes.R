@@ -6,9 +6,22 @@ suppressPackageStartupMessages({
   library(igraph)
 })
 
+source("R/zzz.R")
+source("R/backend_resources.R")
 source("scripts/Internals/R/06_impose_scores_on_gene_reg_graph_nodes.R")
 
-default_graph_rds_path <- "data/processed/gene_reg_graph_no_scores.rds"
+.onLoad(libname = ".", pkgname = "conseguiR")
+test_backend_dir <- file.path(tempdir(), "conseguiR_backend_test_06")
+options(conseguiR.backend_dir = test_backend_dir)
+.conseguiR_initialize_backend_graphs(
+  backend_dir = test_backend_dir,
+  build_gene_reg = TRUE,
+  build_gene_gene = TRUE,
+  force = TRUE,
+  strict = TRUE,
+  quiet = TRUE
+)
+default_graph_rds_path <- .conseguiR_backend_paths(test_backend_dir)$gene_reg_graph_rds
 default_gene_reg_scored_test_output_dir <- "data/processed/test_outputs/gene_reg_scored"
 
 make_gene_reg_scored_test_path <- function(stem, ext = "") {
@@ -22,11 +35,12 @@ make_gene_reg_scored_test_path <- function(stem, ext = "") {
 make_live_gene_reg_score_fixture <- function() {
   graph <- read_gene_reg_graph_no_scores(default_graph_rds_path)
   nodes <- extract_gene_reg_graph_nodes(graph)
-  edges <- extract_gene_reg_graph_edges(graph)
-  connected_pairs <- unique(edges[, .(gene_id = from, reg_id = to)])
-  connected_pairs <- connected_pairs[, .SD[1], by = gene_id][1:3]
-  gene_ids <- unique(connected_pairs$gene_id)
-  reg_ids <- unique(connected_pairs$reg_id)
+  gene_ids <- nodes[node_type == "gene", unique(node_id)][1:3]
+  reg_ids <- nodes[node_type == "reg", unique(node_id)][1:3]
+
+  if (length(gene_ids) < 3L || length(reg_ids) < 3L) {
+    stop("Live backend fixture could not derive enough gene/reg node IDs for score injection.")
+  }
 
   list(
     graph = graph,
@@ -116,7 +130,13 @@ test_prepare_scored_gene_reg_graph_saves_outputs <- function(print_scores = TRUE
   expect_true(file.exists(paste0(output_prefix, ".rds")))
   expect_true(file.exists(paste0(output_prefix, "_nodes.tsv.gz")))
   expect_true(file.exists(paste0(output_prefix, "_edges.tsv.gz")))
-  expect_true(all(result$nodes$node_id %in% c(fixture$gene_somatic_scores$gene_id, fixture$reg_somatic_scores$reg_elem_id)))
+  expect_true(all(c(
+    fixture$gene_somatic_scores$gene_id,
+    fixture$reg_somatic_scores$reg_elem_id
+  ) %in% result$nodes$node_id))
+  expect_true(any(result$nodes$somatic_score != 0))
+  expect_true(any(result$nodes$germline_score != 0))
+  expect_true(any(result$nodes$epigenomic_score != 0))
 
   if (isTRUE(print_scores)) {
     message("Scored gene-reg nodes with injected non-zero scores:")
@@ -137,13 +157,13 @@ test_prepare_scored_gene_reg_graph_saves_outputs <- function(print_scores = TRUE
 test_standardize_score_tables_negative_cases <- function() {
   expect_error(
     standardize_gene_score_table(data.table(gene = "TP53", z = 1), "somatic"),
-    expected = "Gene somatic score table is missing required columns",
+    regexp = "Gene somatic score table is missing required columns",
     fixed = TRUE
   )
 
   expect_error(
     standardize_reg_score_table(data.table(reg = "EH38E0080197", z = 1), "epigenomic"),
-    expected = "Regulatory-element epigenomic score table is missing required columns",
+    regexp = "Regulatory-element epigenomic score table is missing required columns",
     fixed = TRUE
   )
 }
@@ -168,7 +188,7 @@ test_standardize_score_tables_prefer_positive_duplicates <- function() {
 test_validate_gene_reg_graph_nodes_negative_cases <- function() {
   expect_error(
     validate_gene_reg_graph_nodes(data.table(node_id = "TP53", node_type = "gene")),
-    expected = "Gene-reg node table is missing required columns",
+    regexp = "Gene-reg node table is missing required columns",
     fixed = TRUE
   )
 
@@ -180,7 +200,7 @@ test_validate_gene_reg_graph_nodes_negative_cases <- function() {
         node_type = "protein"
       )
     ),
-    expected = "unsupported `node_type` values",
+    regexp = "unsupported `node_type` values",
     fixed = TRUE
   )
 }
@@ -188,7 +208,7 @@ test_validate_gene_reg_graph_nodes_negative_cases <- function() {
 test_read_gene_reg_graph_no_scores_negative_missing_file <- function() {
   expect_error(
     read_gene_reg_graph_no_scores("data/processed/does_not_exist.rds"),
-    expected = "Gene-reg graph file does not exist",
+    regexp = "Gene-reg graph file does not exist",
     fixed = TRUE
   )
 }
@@ -202,7 +222,7 @@ test_prepare_scored_gene_reg_graph_negative_bad_gene_scores <- function() {
       gene_somatic_scores = data.table(gene = "TP53", z = 1),
       save_outputs = FALSE
     ),
-    expected = "Gene somatic score table is missing required columns",
+    regexp = "Gene somatic score table is missing required columns",
     fixed = TRUE
   )
 }
@@ -216,7 +236,7 @@ test_prepare_scored_gene_reg_graph_negative_bad_reg_scores <- function() {
       reg_epigenomic_scores = data.table(reg = "EH38E0080197", z = 1),
       save_outputs = FALSE
     ),
-    expected = "Regulatory-element epigenomic score table is missing required columns",
+    regexp = "Regulatory-element epigenomic score table is missing required columns",
     fixed = TRUE
   )
 }
