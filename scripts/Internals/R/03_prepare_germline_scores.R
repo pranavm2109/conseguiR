@@ -41,6 +41,42 @@ conseguiR_magma_resolution_note <- function() {
   )
 }
 
+autodiscovered_magma_candidates <- function() {
+  roots <- unique(Filter(
+    function(x) is.character(x) && length(x) == 1L && nzchar(x) && dir.exists(x),
+    c(getwd(), Sys.getenv("HOME", unset = ""))
+  ))
+
+  patterns <- c(
+    "magma",
+    "bin/magma",
+    "tools/magma",
+    "tools/magma/bin/magma",
+    "tools/magma_v1/magma",
+    "tools/magma_v1.1/magma",
+    "tools/magma_v1.10/magma",
+    "tools/magma_linux/magma",
+    "tools/magma_v1_linux/magma",
+    "tools/magma_v1.1_linux/magma",
+    "tools/magma_v1.10_linux/magma"
+  )
+
+  candidates <- unlist(
+    lapply(
+      roots,
+      function(root) {
+        unique(c(
+          file.path(root, patterns),
+          Sys.glob(file.path(root, "tools", "magma*", "magma"))
+        ))
+      }
+    ),
+    use.names = FALSE
+  )
+
+  unique(candidates[file.exists(candidates) & !dir.exists(candidates)])
+}
+
 resolve_magma_path <- function(magma_path = NULL, must_work = TRUE) {
   explicit_path <- NULL
   if (!is.null(magma_path)) {
@@ -65,7 +101,13 @@ resolve_magma_path <- function(magma_path = NULL, must_work = TRUE) {
     path_path <- NULL
   }
 
-  candidates <- unique(Filter(Negate(is.null), c(explicit_path, option_path, env_path, path_path)))
+  candidates <- unique(Filter(Negate(is.null), c(
+    explicit_path,
+    option_path,
+    env_path,
+    path_path,
+    autodiscovered_magma_candidates()
+  )))
 
   if (length(candidates) == 0L) {
     if (isTRUE(must_work)) {

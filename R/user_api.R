@@ -254,6 +254,28 @@ initialize_backend_graphs <- function(
   )
 }
 
+#' Manually set the MAGMA executable path
+#'
+#' Stores a validated absolute path to the MAGMA executable for the current R
+#' session. This is a fallback for cases where `conseguiR` cannot auto-discover
+#' MAGMA on package load.
+#'
+#' @param path Absolute path to the MAGMA executable.
+#'
+#' @examples
+#' \dontrun{
+#' setMAGMAPath("/absolute/path/to/magma")
+#' }
+#'
+#' @return The normalized MAGMA path, invisibly.
+#' @export
+setMAGMAPath <- function(path) {
+  resolved <- .conseguiR_resolve_magma_path(magma_path = path, must_work = TRUE)
+  options(conseguiR.magma_path = resolved)
+  .conseguiR_state$magma_path <- resolved
+  invisible(resolved)
+}
+
 #' Run MAGMA germline gene scoring
 #'
 #' This wrapper exposes both MAGMA stages for the gene-level run:

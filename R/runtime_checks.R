@@ -74,10 +74,14 @@
   if (!nzchar(path_path)) {
     path_path <- NULL
   }
+  autodiscovered_paths <- tryCatch(
+    .conseguiR_magma_autodiscovery_candidates(),
+    error = function(e) character()
+  )
 
   unique(Filter(
     Negate(is.null),
-    c(explicit_path, option_path, env_path, path_path)
+    c(explicit_path, option_path, env_path, path_path, autodiscovered_paths)
   ))
 }
 
