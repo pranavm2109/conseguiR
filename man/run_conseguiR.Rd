@@ -130,9 +130,9 @@ resulting objects in memory.
 
 Exact list formatting:
 
-\verb{germline_args = list( gene_sample_size = 456348, reg_sample_size = 456348, gene_step1_args = list(annotation_window = c(35, 10)), gene_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list(gene_model = \\"snp-wise=mean\\", pval_use = c(\\"SNP\\", \\"P\\")) )}
+\verb{germline_args = list( gene_sample_size = 456348, reg_sample_size = 456348, gene_step1_args = list(annotation_window = c(35, 10), ignore_strand = TRUE), gene_step2_args = list( gene_model = \\"snp-wise=mean\\", pval = list(use = c(\\"SNP\\", \\"P\\"), duplicate = \\"drop\\") ), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list( pval = list(use = c(\\"SNP\\", \\"P\\"), duplicate = \\"drop\\") ), shared_args = list(reuse_existing_gwas_cache = TRUE) )}
 
-\verb{somatic_args = list( gene_cv = NULL, dndscv_args = list(sm = \\"192r_3w\\"), eligible_gr = NULL, fishhook_covariate_data = covariate_dt, fishhook_args = list() )}
+\verb{somatic_args = list( gene_cv = NULL, sm = \\"192r_3w\\", kc = \\"cgc81\\", eligible_gr = NULL, fishhook_covariate_data = covariate_dt, constructor_use_local_mut_density = FALSE, score_iter = 25L, fishhook_args = list() )}
 
 \verb{epigenomic_args = list( bw_files = c(\\"track1.bw\\", \\"track2.bw\\", \\"track3.bw\\"), min_tracks = 3L, transform = \\"log1p\\" )}
 }

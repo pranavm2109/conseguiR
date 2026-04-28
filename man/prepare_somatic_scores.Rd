@@ -13,11 +13,47 @@ prepare_somatic_scores(
   gene_cv = NULL,
   gene_max_muts_per_gene_per_sample = 6L,
   gene_max_coding_muts_per_sample = 5000L,
+  gene_list = NULL,
+  sm = "192r_3w",
+  kc = "cgc81",
+  use_indel_sites = TRUE,
+  min_indels = 5L,
+  maxcovs = 20L,
+  constrain_wnon_wspl = TRUE,
+  outp = 3L,
+  numcode = 1L,
+  outmats = FALSE,
+  mingenecovs = 500L,
+  onesided = NULL,
+  dc = NULL,
   dndscv_args = list(),
   eligible_gr = NULL,
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   fishhook_idcol = "Tumor_Sample_Barcode",
+  constructor_out_path = NULL,
+  constructor_use_local_mut_density = FALSE,
+  constructor_local_mut_density_bin = 1e+06,
+  constructor_mc_cores = 1L,
+  constructor_na_rm = TRUE,
+  constructor_pad = 0,
+  constructor_max_slice = 1e+05,
+  constructor_ff_chunk = 1e+06,
+  constructor_max_chunk = 1e+12,
+  constructor_idcap = 1,
+  constructor_weight_events = FALSE,
+  constructor_nb = TRUE,
+  score_sets = NULL,
+  score_model = NULL,
+  score_return_model = TRUE,
+  score_nb = NULL,
+  score_iter = NULL,
+  score_subsample = NULL,
+  score_seed = NULL,
+  score_verbose = NULL,
+  score_mc_cores = NULL,
+  score_p_randomized = NULL,
+  score_class_return = TRUE,
   fishhook_args = list(),
   verbose = FALSE
 )
@@ -38,6 +74,32 @@ prepare_somatic_scores(
 \item{gene_max_muts_per_gene_per_sample}{dndscv gene-level mutation cap.}
 
 \item{gene_max_coding_muts_per_sample}{dndscv sample-level coding mutation cap.}
+
+\item{gene_list}{Optional vector of genes passed to \code{dndscv()}.}
+
+\item{sm}{dndscv substitution model.}
+
+\item{kc}{dndscv known-cancer-gene setting.}
+
+\item{use_indel_sites}{Whether dndscv should use indel sites.}
+
+\item{min_indels}{Minimum number of indels for dndscv indel modeling.}
+
+\item{maxcovs}{Maximum number of covariates passed to dndscv.}
+
+\item{constrain_wnon_wspl}{Whether to constrain \code{wnon == wspl} in dndscv.}
+
+\item{outp}{dndscv output level.}
+
+\item{numcode}{Genetic code used by dndscv.}
+
+\item{outmats}{Whether dndscv should return count/exposure matrices.}
+
+\item{mingenecovs}{Minimum number of genes for dndscv covariate modeling.}
+
+\item{onesided}{Optional dndscv one-sided testing switch.}
+
+\item{dc}{Optional dndscv duplex-coverage vector.}
 
 \item{dndscv_args}{Named list of additional dndscv arguments.}
 
@@ -73,10 +135,13 @@ modeling framework independently.
 \itemize{
 \item gene-level dndscv controls: \code{gene_cv},
 \code{gene_max_muts_per_gene_per_sample},
-\code{gene_max_coding_muts_per_sample}, \code{dndscv_args}
+\code{gene_max_coding_muts_per_sample}, \code{gene_list}, \code{sm}, \code{kc},
+\code{use_indel_sites}, \code{min_indels}, \code{maxcovs}, \code{constrain_wnon_wspl},
+\code{outp}, \code{numcode}, \code{outmats}, \code{mingenecovs}, \code{onesided}, \code{dc},
+\code{dndscv_args}
 \item regulatory-level fishHook controls: \code{eligible_gr},
 \code{fishhook_covariates}, \code{fishhook_covariate_data}, \code{fishhook_idcol},
-\code{fishhook_args}
+constructor-side controls, score-side controls, and \code{fishhook_args}
 }
 
 A good mental model is:

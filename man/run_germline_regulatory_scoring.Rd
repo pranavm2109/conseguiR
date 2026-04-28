@@ -17,6 +17,28 @@ run_germline_regulatory_scoring(
   reuse_existing_annotation = FALSE,
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
+  annotation_window = NULL,
+  filter_path = NULL,
+  ignore_strand = FALSE,
+  nonhuman = FALSE,
+  annotate_modifiers = NULL,
+  step1_general_args = list(),
+  step1_extra_args = character(),
+  gene_model = NULL,
+  gene_model_modifiers = NULL,
+  genes_only = TRUE,
+  pval_use = NULL,
+  pval_snp_id = NULL,
+  pval_pval = NULL,
+  pval_duplicate = NULL,
+  bfile_synonyms = NULL,
+  bfile_synonym_dup = NULL,
+  gene_settings = list(),
+  batch = NULL,
+  seed = NULL,
+  big_data = NULL,
+  step2_general_args = list(),
+  step2_extra_args = character(),
   step1_args = list(),
   step2_args = list(),
   verbose = FALSE
@@ -54,13 +76,71 @@ analysis output.}
 
 \item{keep_intermediates}{Whether to keep intermediate MAGMA files.}
 
+\item{annotation_window}{Optional MAGMA step 1 window passed as
+\verb{window=before,after}.}
+
+\item{filter_path}{Optional MAGMA step 1 filter file.}
+
+\item{ignore_strand}{Whether to add \code{ignore-strand} in MAGMA step 1.}
+
+\item{nonhuman}{Whether to add \code{nonhuman} in MAGMA step 1.}
+
+\item{annotate_modifiers}{Optional additional MAGMA step 1 annotation
+modifiers appended after \code{--annotate}.}
+
+\item{step1_general_args}{Named list converted into additional MAGMA step 1
+flags.}
+
+\item{step1_extra_args}{Character vector appended verbatim to the MAGMA step
+1 command.}
+
+\item{gene_model}{Optional MAGMA step 2 gene model.}
+
+\item{gene_model_modifiers}{Optional additional modifiers appended after the
+MAGMA step 2 gene model value.}
+
+\item{genes_only}{Whether to add \code{--genes-only} in MAGMA step 2.}
+
+\item{pval_use}{Optional two-element character vector naming the SNP-ID and
+p-value columns supplied to MAGMA via \code{use=...}.}
+
+\item{pval_snp_id}{Optional explicit SNP-ID column name supplied to MAGMA
+via \code{snp-id=...}.}
+
+\item{pval_pval}{Optional explicit p-value column name supplied to MAGMA via
+\code{pval=...}.}
+
+\item{pval_duplicate}{Optional MAGMA duplicate-SNP handling mode.}
+
+\item{bfile_synonyms}{Optional PLINK synonym file supplied to MAGMA via
+\code{synonyms=...}.}
+
+\item{bfile_synonym_dup}{Optional MAGMA synonym duplicate handling mode.}
+
+\item{gene_settings}{Named list of MAGMA \code{--gene-settings} modifiers, for
+example SNP filters, pruning controls, and permutation controls.}
+
+\item{batch}{Optional MAGMA \code{--batch} value.}
+
+\item{seed}{Optional MAGMA \code{--seed} value.}
+
+\item{big_data}{Optional MAGMA \code{--big-data} switch. Use \code{TRUE} for \code{on} and
+\code{FALSE} for \code{off}.}
+
+\item{step2_general_args}{Named list converted into additional MAGMA step 2
+flags.}
+
+\item{step2_extra_args}{Character vector appended verbatim to the MAGMA step
+2 command.}
+
 \item{step1_args}{Named list of MAGMA step 1 arguments. Supported entries
 include \code{annotation_window}, \code{filter_path}, \code{ignore_strand}, \code{nonhuman},
-and \code{extra_args}.}
+\code{annotate_modifiers}, \code{general_args}, and \code{extra_args}.}
 
 \item{step2_args}{Named list of MAGMA step 2 arguments. Supported entries
-include \code{gene_model}, \code{genes_only}, \code{pval_use}, \code{pval_duplicate},
-\code{bfile_synonyms}, \code{bfile_synonym_dup}, and \code{extra_args}.}
+include \code{gene_model}, \code{gene_model_modifiers}, \code{genes_only}, nested
+\code{pval = list(...)}, nested \code{bfile = list(...)}, \code{gene_settings}, \code{batch},
+\code{seed}, \code{big_data}, \code{general_args}, and \code{extra_args}.}
 
 \item{verbose}{Logical scalar. If \code{TRUE}, show a progress bar and MAGMA step
 output.}

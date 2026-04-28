@@ -86,9 +86,10 @@ run.
 Typical entries for the step-specific lists include:
 \itemize{
 \item step 1 lists: \code{annotation_window}, \code{filter_path}, \code{ignore_strand},
-\code{nonhuman}, \code{extra_args}
-\item step 2 lists: \code{gene_model}, \code{genes_only}, \code{pval_use}, \code{pval_duplicate},
-\code{bfile_synonyms}, \code{bfile_synonym_dup}, \code{extra_args}
+\code{nonhuman}, \code{annotate_modifiers}, \code{general_args}, \code{extra_args}
+\item step 2 lists: \code{gene_model}, \code{gene_model_modifiers}, \code{genes_only},
+\code{pval = list(...)}, \code{bfile = list(...)}, \code{gene_settings}, \code{batch},
+\code{seed}, \code{big_data}, \code{general_args}, \code{extra_args}
 }
 
 Example:

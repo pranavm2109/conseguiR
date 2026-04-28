@@ -304,12 +304,48 @@ setMAGMAPath <- function(path) {
 #' @param reuse_existing_analysis Whether to reuse an existing MAGMA gene
 #'   analysis output.
 #' @param keep_intermediates Whether to keep intermediate MAGMA files.
+#' @param annotation_window Optional MAGMA step 1 window passed as
+#'   `window=before,after`.
+#' @param filter_path Optional MAGMA step 1 filter file.
+#' @param ignore_strand Whether to add `ignore-strand` in MAGMA step 1.
+#' @param nonhuman Whether to add `nonhuman` in MAGMA step 1.
+#' @param annotate_modifiers Optional additional MAGMA step 1 annotation
+#'   modifiers appended after `--annotate`.
+#' @param step1_general_args Named list converted into additional MAGMA step 1
+#'   flags.
+#' @param step1_extra_args Character vector appended verbatim to the MAGMA step
+#'   1 command.
+#' @param gene_model Optional MAGMA step 2 gene model.
+#' @param gene_model_modifiers Optional additional modifiers appended after the
+#'   MAGMA step 2 gene model value.
+#' @param genes_only Whether to add `--genes-only` in MAGMA step 2.
+#' @param pval_use Optional two-element character vector naming the SNP-ID and
+#'   p-value columns supplied to MAGMA via `use=...`.
+#' @param pval_snp_id Optional explicit SNP-ID column name supplied to MAGMA
+#'   via `snp-id=...`.
+#' @param pval_pval Optional explicit p-value column name supplied to MAGMA via
+#'   `pval=...`.
+#' @param pval_duplicate Optional MAGMA duplicate-SNP handling mode.
+#' @param bfile_synonyms Optional PLINK synonym file supplied to MAGMA via
+#'   `synonyms=...`.
+#' @param bfile_synonym_dup Optional MAGMA synonym duplicate handling mode.
+#' @param gene_settings Named list of MAGMA `--gene-settings` modifiers, for
+#'   example SNP filters, pruning controls, and permutation controls.
+#' @param batch Optional MAGMA `--batch` value.
+#' @param seed Optional MAGMA `--seed` value.
+#' @param big_data Optional MAGMA `--big-data` switch. Use `TRUE` for `on` and
+#'   `FALSE` for `off`.
+#' @param step2_general_args Named list converted into additional MAGMA step 2
+#'   flags.
+#' @param step2_extra_args Character vector appended verbatim to the MAGMA step
+#'   2 command.
 #' @param step1_args Named list of MAGMA step 1 arguments. Supported entries
 #'   include `annotation_window`, `filter_path`, `ignore_strand`, `nonhuman`,
-#'   and `extra_args`.
+#'   `annotate_modifiers`, `general_args`, and `extra_args`.
 #' @param step2_args Named list of MAGMA step 2 arguments. Supported entries
-#'   include `gene_model`, `genes_only`, `pval_use`, `pval_duplicate`,
-#'   `bfile_synonyms`, `bfile_synonym_dup`, and `extra_args`.
+#'   include `gene_model`, `gene_model_modifiers`, `genes_only`, nested
+#'   `pval = list(...)`, nested `bfile = list(...)`, `gene_settings`, `batch`,
+#'   `seed`, `big_data`, `general_args`, and `extra_args`.
 #' @param verbose Logical scalar. If `TRUE`, show a progress bar and MAGMA step
 #'   output.
 #'
@@ -337,16 +373,22 @@ setMAGMAPath <- function(path) {
 #'   filter_path = NULL,
 #'   ignore_strand = FALSE,
 #'   nonhuman = FALSE,
+#'   annotate_modifiers = NULL,
+#'   general_args = list(),
 #'   extra_args = character()
 #' )`
 #'
 #' `step2_args = list(
 #'   gene_model = \"snp-wise=mean\",
+#'   gene_model_modifiers = NULL,
 #'   genes_only = TRUE,
-#'   pval_use = c(\"SNP\", \"P\"),
-#'   pval_duplicate = \"drop\",
-#'   bfile_synonyms = NULL,
-#'   bfile_synonym_dup = NULL,
+#'   pval = list(use = c(\"SNP\", \"P\"), duplicate = \"drop\"),
+#'   bfile = list(synonyms = NULL, synonym_dup = NULL),
+#'   gene_settings = list(),
+#'   batch = NULL,
+#'   seed = NULL,
+#'   big_data = NULL,
+#'   general_args = list(),
 #'   extra_args = character()
 #' )`
 #'
@@ -360,20 +402,17 @@ setMAGMAPath <- function(path) {
 #' In plain language:
 #'
 #' - MAGMA step 1 (`step1_args`) controls how SNPs are assigned to features.
-#'   The most important knob is usually `annotation_window`, which expands the
-#'   feature boundaries upstream and downstream before MAGMA annotates SNPs.
-#' - MAGMA step 2 (`step2_args`) controls how annotated SNP-level signal is
-#'   collapsed into one feature-level statistic. The most important knobs are
-#'   usually `gene_model`, `pval_use`, and `pval_duplicate`.
-#' - `pval_use = c("SNP", "P")` tells MAGMA which columns in the p-value file
-#'   correspond to SNP IDs and p-values.
-#' - `pval_duplicate` follows MAGMA's own duplicate-SNP handling, for example
-#'   `"drop"`, `"first"`, `"last"`, or `"error"`.
-#' - `genes_only = TRUE` is a practical default when you want the standard
-#'   feature-level MAGMA result rather than broader auxiliary outputs.
-#' - `gene_model = "snp-wise=mean"` is a common starting point because it asks
-#'   MAGMA to summarize SNP-level signal across the assigned feature rather than
-#'   relying on a single top SNP.
+#'   The usual controls are `annotation_window`, `filter_path`,
+#'   `ignore_strand`, and `nonhuman`.
+#' - MAGMA step 2 (`step2_args`) controls how SNP-level p-values are read and
+#'   how feature-level statistics are fit. The usual controls are
+#'   `gene_model`, `genes_only`, the `pval` list, the `bfile` list,
+#'   `gene_settings`, `batch`, `seed`, and `big_data`.
+#' - `pval_use = c("SNP", "P")` is the compact MAGMA syntax for the SNP-ID and
+#'   p-value columns; `pval_snp_id` and `pval_pval` expose the explicit
+#'   `snp-id=...` and `pval=...` forms.
+#' - `sample_size` and `sample_size_col` correspond to MAGMA's fixed `N=...`
+#'   and column-driven `ncol=...` p-value modes.
 #'
 #' MAGMA manual:
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
@@ -631,9 +670,10 @@ run_germline_regulatory_scoring <- function(
 #' Typical entries for the step-specific lists include:
 #'
 #' - step 1 lists: `annotation_window`, `filter_path`, `ignore_strand`,
-#'   `nonhuman`, `extra_args`
-#' - step 2 lists: `gene_model`, `genes_only`, `pval_use`, `pval_duplicate`,
-#'   `bfile_synonyms`, `bfile_synonym_dup`, `extra_args`
+#'   `nonhuman`, `annotate_modifiers`, `general_args`, `extra_args`
+#' - step 2 lists: `gene_model`, `gene_model_modifiers`, `genes_only`,
+#'   `pval = list(...)`, `bfile = list(...)`, `gene_settings`, `batch`,
+#'   `seed`, `big_data`, `general_args`, `extra_args`
 #'
 #' Example:
 #'
@@ -704,8 +744,8 @@ prepare_germline_scores <- function(
 
 #' Run dndscv somatic gene scoring
 #'
-#' This wrapper exposes the core dndscv settings used by the current pipeline
-#' and leaves less common controls available through `dndscv_args`.
+#' This wrapper exposes the relevant `dndscv()` parameter surface used by the
+#' package, while still allowing additional passthrough through `dndscv_args`.
 #'
 #' @param maf Somatic MAF path or table.
 #' @param refdb dndscv reference database path.
@@ -713,6 +753,19 @@ prepare_germline_scores <- function(
 #' @param cv Optional dndscv covariates.
 #' @param max_muts_per_gene_per_sample dndscv gene-level mutation cap.
 #' @param max_coding_muts_per_sample dndscv sample-level coding mutation cap.
+#' @param gene_list Optional vector of genes passed to `dndscv()`.
+#' @param sm dndscv substitution model.
+#' @param kc dndscv known-cancer-gene setting.
+#' @param use_indel_sites Whether dndscv should use indel sites.
+#' @param min_indels Minimum number of indels for dndscv indel modeling.
+#' @param maxcovs Maximum number of covariates passed to dndscv.
+#' @param constrain_wnon_wspl Whether to constrain `wnon == wspl` in dndscv.
+#' @param outp dndscv output level.
+#' @param numcode Genetic code used by dndscv.
+#' @param outmats Whether dndscv should return count/exposure matrices.
+#' @param mingenecovs Minimum number of genes for dndscv covariate modeling.
+#' @param onesided Optional dndscv one-sided testing switch.
+#' @param dc Optional dndscv duplex-coverage vector.
 #' @param dndscv_args Named list of additional dndscv arguments.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages and dndscv
 #'   output.
@@ -757,10 +810,7 @@ prepare_germline_scores <- function(
 #'
 #' Minimal examples:
 #'
-#' `dndscv_args = list(
-#'   sm = \"192r_3w\",
-#'   kc = \"cgc81\"
-#' )`
+#' `dndscv_args = list()`
 #'
 #' `cv = NULL`
 #'
@@ -826,9 +876,9 @@ run_somatic_gene_scoring <- function(
 
 #' Run fishHook somatic regulatory scoring
 #'
-#' This wrapper exposes the main fishHook configuration surface used by the
-#' package workflow and leaves less common model tuning available through
-#' `fishhook_args`.
+#' This wrapper exposes the relevant fishHook constructor and
+#' `score.hypotheses()` parameter surfaces used by the package, while still
+#' allowing additional passthrough through `fishhook_args`.
 #'
 #' @inheritParams run_somatic_gene_scoring
 #' @param reg_ref_path Regulatory-element reference path.
@@ -836,6 +886,33 @@ run_somatic_gene_scoring <- function(
 #' @param fishhook_covariates Optional fishHook covariate objects/specifications.
 #' @param fishhook_covariate_data Optional tabular covariate data.
 #' @param idcol Sample identifier column for fishHook.
+#' @param constructor_out_path Optional fishHook constructor output path.
+#' @param constructor_use_local_mut_density Whether fishHook should add the
+#'   local-mutation-density constructor branch.
+#' @param constructor_local_mut_density_bin Bin size for fishHook local mutation
+#'   density.
+#' @param constructor_mc_cores fishHook constructor parallel worker count.
+#' @param constructor_na_rm Whether fishHook constructor covariates drop `NA`.
+#' @param constructor_pad fishHook constructor padding.
+#' @param constructor_max_slice fishHook constructor `max.slice`.
+#' @param constructor_ff_chunk fishHook constructor `ff.chunk`.
+#' @param constructor_max_chunk fishHook constructor `max.chunk`.
+#' @param constructor_idcap fishHook constructor `idcap`.
+#' @param constructor_weight_events Whether fishHook constructor should weight
+#'   events.
+#' @param constructor_nb fishHook constructor negative-binomial switch.
+#' @param score_sets Optional sets passed to `fishHook::score.hypotheses()`.
+#' @param score_model Optional score model passed to fishHook.
+#' @param score_return_model Whether to request the fishHook fitted model.
+#' @param score_nb Optional score-side negative-binomial switch.
+#' @param score_iter Optional score-side maximum iteration count.
+#' @param score_subsample Optional fishHook score subsample size.
+#' @param score_seed Optional fishHook score seed.
+#' @param score_verbose Optional fishHook score verbosity override.
+#' @param score_mc_cores Optional fishHook score parallel worker count.
+#' @param score_p_randomized Optional fishHook randomized-p setting.
+#' @param score_class_return Whether fishHook should return the classed result
+#'   object.
 #' @param fishhook_args Named list of additional fishHook scoring arguments.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages and fishHook
 #'   output.
@@ -1008,10 +1085,13 @@ run_somatic_regulatory_scoring <- function(
 #'
 #' - gene-level dndscv controls: `gene_cv`,
 #'   `gene_max_muts_per_gene_per_sample`,
-#'   `gene_max_coding_muts_per_sample`, `dndscv_args`
+#'   `gene_max_coding_muts_per_sample`, `gene_list`, `sm`, `kc`,
+#'   `use_indel_sites`, `min_indels`, `maxcovs`, `constrain_wnon_wspl`,
+#'   `outp`, `numcode`, `outmats`, `mingenecovs`, `onesided`, `dc`,
+#'   `dndscv_args`
 #' - regulatory-level fishHook controls: `eligible_gr`,
 #'   `fishhook_covariates`, `fishhook_covariate_data`, `fishhook_idcol`,
-#'   `fishhook_args`
+#'   constructor-side controls, score-side controls, and `fishhook_args`
 #'
 #' A good mental model is:
 #'
@@ -2238,17 +2318,26 @@ plot_selected_subgraph <- function(
 #' `germline_args = list(
 #'   gene_sample_size = 456348,
 #'   reg_sample_size = 456348,
-#'   gene_step1_args = list(annotation_window = c(35, 10)),
-#'   gene_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\")),
+#'   gene_step1_args = list(annotation_window = c(35, 10), ignore_strand = TRUE),
+#'   gene_step2_args = list(
+#'     gene_model = \"snp-wise=mean\",
+#'     pval = list(use = c(\"SNP\", \"P\"), duplicate = \"drop\")
+#'   ),
 #'   reg_step1_args = list(annotation_window = c(0, 0)),
-#'   reg_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\"))
+#'   reg_step2_args = list(
+#'     pval = list(use = c(\"SNP\", \"P\"), duplicate = \"drop\")
+#'   ),
+#'   shared_args = list(reuse_existing_gwas_cache = TRUE)
 #' )`
 #'
 #' `somatic_args = list(
 #'   gene_cv = NULL,
-#'   dndscv_args = list(sm = \"192r_3w\"),
+#'   sm = \"192r_3w\",
+#'   kc = \"cgc81\",
 #'   eligible_gr = NULL,
 #'   fishhook_covariate_data = covariate_dt,
+#'   constructor_use_local_mut_density = FALSE,
+#'   score_iter = 25L,
 #'   fishhook_args = list()
 #' )`
 #'

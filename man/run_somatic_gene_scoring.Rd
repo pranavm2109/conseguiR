@@ -11,6 +11,19 @@ run_somatic_gene_scoring(
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
+  gene_list = NULL,
+  sm = "192r_3w",
+  kc = "cgc81",
+  use_indel_sites = TRUE,
+  min_indels = 5L,
+  maxcovs = 20L,
+  constrain_wnon_wspl = TRUE,
+  outp = 3L,
+  numcode = 1L,
+  outmats = FALSE,
+  mingenecovs = 500L,
+  onesided = NULL,
+  dc = NULL,
   dndscv_args = list(),
   verbose = FALSE
 )
@@ -28,6 +41,32 @@ run_somatic_gene_scoring(
 
 \item{max_coding_muts_per_sample}{dndscv sample-level coding mutation cap.}
 
+\item{gene_list}{Optional vector of genes passed to \code{dndscv()}.}
+
+\item{sm}{dndscv substitution model.}
+
+\item{kc}{dndscv known-cancer-gene setting.}
+
+\item{use_indel_sites}{Whether dndscv should use indel sites.}
+
+\item{min_indels}{Minimum number of indels for dndscv indel modeling.}
+
+\item{maxcovs}{Maximum number of covariates passed to dndscv.}
+
+\item{constrain_wnon_wspl}{Whether to constrain \code{wnon == wspl} in dndscv.}
+
+\item{outp}{dndscv output level.}
+
+\item{numcode}{Genetic code used by dndscv.}
+
+\item{outmats}{Whether dndscv should return count/exposure matrices.}
+
+\item{mingenecovs}{Minimum number of genes for dndscv covariate modeling.}
+
+\item{onesided}{Optional dndscv one-sided testing switch.}
+
+\item{dc}{Optional dndscv duplex-coverage vector.}
+
 \item{dndscv_args}{Named list of additional dndscv arguments.}
 
 \item{verbose}{Logical scalar. If \code{TRUE}, show stage messages and dndscv
@@ -37,8 +76,8 @@ output.}
 A somatic gene score bundle.
 }
 \description{
-This wrapper exposes the core dndscv settings used by the current pipeline
-and leaves less common controls available through \code{dndscv_args}.
+This wrapper exposes the relevant \code{dndscv()} parameter surface used by the
+package, while still allowing additional passthrough through \code{dndscv_args}.
 }
 \details{
 Exact formatting:
@@ -82,7 +121,7 @@ are scoring.
 
 Minimal examples:
 
-\verb{dndscv_args = list( sm = \\"192r_3w\\", kc = \\"cgc81\\" )}
+\code{dndscv_args = list()}
 
 \code{cv = NULL}
 

@@ -12,6 +12,29 @@ run_somatic_regulatory_scoring(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
+  constructor_out_path = NULL,
+  constructor_use_local_mut_density = FALSE,
+  constructor_local_mut_density_bin = 1e+06,
+  constructor_mc_cores = 1L,
+  constructor_na_rm = TRUE,
+  constructor_pad = 0,
+  constructor_max_slice = 1e+05,
+  constructor_ff_chunk = 1e+06,
+  constructor_max_chunk = 1e+12,
+  constructor_idcap = 1,
+  constructor_weight_events = FALSE,
+  constructor_nb = TRUE,
+  score_sets = NULL,
+  score_model = NULL,
+  score_return_model = TRUE,
+  score_nb = NULL,
+  score_iter = NULL,
+  score_subsample = NULL,
+  score_seed = NULL,
+  score_verbose = NULL,
+  score_mc_cores = NULL,
+  score_p_randomized = NULL,
+  score_class_return = TRUE,
   fishhook_args = list(),
   verbose = FALSE
 )
@@ -31,6 +54,56 @@ run_somatic_regulatory_scoring(
 
 \item{idcol}{Sample identifier column for fishHook.}
 
+\item{constructor_out_path}{Optional fishHook constructor output path.}
+
+\item{constructor_use_local_mut_density}{Whether fishHook should add the
+local-mutation-density constructor branch.}
+
+\item{constructor_local_mut_density_bin}{Bin size for fishHook local mutation
+density.}
+
+\item{constructor_mc_cores}{fishHook constructor parallel worker count.}
+
+\item{constructor_na_rm}{Whether fishHook constructor covariates drop \code{NA}.}
+
+\item{constructor_pad}{fishHook constructor padding.}
+
+\item{constructor_max_slice}{fishHook constructor \code{max.slice}.}
+
+\item{constructor_ff_chunk}{fishHook constructor \code{ff.chunk}.}
+
+\item{constructor_max_chunk}{fishHook constructor \code{max.chunk}.}
+
+\item{constructor_idcap}{fishHook constructor \code{idcap}.}
+
+\item{constructor_weight_events}{Whether fishHook constructor should weight
+events.}
+
+\item{constructor_nb}{fishHook constructor negative-binomial switch.}
+
+\item{score_sets}{Optional sets passed to \code{fishHook::score.hypotheses()}.}
+
+\item{score_model}{Optional score model passed to fishHook.}
+
+\item{score_return_model}{Whether to request the fishHook fitted model.}
+
+\item{score_nb}{Optional score-side negative-binomial switch.}
+
+\item{score_iter}{Optional score-side maximum iteration count.}
+
+\item{score_subsample}{Optional fishHook score subsample size.}
+
+\item{score_seed}{Optional fishHook score seed.}
+
+\item{score_verbose}{Optional fishHook score verbosity override.}
+
+\item{score_mc_cores}{Optional fishHook score parallel worker count.}
+
+\item{score_p_randomized}{Optional fishHook randomized-p setting.}
+
+\item{score_class_return}{Whether fishHook should return the classed result
+object.}
+
 \item{fishhook_args}{Named list of additional fishHook scoring arguments.}
 
 \item{verbose}{Logical scalar. If \code{TRUE}, show stage messages and fishHook
@@ -40,9 +113,9 @@ output.}
 A somatic regulatory score bundle.
 }
 \description{
-This wrapper exposes the main fishHook configuration surface used by the
-package workflow and leaves less common model tuning available through
-\code{fishhook_args}.
+This wrapper exposes the relevant fishHook constructor and
+\code{score.hypotheses()} parameter surfaces used by the package, while still
+allowing additional passthrough through \code{fishhook_args}.
 }
 \details{
 Exact formatting:
