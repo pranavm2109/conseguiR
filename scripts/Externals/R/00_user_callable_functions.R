@@ -1814,6 +1814,8 @@ plot_selected_subgraph <- function(
 #' @param feature_column Optional explicit feature-label column.
 #' @param z_column Z-score column name.
 #' @param p_value_column Optional explicit p-value column for volcano plots.
+#' @param drop_tukey_outliers Logical scalar. If `TRUE`, remove extreme
+#'   volcano-plot outliers using Tukey's upper-fence rule on `-log10(p)`.
 #' @param label_features Optional character vector of features to label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
@@ -1831,6 +1833,7 @@ plot_scores <- function(
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
+  drop_tukey_outliers = FALSE,
   label_features = NULL,
   title = "conseguiR Scores",
   width = 10,
@@ -1849,6 +1852,7 @@ plot_scores <- function(
     feature_column = feature_column,
     z_column = z_column,
     p_value_column = p_value_column,
+    drop_tukey_outliers = drop_tukey_outliers,
     label_features = label_features,
     title = title
   )
@@ -1874,6 +1878,7 @@ plot_scores <- function(
       feature_column = feature_column,
       z_column = z_column,
       p_value_column = p_value_column,
+      drop_tukey_outliers = drop_tukey_outliers,
       label_features = label_features,
       title = title,
       width = export_width,
@@ -1897,6 +1902,7 @@ plot_scores <- function(
       feature_column = feature_column,
       z_column = z_column,
       p_value_column = p_value_column,
+      drop_tukey_outliers = drop_tukey_outliers,
       plot_mode = plot_obj$plot_mode,
       export_width = export_width,
       export_height = export_height

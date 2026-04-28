@@ -77,6 +77,32 @@ test_volcano_plotting_works <- function() {
   expect_true(file.exists(output_path))
 }
 
+test_volcano_plotting_can_drop_tukey_outliers <- function() {
+  tbl <- data.table(
+    gene_id = c("KMT2D", "TP53", "MYC", "BCL2", "PAX5", "IRF4", "EZH2"),
+    p_value = c(1e-80, 1e-8, 2e-4, 0.02, 0.03, 0.04, 0.06),
+    zstat = c(18, 5.8, 3.6, 2.2, 2.0, 1.9, 1.5)
+  )
+
+  kept <- plot_scores(
+    table = tbl,
+    test_tail = "two_tailed",
+    drop_tukey_outliers = FALSE,
+    save_plot = FALSE
+  )
+
+  trimmed <- plot_scores(
+    table = tbl,
+    test_tail = "two_tailed",
+    drop_tukey_outliers = TRUE,
+    save_plot = FALSE
+  )
+
+  expect_equal(nrow(kept$objects$plot_data), nrow(tbl))
+  expect_lt(nrow(trimmed$objects$plot_data), nrow(kept$objects$plot_data))
+  expect_false("KMT2D" %in% trimmed$objects$plot_data$feature_id_plot)
+}
+
 test_plotting_requires_output_path_when_saving <- function() {
   expect_error(
     plot_scores(
@@ -99,6 +125,10 @@ main <- function() {
 
   test_that("plot_scores makes a volcano plot on a two-tailed table", {
     test_volcano_plotting_works()
+  })
+
+  test_that("plot_scores can remove extreme volcano outliers with Tukey filtering", {
+    test_volcano_plotting_can_drop_tukey_outliers()
   })
 
   test_that("plot_scores validates save arguments", {

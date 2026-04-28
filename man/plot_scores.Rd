@@ -13,6 +13,7 @@ plot_scores(
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
+  drop_tukey_outliers = FALSE,
   label_features = NULL,
   title = "conseguiR Scores",
   width = 10,
@@ -40,6 +41,9 @@ plot_scores(
 \item{z_column}{Z-score column name.}
 
 \item{p_value_column}{Optional explicit p-value column for volcano plots.}
+
+\item{drop_tukey_outliers}{Logical scalar. If \code{TRUE}, remove extreme
+volcano-plot outliers using Tukey's upper-fence rule on \code{-log10(p)}.}
 
 \item{label_features}{Optional character vector of features to label.}
 
@@ -76,6 +80,9 @@ a \code{zstat}-like numeric column
 \item \code{which}: when \code{scores} contains multiple tables, use values like
 \code{"gene_scores"}, \code{"reg_scores"}, \code{"all_genes"}, or \code{"top_genes"}
 \item \code{test_tail = "two_tailed"} expects a usable p-value column in the table
+\item \code{drop_tukey_outliers = TRUE} trims extreme volcano-plot y-axis outliers
+before plotting, which can help when one feature is far more significant
+than the rest
 \item \code{plot_file_path}: a single file path such as \code{"scores_plot.pdf"}
 }
 }

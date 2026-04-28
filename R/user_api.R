@@ -1663,6 +1663,8 @@ call_selected_subgraph <- function(
 #' @param feature_column Optional explicit feature-label column.
 #' @param z_column Z-score column name.
 #' @param p_value_column Optional explicit p-value column for volcano plots.
+#' @param drop_tukey_outliers Logical scalar. If `TRUE`, remove extreme
+#'   volcano-plot outliers using Tukey's upper-fence rule on `-log10(p)`.
 #' @param label_features Optional character vector of features to label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
@@ -1684,6 +1686,9 @@ call_selected_subgraph <- function(
 #' - `which`: when `scores` contains multiple tables, use values like
 #'   `"gene_scores"`, `"reg_scores"`, `"all_genes"`, or `"top_genes"`
 #' - `test_tail = "two_tailed"` expects a usable p-value column in the table
+#' - `drop_tukey_outliers = TRUE` trims extreme volcano-plot y-axis outliers
+#'   before plotting, which can help when one feature is far more significant
+#'   than the rest
 #' - `plot_file_path`: a single file path such as `"scores_plot.pdf"`
 #'
 #' @examples
@@ -1705,6 +1710,7 @@ plot_scores <- function(
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
+  drop_tukey_outliers = FALSE,
   label_features = NULL,
   title = "conseguiR Scores",
   width = 10,
@@ -1722,6 +1728,7 @@ plot_scores <- function(
     feature_column = feature_column,
     z_column = z_column,
     p_value_column = p_value_column,
+    drop_tukey_outliers = drop_tukey_outliers,
     label_features = label_features,
     title = title,
     width = width,

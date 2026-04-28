@@ -327,6 +327,26 @@ prepare_volcano_display_axes <- function(dt) {
   )
 }
 
+apply_tukey_volcano_filter <- function(dt, tukey_k = 1.5) {
+  dt <- data.table::copy(dt)
+
+  finite_logp <- dt$neglog10_p[is.finite(dt$neglog10_p)]
+  if (length(finite_logp) < 4L) {
+    return(dt)
+  }
+
+  q1 <- stats::quantile(finite_logp, probs = 0.25, names = FALSE, na.rm = TRUE)
+  q3 <- stats::quantile(finite_logp, probs = 0.75, names = FALSE, na.rm = TRUE)
+  iqr <- q3 - q1
+
+  if (!is.finite(iqr) || iqr <= 0) {
+    return(dt)
+  }
+
+  upper_fence <- q3 + tukey_k * iqr
+  dt[!is.finite(neglog10_p) | neglog10_p <= upper_fence]
+}
+
 create_score_plot <- function(
   bundle = NULL,
   table = NULL,
@@ -335,6 +355,7 @@ create_score_plot <- function(
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
+  drop_tukey_outliers = FALSE,
   label_features = NULL,
   title = "conseguiR Scores"
 ) {
@@ -384,6 +405,9 @@ create_score_plot <- function(
     )
 
   if (identical(plot_mode, "volcano")) {
+    if (isTRUE(drop_tukey_outliers)) {
+      dt <- apply_tukey_volcano_filter(dt)
+    }
     volcano_display <- prepare_volcano_display_axes(dt)
     dt <- volcano_display$table
     p <- ggplot2::ggplot(dt, ggplot2::aes(x = z_display, y = neglog10_p_display)) +
@@ -467,6 +491,7 @@ save_score_plot <- function(
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
+  drop_tukey_outliers = FALSE,
   label_features = NULL,
   title = "conseguiR Scores",
   width = 10,
@@ -487,6 +512,7 @@ save_score_plot <- function(
     feature_column = feature_column,
     z_column = z_column,
     p_value_column = p_value_column,
+    drop_tukey_outliers = drop_tukey_outliers,
     label_features = label_features,
     title = title
   )
