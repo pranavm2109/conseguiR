@@ -6,13 +6,83 @@ suppressPackageStartupMessages({
   library(GenomicRanges)
 })
 
+source("R/zzz.R")
 source("R/backend_resources.R")
+source("R/user_api.R")
 source("scripts/Internals/R/04_prepare_somatic_scores.R")
+
+.onLoad(libname = ".", pkgname = "conseguiR")
+
+expected_dndscv_formals <- c(
+  "maf", "refdb", "output_path", "cv", "max_muts_per_gene_per_sample",
+  "max_coding_muts_per_sample", "gene_list", "sm", "kc", "use_indel_sites",
+  "min_indels", "maxcovs", "constrain_wnon_wspl", "outp", "numcode",
+  "outmats", "mingenecovs", "onesided", "dc", "dndscv_args", "verbose"
+)
+
+expected_fishhook_constructor_formals <- c(
+  "maf", "reg_ref_path", "output_path", "eligible_gr", "fishhook_covariates",
+  "fishhook_covariate_data", "idcol", "constructor_out_path",
+  "constructor_use_local_mut_density", "constructor_local_mut_density_bin",
+  "constructor_mc_cores", "constructor_na_rm", "constructor_pad",
+  "constructor_max_slice", "constructor_ff_chunk", "constructor_max_chunk",
+  "constructor_idcap", "constructor_weight_events", "constructor_nb"
+)
+
+expected_fishhook_score_formals <- c(
+  "score_sets", "score_model", "score_return_model", "score_nb", "score_iter",
+  "score_subsample", "score_seed", "score_verbose", "score_mc_cores",
+  "score_p_randomized", "score_class_return", "fishhook_args", "verbose"
+)
+
+expected_prepare_somatic_formals <- c(
+  "maf", "refdb", "reg_ref_path", "gene_output_path", "reg_output_path",
+  "gene_cv", "gene_max_muts_per_gene_per_sample",
+  "gene_max_coding_muts_per_sample", "gene_list", "sm", "kc",
+  "use_indel_sites", "min_indels", "maxcovs", "constrain_wnon_wspl",
+  "outp", "numcode", "outmats", "mingenecovs", "onesided", "dc",
+  "dndscv_args", "eligible_gr", "fishhook_covariates",
+  "fishhook_covariate_data", "fishhook_idcol", "constructor_out_path",
+  "constructor_use_local_mut_density", "constructor_local_mut_density_bin",
+  "constructor_mc_cores", "constructor_na_rm", "constructor_pad",
+  "constructor_max_slice", "constructor_ff_chunk", "constructor_max_chunk",
+  "constructor_idcap", "constructor_weight_events", "constructor_nb",
+  "score_sets", "score_model", "score_return_model", "score_nb",
+  "score_iter", "score_subsample", "score_seed", "score_verbose",
+  "score_mc_cores", "score_p_randomized", "score_class_return",
+  "fishhook_args", "verbose"
+)
 
 default_somatic_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcga_order_hg38.maf"
 default_reg_ref_path <- .conseguiR_default_reg_loc_path()
 default_fishhook_covariate_path <- "data/raw/Testing/2026-01-26_all_reg_elems_sample_level_mut_frac_comparison_bet_only_memory_b_normal_and_non_cll_malig_b_cells.rds"
 default_dndscv_refdb <- "data/raw/Testing/RefCDS_human_GRCh38.p12.rda"
+default_somatic_test_output_dir <- "data/processed/test_outputs/somatic"
+
+make_somatic_test_path <- function(stem, ext = "") {
+  dir.create(default_somatic_test_output_dir, recursive = TRUE, showWarnings = FALSE)
+  file.path(
+    default_somatic_test_output_dir,
+    paste0(
+      stem, "_",
+      format(Sys.time(), "%Y%m%d%H%M%S"), "_",
+      sprintf("%06d", sample.int(999999L, 1L)),
+      ext
+    )
+  )
+}
+
+print_somatic_coverage_summary <- function() {
+  message("Somatic coverage matrix in this script:")
+  message("  dndscv parameters asserted:")
+  message("    refdb, gene_list, sm, kc, cv, max_muts_per_gene_per_sample, max_coding_muts_per_sample, use_indel_sites, min_indels, maxcovs, constrain_wnon_wspl, outp, numcode, outmats, mingenecovs, onesided, dc, dndscv_args, verbose")
+  message("  fishHook constructor parameters asserted:")
+  message("    eligible_gr, fishhook_covariates, fishhook_covariate_data, idcol, constructor_out_path, constructor_use_local_mut_density, constructor_local_mut_density_bin, constructor_mc_cores, constructor_na_rm, constructor_pad, constructor_max_slice, constructor_ff_chunk, constructor_max_chunk, constructor_idcap, constructor_weight_events, constructor_nb, verbose")
+  message("  fishHook score parameters asserted:")
+  message("    score_sets, score_model, score_return_model, score_nb, score_iter, score_subsample, score_seed, score_verbose, score_mc_cores, score_p_randomized, score_class_return, fishhook_args, verbose")
+  message("  Wrapper paths asserted:")
+  message("    run_somatic_gene_scoring, run_somatic_regulatory_scoring, prepare_somatic_scores")
+}
 
 fishhook_covariate_overlap_count <- function(reg_ref_path = default_reg_ref_path,
                                              covariate_path = default_fishhook_covariate_path) {
@@ -43,6 +113,17 @@ make_dummy_maf <- function() {
     Tumor_Seq_Allele2 = c("T", "A", "T"),
     Hugo_Symbol = c("TP53", "KRAS", "BRAF")
   )
+}
+
+with_traced_namespace_function <- function(fun_name, pkg, tracer_expr, code) {
+  trace(
+    fun_name,
+    where = asNamespace(pkg),
+    tracer = tracer_expr,
+    print = FALSE
+  )
+  on.exit(untrace(fun_name, where = asNamespace(pkg)), add = TRUE)
+  force(code)
 }
 
 find_dndscv_refdb <- function() {
@@ -159,6 +240,206 @@ test_run_fishhook_reg_scoring_negative_bad_reg_reference <- function() {
     regexp = "Regulatory element reference file does not exist",
     fixed = TRUE
   )
+}
+
+test_run_dndscv_gene_scoring_forwards_supported_args <- function() {
+  skip_if_not_installed("dndscv")
+
+  refdb <- find_dndscv_refdb()
+  if (is.null(refdb)) {
+    skip("No dndscv refdb found in the repository.")
+  }
+
+  captured <- new.env(parent = emptyenv())
+  cv_mat <- matrix(
+    c(1, 2, 3, 4),
+    nrow = 2L,
+    dimnames = list(c("TP53", "KRAS"), c("cov1", "cov2"))
+  )
+
+  expect_error(
+    with_traced_namespace_function(
+      "dndscv",
+      "dndscv",
+      bquote({
+        assign("args", as.list(environment()), envir = .(captured))
+        stop("captured dndscv call")
+      }),
+      run_somatic_gene_scoring(
+        maf = make_dummy_maf(),
+        refdb = refdb,
+        max_muts_per_gene_per_sample = 9L,
+        max_coding_muts_per_sample = 1234L,
+        gene_list = c("TP53", "KRAS"),
+        sm = "192r_3w",
+        kc = "cgc81",
+        cv = cv_mat,
+        use_indel_sites = FALSE,
+        min_indels = 1L,
+        maxcovs = 7L,
+        constrain_wnon_wspl = FALSE,
+        outp = 1L,
+        numcode = 1L,
+        outmats = TRUE,
+        mingenecovs = 100L,
+        onesided = TRUE,
+        dc = c(TP53 = 1, KRAS = 2),
+        dndscv_args = list()
+      )
+    ),
+    regexp = "captured dndscv call",
+    fixed = TRUE
+  )
+
+  args <- get("args", envir = captured, inherits = FALSE)
+  expect_true(is.data.frame(args$mutations))
+  expect_identical(names(args$mutations), c("sampleID", "chr", "pos", "ref", "mut"))
+  expect_identical(args$refdb, refdb)
+  expect_true(is.matrix(args$cv))
+  expect_identical(dim(args$cv), c(2L, 2L))
+  expect_identical(colnames(args$cv), c("cov1", "cov2"))
+  expect_equal(args$max_muts_per_gene_per_sample, 9L)
+  expect_equal(args$max_coding_muts_per_sample, 1234L)
+  expect_identical(args$sm, "192r_3w")
+  expect_identical(args$kc, "cgc81")
+  expect_identical(args$use_indel_sites, FALSE)
+  expect_equal(args$min_indels, 1L)
+  expect_equal(args$maxcovs, 7L)
+  expect_identical(args$constrain_wnon_wspl, FALSE)
+  expect_equal(args$outp, 1L)
+  expect_equal(args$numcode, 1L)
+  expect_identical(args$outmats, TRUE)
+  expect_equal(args$mingenecovs, 100L)
+  expect_identical(args$onesided, TRUE)
+  expect_equal(as.character(args$gene_list), c("TP53", "KRAS"))
+  expect_true(is.numeric(args$dc))
+  expect_equal(unname(args$dc), c(1, 2))
+}
+
+test_run_fishhook_reg_scoring_forwards_constructor_args <- function() {
+  skip_if_not_installed("fishHook")
+  skip_if_not_installed("BSgenome.Hsapiens.UCSC.hg38")
+
+  captured <- new.env(parent = emptyenv())
+  eligible_gr <- make_fishhook_eligible_hg38()
+  cov_gr_full <- make_fishhook_hypothesis_granges("data/raw/Testing/reg_elements_valid.loc")
+  cov_gr <- cov_gr_full[seq_len(min(10L, length(cov_gr_full)))]
+  cov_obj <- fishHook::Cov(data = cov_gr, name = "dummy_covariate")
+
+  expect_error(
+    with_traced_namespace_function(
+      "Fish",
+      "fishHook",
+      bquote({
+        assign("args", as.list(environment()), envir = .(captured))
+        stop("captured Fish constructor")
+      }),
+      run_somatic_regulatory_scoring(
+        maf = make_dummy_maf(),
+        reg_ref_path = "data/raw/Testing/reg_elements_valid.loc",
+        eligible_gr = eligible_gr,
+        fishhook_covariates = list(cov_obj),
+        idcol = "Tumor_Sample_Barcode",
+        constructor_out_path = tempdir(),
+        constructor_use_local_mut_density = TRUE,
+        constructor_local_mut_density_bin = 500000,
+        constructor_mc_cores = 3L,
+        constructor_na_rm = FALSE,
+        constructor_pad = 25,
+        constructor_max_slice = 5000L,
+        constructor_ff_chunk = 25000L,
+        constructor_max_chunk = 500000L,
+        constructor_idcap = 2,
+        constructor_weight_events = TRUE,
+        constructor_nb = FALSE,
+        verbose = TRUE
+      )
+    ),
+    regexp = "captured Fish constructor",
+    fixed = TRUE
+  )
+
+  args <- get("args", envir = captured, inherits = FALSE)
+  expect_s4_class(args$hypotheses, "GRanges")
+  expect_s4_class(args$events, "GRanges")
+  expect_s4_class(args$eligible, "GRanges")
+  expect_identical(args$idcol, "Tumor_Sample_Barcode")
+  expect_true(is.list(args$covariates))
+  expect_length(args$covariates, 1L)
+  expect_identical(args$out.path, tempdir())
+  expect_identical(args$use_local_mut_density, TRUE)
+  expect_equal(args$local_mut_density_bin, 500000)
+  expect_equal(args$mc.cores, 3L)
+  expect_identical(args$na.rm, FALSE)
+  expect_equal(args$pad, 25)
+  expect_identical(args$verbose, TRUE)
+  expect_equal(args$max.slice, 5000L)
+  expect_equal(args$ff.chunk, 25000L)
+  expect_equal(args$max.chunk, 500000L)
+  expect_equal(args$idcap, 2)
+  expect_identical(args$weightEvents, TRUE)
+  expect_identical(args$nb, FALSE)
+}
+
+test_run_fishhook_reg_scoring_forwards_score_args <- function() {
+  skip_if_not_installed("fishHook")
+  skip_if_not_installed("BSgenome.Hsapiens.UCSC.hg38")
+
+  captured <- new.env(parent = emptyenv())
+  score_sets <- list(dummy_set = c("EH38E0080197", "EH38E2084302"))
+
+  expect_error(
+    with_traced_namespace_function(
+      "score.hypotheses",
+      "fishHook",
+      bquote({
+        assign("args", as.list(environment()), envir = .(captured))
+        stop("captured fishHook score")
+      }),
+      run_somatic_regulatory_scoring(
+        maf = make_dummy_maf(),
+        reg_ref_path = "data/raw/Testing/reg_elements_valid.loc",
+        score_model = "negbin",
+        score_return_model = FALSE,
+        score_nb = FALSE,
+        score_iter = 5L,
+        score_subsample = 250L,
+        score_sets = score_sets,
+        score_seed = 99L,
+        score_verbose = FALSE,
+        score_mc_cores = 2L,
+        score_p_randomized = FALSE,
+        score_class_return = FALSE,
+        fishhook_args = list()
+      )
+    ),
+    regexp = "captured fishHook score",
+    fixed = TRUE
+  )
+
+  args <- get("args", envir = captured, inherits = FALSE)
+  expect_identical(args$model, "negbin")
+  expect_identical(args$return.model, FALSE)
+  expect_identical(args$nb, FALSE)
+  expect_equal(args$iter, 5L)
+  expect_equal(args$subsample, 250L)
+  expect_identical(args$sets, score_sets)
+  expect_equal(args$seed, 99L)
+  expect_identical(args$verbose, FALSE)
+  expect_equal(args$mc.cores, 2L)
+  expect_identical(args$p.randomized, FALSE)
+  expect_identical(args$classReturn, FALSE)
+}
+
+test_somatic_wrapper_surfaces_match_supported_api <- function() {
+  gene_formals <- names(formals(run_somatic_gene_scoring))
+  reg_formals <- names(formals(run_somatic_regulatory_scoring))
+  prepare_formals <- names(formals(prepare_somatic_scores))
+
+  expect_true(all(expected_dndscv_formals %in% gene_formals))
+  expect_true(all(expected_fishhook_constructor_formals %in% reg_formals))
+  expect_true(all(expected_fishhook_score_formals %in% reg_formals))
+  expect_true(all(expected_prepare_somatic_formals %in% prepare_formals))
 }
 
 test_prepare_somatic_inputs_from_dummy_maf <- function() {
@@ -314,13 +595,16 @@ test_run_dndscv_gene_scoring_live <- function(refdb = find_dndscv_refdb()) {
   skip_if(is.null(refdb), "No hg38 dndscv RefCDS file found for the real hg38 MAF.")
 
   maf <- fread(default_somatic_path, nrows = 1000L)
-  result <- run_dndscv_gene_scoring(maf, refdb = refdb)
+  output_path <- make_somatic_test_path("dndscv_live_scores", ".tsv")
+  result <- run_somatic_gene_scoring(maf, refdb = refdb, output_path = output_path)
 
-  expect_true(is.data.frame(result))
-  expect_identical(names(result), c("gene_id", "p_value", "zstat"))
-  expect_gt(nrow(result), 0L)
+  expect_s3_class(result, "conseguiR_bundle")
+  expect_true(is.data.frame(result$gene_scores))
+  expect_identical(names(result$gene_scores), c("gene_id", "p_value", "zstat"))
+  expect_gt(nrow(result$gene_scores), 0L)
+  expect_true(file.exists(output_path))
   message("Live dndscv gene scores:")
-  print(result)
+  print(result$gene_scores)
   invisible(result)
 }
 
@@ -336,17 +620,21 @@ test_run_fishhook_reg_scoring_live <- function() {
 
   maf <- fread(default_somatic_path, nrows = 1000L)
   fishhook_covariate_data <- readRDS(default_fishhook_covariate_path)
-  result <- run_fishhook_reg_scoring(
+  output_path <- make_somatic_test_path("fishhook_live_scores", ".tsv")
+  result <- run_somatic_regulatory_scoring(
     maf = maf,
     reg_ref_path = default_reg_ref_path,
-    fishhook_covariate_data = fishhook_covariate_data
+    fishhook_covariate_data = fishhook_covariate_data,
+    output_path = output_path
   )
 
-  expect_true(is.data.frame(result))
-  expect_identical(names(result), c("reg_elem_id", "p_value", "zstat"))
-  expect_gt(nrow(result), 0L)
+  expect_s3_class(result, "conseguiR_bundle")
+  expect_true(is.data.frame(result$reg_scores))
+  expect_identical(names(result$reg_scores), c("reg_elem_id", "p_value", "zstat"))
+  expect_gt(nrow(result$reg_scores), 0L)
+  expect_true(file.exists(output_path))
   message("Live fishHook regulatory-element scores:")
-  print(result)
+  print(result$reg_scores)
   invisible(result)
 }
 
@@ -392,6 +680,8 @@ test_run_somatic_scoring_pipeline_live <- function(
 }
 
 main <- function() {
+  print_somatic_coverage_summary()
+
   test_that("dummy MAF can be converted into somatic scoring inputs", {
     test_prepare_somatic_inputs_from_dummy_maf()
   })
@@ -411,9 +701,25 @@ main <- function() {
     test_run_dndscv_gene_scoring_negative_bad_refdb()
   })
 
+  test_that("dndscv runner forwards supported passthrough arguments", {
+    test_run_dndscv_gene_scoring_forwards_supported_args()
+  })
+
   test_that("fishHook runner reports clear errors for bad regulatory or covariate inputs", {
     test_run_fishhook_reg_scoring_negative_missing_covariate_column()
     test_run_fishhook_reg_scoring_negative_bad_reg_reference()
+  })
+
+  test_that("fishHook runner forwards supported constructor arguments", {
+    test_run_fishhook_reg_scoring_forwards_constructor_args()
+  })
+
+  test_that("fishHook runner forwards supported score arguments", {
+    test_run_fishhook_reg_scoring_forwards_score_args()
+  })
+
+  test_that("somatic wrapper surfaces expose the supported dndscv and fishHook APIs", {
+    test_somatic_wrapper_surfaces_match_supported_api()
   })
 
   test_that("somatic score extraction works for dndscv genes", {

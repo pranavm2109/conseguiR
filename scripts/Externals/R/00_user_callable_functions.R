@@ -268,6 +268,22 @@ resolve_output_path <- function(bundle, preferred_name) {
 #'
 #' @return The result of `fun`.
 run_with_args <- function(fun, base_args = list(), extra_args = list()) {
+  base_args <- base_args %||% list()
+  extra_args <- extra_args %||% list()
+
+  extra_names <- names(extra_args)
+  named_extra <- if (is.null(extra_names)) character() else extra_names[nzchar(extra_names)]
+
+  if (length(named_extra) > 0L) {
+    base_names <- names(base_args)
+    keep_idx <- if (is.null(base_names)) {
+      rep(TRUE, length(base_args))
+    } else {
+      !nzchar(base_names) | !(base_names %in% named_extra)
+    }
+    base_args <- base_args[keep_idx]
+  }
+
   do.call(fun, c(base_args, extra_args))
 }
 
@@ -431,12 +447,56 @@ run_germline_gene_scoring <- function(
   reuse_existing_annotation = FALSE,
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
+  annotation_window = NULL,
+  filter_path = NULL,
+  ignore_strand = FALSE,
+  nonhuman = FALSE,
+  annotate_modifiers = NULL,
+  step1_general_args = list(),
+  step1_extra_args = character(),
+  gene_model = NULL,
+  gene_model_modifiers = NULL,
+  genes_only = TRUE,
+  pval_use = NULL,
+  pval_snp_id = NULL,
+  pval_pval = NULL,
+  pval_duplicate = NULL,
+  bfile_synonyms = NULL,
+  bfile_synonym_dup = NULL,
+  gene_settings = list(),
+  batch = NULL,
+  seed = NULL,
+  big_data = NULL,
+  step2_general_args = list(),
+  step2_extra_args = character(),
   step1_args = list(),
   step2_args = list(),
   verbose = FALSE
 ) {
   step1_args <- as_list_or_empty(step1_args)
   step2_args <- as_list_or_empty(step2_args)
+  if (!missing(annotation_window)) step1_args$annotation_window <- annotation_window
+  if (!missing(filter_path)) step1_args$filter_path <- filter_path
+  if (!missing(ignore_strand)) step1_args$ignore_strand <- ignore_strand
+  if (!missing(nonhuman)) step1_args$nonhuman <- nonhuman
+  if (!missing(annotate_modifiers)) step1_args$annotate_modifiers <- annotate_modifiers
+  if (!missing(step1_general_args)) step1_args$general_args <- step1_general_args
+  if (!missing(step1_extra_args)) step1_args$extra_args <- step1_extra_args
+  if (!missing(gene_model)) step2_args$gene_model <- gene_model
+  if (!missing(gene_model_modifiers)) step2_args$gene_model_modifiers <- gene_model_modifiers
+  if (!missing(genes_only)) step2_args$genes_only <- genes_only
+  if (!missing(pval_use)) step2_args$pval_use <- pval_use
+  if (!missing(pval_snp_id)) step2_args$pval_snp_id <- pval_snp_id
+  if (!missing(pval_pval)) step2_args$pval_pval <- pval_pval
+  if (!missing(pval_duplicate)) step2_args$pval_duplicate <- pval_duplicate
+  if (!missing(bfile_synonyms)) step2_args$bfile_synonyms <- bfile_synonyms
+  if (!missing(bfile_synonym_dup)) step2_args$bfile_synonym_dup <- bfile_synonym_dup
+  if (!missing(gene_settings)) step2_args$gene_settings <- gene_settings
+  if (!missing(batch)) step2_args$batch <- batch
+  if (!missing(seed)) step2_args$seed <- seed
+  if (!missing(big_data)) step2_args$big_data <- big_data
+  if (!missing(step2_general_args)) step2_args$general_args <- step2_general_args
+  if (!missing(step2_extra_args)) step2_args$extra_args <- step2_extra_args
   requested_output_prefix <- output_prefix
   output_prefix <- output_prefix %||% make_temp_output_prefix("germline_gene_scores")
   zstat_output_path <- if (is.null(requested_output_prefix)) NULL else paste0(output_prefix, ".zstat.tsv")
@@ -458,17 +518,27 @@ run_germline_gene_scoring <- function(
       reuse_existing_analysis = reuse_existing_analysis,
       keep_intermediates = keep_intermediates,
       verbose = verbose,
+      step1_args = step1_args,
+      step2_args = step2_args,
       annotation_window = step1_args$annotation_window %||% NULL,
       filter_path = step1_args$filter_path %||% NULL,
       ignore_strand = step1_args$ignore_strand %||% FALSE,
       nonhuman = step1_args$nonhuman %||% FALSE,
       step1_extra_args = step1_args$extra_args %||% character(),
       gene_model = step2_args$gene_model %||% NULL,
+      gene_model_modifiers = step2_args$gene_model_modifiers %||% NULL,
       genes_only = step2_args$genes_only %||% TRUE,
       pval_use = step2_args$pval_use %||% NULL,
+      pval_snp_id = step2_args$pval_snp_id %||% NULL,
+      pval_pval = step2_args$pval_pval %||% NULL,
       pval_duplicate = step2_args$pval_duplicate %||% NULL,
       bfile_synonyms = step2_args$bfile_synonyms %||% NULL,
       bfile_synonym_dup = step2_args$bfile_synonym_dup %||% NULL,
+      gene_settings = step2_args$gene_settings %||% list(),
+      batch = step2_args$batch %||% NULL,
+      seed = step2_args$seed %||% NULL,
+      big_data = step2_args$big_data %||% NULL,
+      step2_general_args = step2_args$general_args %||% list(),
       step2_extra_args = step2_args$extra_args %||% character(),
       zstat_output_path = zstat_output_path
     )
@@ -537,12 +607,56 @@ run_germline_regulatory_scoring <- function(
   reuse_existing_annotation = FALSE,
   reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
+  annotation_window = NULL,
+  filter_path = NULL,
+  ignore_strand = FALSE,
+  nonhuman = FALSE,
+  annotate_modifiers = NULL,
+  step1_general_args = list(),
+  step1_extra_args = character(),
+  gene_model = NULL,
+  gene_model_modifiers = NULL,
+  genes_only = TRUE,
+  pval_use = NULL,
+  pval_snp_id = NULL,
+  pval_pval = NULL,
+  pval_duplicate = NULL,
+  bfile_synonyms = NULL,
+  bfile_synonym_dup = NULL,
+  gene_settings = list(),
+  batch = NULL,
+  seed = NULL,
+  big_data = NULL,
+  step2_general_args = list(),
+  step2_extra_args = character(),
   step1_args = list(),
   step2_args = list(),
   verbose = FALSE
 ) {
   step1_args <- as_list_or_empty(step1_args)
   step2_args <- as_list_or_empty(step2_args)
+  if (!missing(annotation_window)) step1_args$annotation_window <- annotation_window
+  if (!missing(filter_path)) step1_args$filter_path <- filter_path
+  if (!missing(ignore_strand)) step1_args$ignore_strand <- ignore_strand
+  if (!missing(nonhuman)) step1_args$nonhuman <- nonhuman
+  if (!missing(annotate_modifiers)) step1_args$annotate_modifiers <- annotate_modifiers
+  if (!missing(step1_general_args)) step1_args$general_args <- step1_general_args
+  if (!missing(step1_extra_args)) step1_args$extra_args <- step1_extra_args
+  if (!missing(gene_model)) step2_args$gene_model <- gene_model
+  if (!missing(gene_model_modifiers)) step2_args$gene_model_modifiers <- gene_model_modifiers
+  if (!missing(genes_only)) step2_args$genes_only <- genes_only
+  if (!missing(pval_use)) step2_args$pval_use <- pval_use
+  if (!missing(pval_snp_id)) step2_args$pval_snp_id <- pval_snp_id
+  if (!missing(pval_pval)) step2_args$pval_pval <- pval_pval
+  if (!missing(pval_duplicate)) step2_args$pval_duplicate <- pval_duplicate
+  if (!missing(bfile_synonyms)) step2_args$bfile_synonyms <- bfile_synonyms
+  if (!missing(bfile_synonym_dup)) step2_args$bfile_synonym_dup <- bfile_synonym_dup
+  if (!missing(gene_settings)) step2_args$gene_settings <- gene_settings
+  if (!missing(batch)) step2_args$batch <- batch
+  if (!missing(seed)) step2_args$seed <- seed
+  if (!missing(big_data)) step2_args$big_data <- big_data
+  if (!missing(step2_general_args)) step2_args$general_args <- step2_general_args
+  if (!missing(step2_extra_args)) step2_args$extra_args <- step2_extra_args
   requested_output_prefix <- output_prefix
   output_prefix <- output_prefix %||% make_temp_output_prefix("germline_reg_scores")
   zstat_output_path <- if (is.null(requested_output_prefix)) NULL else paste0(output_prefix, ".zstat.tsv")
@@ -564,17 +678,27 @@ run_germline_regulatory_scoring <- function(
       reuse_existing_analysis = reuse_existing_analysis,
       keep_intermediates = keep_intermediates,
       verbose = verbose,
+      step1_args = step1_args,
+      step2_args = step2_args,
       annotation_window = step1_args$annotation_window %||% NULL,
       filter_path = step1_args$filter_path %||% NULL,
       ignore_strand = step1_args$ignore_strand %||% FALSE,
       nonhuman = step1_args$nonhuman %||% FALSE,
       step1_extra_args = step1_args$extra_args %||% character(),
       gene_model = step2_args$gene_model %||% NULL,
+      gene_model_modifiers = step2_args$gene_model_modifiers %||% NULL,
       genes_only = step2_args$genes_only %||% TRUE,
       pval_use = step2_args$pval_use %||% NULL,
+      pval_snp_id = step2_args$pval_snp_id %||% NULL,
+      pval_pval = step2_args$pval_pval %||% NULL,
       pval_duplicate = step2_args$pval_duplicate %||% NULL,
       bfile_synonyms = step2_args$bfile_synonyms %||% NULL,
       bfile_synonym_dup = step2_args$bfile_synonym_dup %||% NULL,
+      gene_settings = step2_args$gene_settings %||% list(),
+      batch = step2_args$batch %||% NULL,
+      seed = step2_args$seed %||% NULL,
+      big_data = step2_args$big_data %||% NULL,
+      step2_general_args = step2_args$general_args %||% list(),
       step2_extra_args = step2_args$extra_args %||% character(),
       zstat_output_path = zstat_output_path
     )
@@ -652,6 +776,13 @@ prepare_germline_scores <- function(
   gene_loc_path <- if (exists(".conseguiR_default_gene_loc_path", inherits = TRUE)) .conseguiR_default_gene_loc_path() else "data/raw/NCBI38/NCBI38.gene.loc"
   reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/processed/GRCh38-cCREs.loc"
 
+  resolved_reg_sample_size <- reg_sample_size
+  resolved_reg_sample_size_col <- reg_sample_size_col
+  if (is.null(resolved_reg_sample_size) && is.null(resolved_reg_sample_size_col)) {
+    resolved_reg_sample_size <- gene_sample_size
+    resolved_reg_sample_size_col <- gene_sample_size_col
+  }
+
   gene_bundle <- run_with_args(
     run_germline_gene_scoring,
     base_args = c(
@@ -679,8 +810,8 @@ prepare_germline_scores <- function(
         reg_loc_path = reg_loc_path,
         reference_bfile = reference_bfile,
         output_prefix = reg_output_prefix,
-        sample_size = reg_sample_size %||% gene_sample_size,
-        sample_size_col = reg_sample_size_col %||% gene_sample_size_col,
+        sample_size = resolved_reg_sample_size,
+        sample_size_col = resolved_reg_sample_size_col,
         magma_gwas_cache_prefix = magma_gwas_cache_prefix,
         verbose = verbose,
         step1_args = reg_step1_args,
@@ -733,6 +864,19 @@ run_somatic_gene_scoring <- function(
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
+  gene_list = NULL,
+  sm = "192r_3w",
+  kc = "cgc81",
+  use_indel_sites = TRUE,
+  min_indels = 5L,
+  maxcovs = 20L,
+  constrain_wnon_wspl = TRUE,
+  outp = 3L,
+  numcode = 1L,
+  outmats = FALSE,
+  mingenecovs = 500L,
+  onesided = NULL,
+  dc = NULL,
   dndscv_args = list(),
   verbose = FALSE
 ) {
@@ -749,6 +893,19 @@ run_somatic_gene_scoring <- function(
         cv = cv,
         max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
         max_coding_muts_per_sample = max_coding_muts_per_sample,
+        gene_list = gene_list,
+        sm = sm,
+        kc = kc,
+        use_indel_sites = use_indel_sites,
+        min_indels = min_indels,
+        maxcovs = maxcovs,
+        constrain_wnon_wspl = constrain_wnon_wspl,
+        outp = outp,
+        numcode = numcode,
+        outmats = outmats,
+        mingenecovs = mingenecovs,
+        onesided = onesided,
+        dc = dc,
         verbose = verbose
       ),
       dndscv_args
@@ -795,6 +952,29 @@ run_somatic_regulatory_scoring <- function(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
+  constructor_out_path = NULL,
+  constructor_use_local_mut_density = FALSE,
+  constructor_local_mut_density_bin = 1e6,
+  constructor_mc_cores = 1L,
+  constructor_na_rm = TRUE,
+  constructor_pad = 0,
+  constructor_max_slice = 1e5,
+  constructor_ff_chunk = 1e6,
+  constructor_max_chunk = 1e12,
+  constructor_idcap = 1,
+  constructor_weight_events = FALSE,
+  constructor_nb = TRUE,
+  score_sets = NULL,
+  score_model = NULL,
+  score_return_model = TRUE,
+  score_nb = NULL,
+  score_iter = NULL,
+  score_subsample = NULL,
+  score_seed = NULL,
+  score_verbose = NULL,
+  score_mc_cores = NULL,
+  score_p_randomized = NULL,
+  score_class_return = TRUE,
   fishhook_args = list(),
   verbose = FALSE
 ) {
@@ -812,6 +992,29 @@ run_somatic_regulatory_scoring <- function(
         fishhook_covariates = fishhook_covariates,
         fishhook_covariate_data = fishhook_covariate_data,
         idcol = idcol,
+        constructor_out_path = constructor_out_path,
+        constructor_use_local_mut_density = constructor_use_local_mut_density,
+        constructor_local_mut_density_bin = constructor_local_mut_density_bin,
+        constructor_mc_cores = constructor_mc_cores,
+        constructor_na_rm = constructor_na_rm,
+        constructor_pad = constructor_pad,
+        constructor_max_slice = constructor_max_slice,
+        constructor_ff_chunk = constructor_ff_chunk,
+        constructor_max_chunk = constructor_max_chunk,
+        constructor_idcap = constructor_idcap,
+        constructor_weight_events = constructor_weight_events,
+        constructor_nb = constructor_nb,
+        score_sets = score_sets,
+        score_model = score_model,
+        score_return_model = score_return_model,
+        score_nb = score_nb,
+        score_iter = score_iter,
+        score_subsample = score_subsample,
+        score_seed = score_seed,
+        score_verbose = score_verbose,
+        score_mc_cores = score_mc_cores,
+        score_p_randomized = score_p_randomized,
+        score_class_return = score_class_return,
         verbose = verbose
       ),
       fishhook_args
@@ -867,11 +1070,47 @@ prepare_somatic_scores <- function(
   gene_cv = NULL,
   gene_max_muts_per_gene_per_sample = 6L,
   gene_max_coding_muts_per_sample = 5000L,
+  gene_list = NULL,
+  sm = "192r_3w",
+  kc = "cgc81",
+  use_indel_sites = TRUE,
+  min_indels = 5L,
+  maxcovs = 20L,
+  constrain_wnon_wspl = TRUE,
+  outp = 3L,
+  numcode = 1L,
+  outmats = FALSE,
+  mingenecovs = 500L,
+  onesided = NULL,
+  dc = NULL,
   dndscv_args = list(),
   eligible_gr = NULL,
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   fishhook_idcol = "Tumor_Sample_Barcode",
+  constructor_out_path = NULL,
+  constructor_use_local_mut_density = FALSE,
+  constructor_local_mut_density_bin = 1e6,
+  constructor_mc_cores = 1L,
+  constructor_na_rm = TRUE,
+  constructor_pad = 0,
+  constructor_max_slice = 1e5,
+  constructor_ff_chunk = 1e6,
+  constructor_max_chunk = 1e12,
+  constructor_idcap = 1,
+  constructor_weight_events = FALSE,
+  constructor_nb = TRUE,
+  score_sets = NULL,
+  score_model = NULL,
+  score_return_model = TRUE,
+  score_nb = NULL,
+  score_iter = NULL,
+  score_subsample = NULL,
+  score_seed = NULL,
+  score_verbose = NULL,
+  score_mc_cores = NULL,
+  score_p_randomized = NULL,
+  score_class_return = TRUE,
   fishhook_args = list(),
   verbose = FALSE
 ) {
@@ -883,6 +1122,19 @@ prepare_somatic_scores <- function(
     cv = gene_cv,
     max_muts_per_gene_per_sample = gene_max_muts_per_gene_per_sample,
     max_coding_muts_per_sample = gene_max_coding_muts_per_sample,
+    gene_list = gene_list,
+    sm = sm,
+    kc = kc,
+    use_indel_sites = use_indel_sites,
+    min_indels = min_indels,
+    maxcovs = maxcovs,
+    constrain_wnon_wspl = constrain_wnon_wspl,
+    outp = outp,
+    numcode = numcode,
+    outmats = outmats,
+    mingenecovs = mingenecovs,
+    onesided = onesided,
+    dc = dc,
     dndscv_args = dndscv_args,
     verbose = verbose
   )
@@ -895,6 +1147,29 @@ prepare_somatic_scores <- function(
     fishhook_covariates = fishhook_covariates,
     fishhook_covariate_data = fishhook_covariate_data,
     idcol = fishhook_idcol,
+    constructor_out_path = constructor_out_path,
+    constructor_use_local_mut_density = constructor_use_local_mut_density,
+    constructor_local_mut_density_bin = constructor_local_mut_density_bin,
+    constructor_mc_cores = constructor_mc_cores,
+    constructor_na_rm = constructor_na_rm,
+    constructor_pad = constructor_pad,
+    constructor_max_slice = constructor_max_slice,
+    constructor_ff_chunk = constructor_ff_chunk,
+    constructor_max_chunk = constructor_max_chunk,
+    constructor_idcap = constructor_idcap,
+    constructor_weight_events = constructor_weight_events,
+    constructor_nb = constructor_nb,
+    score_sets = score_sets,
+    score_model = score_model,
+    score_return_model = score_return_model,
+    score_nb = score_nb,
+    score_iter = score_iter,
+    score_subsample = score_subsample,
+    score_seed = score_seed,
+    score_verbose = score_verbose,
+    score_mc_cores = score_mc_cores,
+    score_p_randomized = score_p_randomized,
+    score_class_return = score_class_return,
     fishhook_args = fishhook_args,
     verbose = verbose
   )
@@ -2092,106 +2367,92 @@ run_conseguiR <- function(
 
   germline <- run_with_args(
     prepare_germline_scores,
-    base_args = c(
-      list(
-        gwas_sumstats = gwas_sumstats,
-        reference_bfile = reference_bfile,
-        gene_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "germline_gene_scores") else NULL,
-        reg_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "germline_reg_scores") else NULL,
-        magma_gwas_cache_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "magma_shared_gwas_cache") else NULL,
-        verbose = verbose
-      ),
-      as_list_or_empty(germline_args)
-    )
+    base_args = list(
+      gwas_sumstats = gwas_sumstats,
+      reference_bfile = reference_bfile,
+      gene_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "germline_gene_scores") else NULL,
+      reg_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "germline_reg_scores") else NULL,
+      magma_gwas_cache_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "magma_shared_gwas_cache") else NULL,
+      verbose = verbose
+    ),
+    extra_args = as_list_or_empty(germline_args)
   )
 
   somatic <- run_with_args(
     prepare_somatic_scores,
-    base_args = c(
-      list(
-        maf = somatic_maf,
-        refdb = dndscv_refdb,
-        reg_ref_path = reg_ref_path,
-        gene_output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "somatic_gene_scores.tsv") else NULL,
-        reg_output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "somatic_reg_scores.tsv") else NULL,
-        verbose = verbose
-      ),
-      as_list_or_empty(somatic_args)
-    )
+    base_args = list(
+      maf = somatic_maf,
+      refdb = dndscv_refdb,
+      reg_ref_path = reg_ref_path,
+      gene_output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "somatic_gene_scores.tsv") else NULL,
+      reg_output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "somatic_reg_scores.tsv") else NULL,
+      verbose = verbose
+    ),
+    extra_args = as_list_or_empty(somatic_args)
   )
 
   epigenomic <- run_with_args(
     prepare_epigenomic_scores,
-    base_args = c(
-      list(
-        reg_ref_path = reg_ref_path,
-        track_dir = epigenomic_track_dir,
-        bw_files = epigenomic_tracks,
-        output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "epigenomic_reg_scores.tsv") else NULL,
-        verbose = verbose
-      ),
-      as_list_or_empty(epigenomic_args)
-    )
+    base_args = list(
+      reg_ref_path = reg_ref_path,
+      track_dir = epigenomic_track_dir,
+      bw_files = epigenomic_tracks,
+      output_path = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "epigenomic_reg_scores.tsv") else NULL,
+      verbose = verbose
+    ),
+    extra_args = as_list_or_empty(epigenomic_args)
   )
 
   scored_graph <- run_with_args(
     build_scored_gene_reg_graph,
-    base_args = c(
-      list(
-        graph_rds_path = graph_rds_path,
-        output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "gene_reg_graph_scored") else "data/processed/gene_reg_graph_scored",
-        germline_scores = germline,
-        somatic_scores = somatic,
-        epigenomic_scores = epigenomic,
-        save_outputs = !is.null(requested_output_dir),
-        verbose = verbose
-      ),
-      as_list_or_empty(scored_graph_args)
-    )
+    base_args = list(
+      graph_rds_path = graph_rds_path,
+      output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "gene_reg_graph_scored") else "data/processed/gene_reg_graph_scored",
+      germline_scores = germline,
+      somatic_scores = somatic,
+      epigenomic_scores = epigenomic,
+      save_outputs = !is.null(requested_output_dir),
+      verbose = verbose
+    ),
+    extra_args = as_list_or_empty(scored_graph_args)
   )
 
   diffusion <- run_with_args(
     run_gene_reg_diffusion,
-    base_args = c(
-      list(
-        scored_graph = scored_graph,
-        output_dir = requested_output_dir,
-        output_stem = if (!is.null(requested_output_dir)) "gene_reg_graph_diffusion" else NULL,
-        verbose = verbose
-      ),
-      as_list_or_empty(diffusion_args)
-    )
+    base_args = list(
+      scored_graph = scored_graph,
+      output_dir = requested_output_dir,
+      output_stem = if (!is.null(requested_output_dir)) "gene_reg_graph_diffusion" else NULL,
+      verbose = verbose
+    ),
+    extra_args = as_list_or_empty(diffusion_args)
   )
 
   selected_subgraph <- run_with_args(
     call_selected_subgraph,
-    base_args = c(
-      list(
-        diffusion = diffusion,
-        gg_nodes_path = gg_nodes_path,
-        gg_edges_path = gg_edges_path,
-        output_dir = requested_output_dir,
-        output_stem = if (!is.null(requested_output_dir)) "gene_gene_selected_subgraph" else NULL,
-        target_genes = target_genes,
-        verbose = verbose
-      ),
-      as_list_or_empty(subgraph_args)
-    )
+    base_args = list(
+      diffusion = diffusion,
+      gg_nodes_path = gg_nodes_path,
+      gg_edges_path = gg_edges_path,
+      output_dir = requested_output_dir,
+      output_stem = if (!is.null(requested_output_dir)) "gene_gene_selected_subgraph" else NULL,
+      target_genes = target_genes,
+      verbose = verbose
+    ),
+    extra_args = as_list_or_empty(subgraph_args)
   )
 
   plot_bundle <- run_with_args(
     plot_selected_subgraph,
-    base_args = c(
-      list(
-        selected_subgraph = selected_subgraph,
-        bundle_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "gene_gene_selected_subgraph_plot_bundle") else "data/processed/gene_gene_selected_subgraph_plot_bundle",
-        plot_file_path = NULL,
-        save_bundle = FALSE,
-        save_plot = FALSE,
-        verbose = verbose
-      ),
-      as_list_or_empty(plot_args)
-    )
+    base_args = list(
+      selected_subgraph = selected_subgraph,
+      bundle_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "gene_gene_selected_subgraph_plot_bundle") else "data/processed/gene_gene_selected_subgraph_plot_bundle",
+      plot_file_path = NULL,
+      save_bundle = FALSE,
+      save_plot = FALSE,
+      verbose = verbose
+    ),
+    extra_args = as_list_or_empty(plot_args)
   )
 
   new_bundle(

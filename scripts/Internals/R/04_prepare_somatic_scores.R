@@ -424,6 +424,19 @@ run_dndscv_gene_scoring <- function(
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
+  gene_list = NULL,
+  sm = "192r_3w",
+  kc = "cgc81",
+  use_indel_sites = TRUE,
+  min_indels = 5L,
+  maxcovs = 20L,
+  constrain_wnon_wspl = TRUE,
+  outp = 3L,
+  numcode = 1L,
+  outmats = FALSE,
+  mingenecovs = 500L,
+  onesided = NULL,
+  dc = NULL,
   verbose = FALSE,
   ...
 ) {
@@ -446,15 +459,30 @@ run_dndscv_gene_scoring <- function(
 
   dndscv_args <- list(
     mutations = as.data.frame(maf_ready),
+    gene_list = gene_list,
     cv = cv,
     refdb = refdb,
+    sm = sm,
+    kc = kc,
     max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
-    max_coding_muts_per_sample = max_coding_muts_per_sample
+    max_coding_muts_per_sample = max_coding_muts_per_sample,
+    use_indel_sites = use_indel_sites,
+    min_indels = min_indels,
+    maxcovs = maxcovs,
+    constrain_wnon_wspl = constrain_wnon_wspl,
+    outp = outp,
+    numcode = numcode,
+    outmats = outmats,
+    mingenecovs = mingenecovs,
+    dc = dc
   )
 
   extra_args <- list(...)
-  if ("onesided" %in% names(formals(dndscv::dndscv)) && is.null(extra_args$onesided)) {
+  if ("onesided" %in% names(formals(dndscv::dndscv)) && is.null(onesided) && is.null(extra_args$onesided)) {
     extra_args$onesided <- TRUE
+  }
+  if (!is.null(onesided)) {
+    dndscv_args$onesided <- onesided
   }
   dndscv_args <- c(dndscv_args, extra_args)
 
@@ -479,6 +507,29 @@ run_fishhook_reg_scoring <- function(
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
+  constructor_out_path = NULL,
+  constructor_use_local_mut_density = FALSE,
+  constructor_local_mut_density_bin = 1e6,
+  constructor_mc_cores = 1L,
+  constructor_na_rm = TRUE,
+  constructor_pad = 0,
+  constructor_max_slice = 1e5,
+  constructor_ff_chunk = 1e6,
+  constructor_max_chunk = 1e12,
+  constructor_idcap = 1,
+  constructor_weight_events = FALSE,
+  constructor_nb = TRUE,
+  score_sets = NULL,
+  score_model = NULL,
+  score_return_model = TRUE,
+  score_nb = NULL,
+  score_iter = NULL,
+  score_subsample = NULL,
+  score_seed = NULL,
+  score_verbose = NULL,
+  score_mc_cores = NULL,
+  score_p_randomized = NULL,
+  score_class_return = TRUE,
   verbose = FALSE,
   ...
 ) {
@@ -540,15 +591,70 @@ run_fishhook_reg_scoring <- function(
     events = event_gr,
     eligible = eligible_gr,
     covariates = covs,
-    idcol = idcol
+    out.path = constructor_out_path,
+    use_local_mut_density = constructor_use_local_mut_density,
+    local_mut_density_bin = constructor_local_mut_density_bin,
+    mc.cores = constructor_mc_cores,
+    na.rm = constructor_na_rm,
+    pad = constructor_pad,
+    verbose = verbose,
+    max.slice = constructor_max_slice,
+    ff.chunk = constructor_ff_chunk,
+    max.chunk = constructor_max_chunk,
+    idcol = idcol,
+    idcap = constructor_idcap,
+    weightEvents = constructor_weight_events,
+    nb = constructor_nb
   )
 
   conseguiR_verbose_message(verbose, "Running fishHook scoring...")
-  if (isTRUE(verbose)) {
-    fish$score(...)
-  } else {
-    suppressMessages(fish$score(...))
+  fish_env <- environment(fish$score)
+  private <- get("private", envir = fish_env, inherits = FALSE)
+  self <- get("self", envir = fish_env, inherits = FALSE)
+
+  if (identical(private$pstate, "Initialized")) {
+    self$annotate()
   }
+  if (is.null(private$pevents)) {
+    stop("fishHook object has not been provided with events; unable to score.")
+  }
+
+  if (identical(private$pstate, "Aggregated")) {
+    targ <- private$paggregated
+    covs <- c()
+  } else {
+    targ <- private$pdata
+    covs <- names(GenomicRanges::values(private$pdata))
+  }
+
+  score_args <- list(...)
+  score_args$hypotheses <- targ
+  score_args$covariates <- covs
+  score_args$model <- score_model
+  score_args$return.model <- score_return_model
+  score_args$nb <- score_nb %||% private$pnb
+  score_args$verbose <- score_verbose %||% private$pverbose
+  score_args$iter <- score_iter %||% 200L
+  score_args$subsample <- score_subsample %||% 1e5
+  score_args$sets <- score_sets %||% private$psets
+  score_args$seed <- score_seed %||% 42L
+  score_args$mc.cores <- score_mc_cores %||% private$pmc.cores
+  score_args$p.randomized <- score_p_randomized %||% TRUE
+  score_args$classReturn <- score_class_return
+
+  if (isTRUE(verbose)) {
+    score <- do.call(fishHook::score.hypotheses, score_args)
+  } else {
+    score <- suppressMessages(do.call(fishHook::score.hypotheses, score_args))
+  }
+
+  private$pscore <- score$res
+  private$pmodel <- score$model
+  if (!is.null(score_args$sets)) {
+    private$psets <- score_args$sets
+    private$psetscore <- score$setres
+  }
+  private$pstate <- "Scored"
 
   if (is.null(fish$res)) {
     stop("fishHook did not produce a `$res` result table.")
@@ -571,10 +677,46 @@ run_somatic_scoring_pipeline <- function(
   cv = NULL,
   max_muts_per_gene_per_sample = 6L,
   max_coding_muts_per_sample = 5000L,
+  gene_list = NULL,
+  sm = "192r_3w",
+  kc = "cgc81",
+  use_indel_sites = TRUE,
+  min_indels = 5L,
+  maxcovs = 20L,
+  constrain_wnon_wspl = TRUE,
+  outp = 3L,
+  numcode = 1L,
+  outmats = FALSE,
+  mingenecovs = 500L,
+  onesided = NULL,
+  dc = NULL,
   eligible_gr = NULL,
   fishhook_covariates = NULL,
   fishhook_covariate_data = NULL,
   idcol = "Tumor_Sample_Barcode",
+  constructor_out_path = NULL,
+  constructor_use_local_mut_density = FALSE,
+  constructor_local_mut_density_bin = 1e6,
+  constructor_mc_cores = 1L,
+  constructor_na_rm = TRUE,
+  constructor_pad = 0,
+  constructor_max_slice = 1e5,
+  constructor_ff_chunk = 1e6,
+  constructor_max_chunk = 1e12,
+  constructor_idcap = 1,
+  constructor_weight_events = FALSE,
+  constructor_nb = TRUE,
+  score_sets = NULL,
+  score_model = NULL,
+  score_return_model = TRUE,
+  score_nb = NULL,
+  score_iter = NULL,
+  score_subsample = NULL,
+  score_seed = NULL,
+  score_verbose = NULL,
+  score_mc_cores = NULL,
+  score_p_randomized = NULL,
+  score_class_return = TRUE,
   verbose = FALSE,
   ...
 ) {
@@ -591,6 +733,19 @@ run_somatic_scoring_pipeline <- function(
       cv = cv,
       max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
       max_coding_muts_per_sample = max_coding_muts_per_sample,
+      gene_list = gene_list,
+      sm = sm,
+      kc = kc,
+      use_indel_sites = use_indel_sites,
+      min_indels = min_indels,
+      maxcovs = maxcovs,
+      constrain_wnon_wspl = constrain_wnon_wspl,
+      outp = outp,
+      numcode = numcode,
+      outmats = outmats,
+      mingenecovs = mingenecovs,
+      onesided = onesided,
+      dc = dc,
       verbose = verbose,
       ...
     )
@@ -609,6 +764,29 @@ run_somatic_scoring_pipeline <- function(
       fishhook_covariates = fishhook_covariates,
       fishhook_covariate_data = fishhook_covariate_data,
       idcol = idcol,
+      constructor_out_path = constructor_out_path,
+      constructor_use_local_mut_density = constructor_use_local_mut_density,
+      constructor_local_mut_density_bin = constructor_local_mut_density_bin,
+      constructor_mc_cores = constructor_mc_cores,
+      constructor_na_rm = constructor_na_rm,
+      constructor_pad = constructor_pad,
+      constructor_max_slice = constructor_max_slice,
+      constructor_ff_chunk = constructor_ff_chunk,
+      constructor_max_chunk = constructor_max_chunk,
+      constructor_idcap = constructor_idcap,
+      constructor_weight_events = constructor_weight_events,
+      constructor_nb = constructor_nb,
+      score_sets = score_sets,
+      score_model = score_model,
+      score_return_model = score_return_model,
+      score_nb = score_nb,
+      score_iter = score_iter,
+      score_subsample = score_subsample,
+      score_seed = score_seed,
+      score_verbose = score_verbose,
+      score_mc_cores = score_mc_cores,
+      score_p_randomized = score_p_randomized,
+      score_class_return = score_class_return,
       verbose = verbose,
       ...
     )

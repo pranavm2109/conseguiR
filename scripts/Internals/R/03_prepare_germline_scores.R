@@ -277,6 +277,199 @@ prepare_magma_gwas_cache <- function(
   )
 }
 
+conseguiR_as_list_or_empty <- function(x) {
+  if (is.null(x)) {
+    return(list())
+  }
+  if (!is.list(x)) {
+    stop("Expected a list of MAGMA step arguments.")
+  }
+  x
+}
+
+conseguiR_magma_flag_name <- function(name) {
+  if (grepl("^--", name)) {
+    return(name)
+  }
+  paste0("--", gsub("[._]", "-", name))
+}
+
+conseguiR_magma_modifier_name <- function(name) {
+  gsub("[._]", "-", name)
+}
+
+conseguiR_magma_modifiers <- function(args_list) {
+  args_list <- conseguiR_as_list_or_empty(args_list)
+  out <- character()
+  for (nm in names(args_list)) {
+    value <- args_list[[nm]]
+    if (is.null(value) || identical(value, FALSE)) {
+      next
+    }
+    modifier <- conseguiR_magma_modifier_name(nm)
+    if (identical(value, TRUE)) {
+      out <- c(out, modifier)
+    } else {
+      out <- c(out, paste0(modifier, "=", paste(as.character(unlist(value, use.names = FALSE)), collapse = ",")))
+    }
+  }
+  out
+}
+
+conseguiR_magma_general_args <- function(args_list) {
+  args_list <- conseguiR_as_list_or_empty(args_list)
+  out <- character()
+  for (nm in names(args_list)) {
+    value <- args_list[[nm]]
+    if (is.null(value) || identical(value, FALSE)) {
+      next
+    }
+    flag <- conseguiR_magma_flag_name(nm)
+    if (identical(value, TRUE)) {
+      out <- c(out, flag)
+    } else {
+      out <- c(out, flag, as.character(unlist(value, use.names = FALSE)))
+    }
+  }
+  out
+}
+
+normalize_magma_step1_args <- function(
+  step1_args = list(),
+  annotation_window = NULL,
+  filter_path = NULL,
+  ignore_strand = FALSE,
+  nonhuman = FALSE,
+  step1_extra_args = character()
+) {
+  step1_args <- conseguiR_as_list_or_empty(step1_args)
+
+  if (is.null(step1_args$annotation_window) && is.null(step1_args$window) && !is.null(annotation_window)) {
+    step1_args$annotation_window <- annotation_window
+  }
+  if (is.null(step1_args$filter_path) && is.null(step1_args$filter) && !is.null(filter_path)) {
+    step1_args$filter_path <- filter_path
+  }
+  if (is.null(step1_args$ignore_strand) && is.null(step1_args$ignore.strand) && isTRUE(ignore_strand)) {
+    step1_args$ignore_strand <- TRUE
+  }
+  if (is.null(step1_args$nonhuman) && isTRUE(nonhuman)) {
+    step1_args$nonhuman <- TRUE
+  }
+  if (length(step1_extra_args) > 0L && is.null(step1_args$extra_args)) {
+    step1_args$extra_args <- step1_extra_args
+  }
+
+  step1_args
+}
+
+normalize_magma_step2_args <- function(
+  step2_args = list(),
+  sample_size = NULL,
+  sample_size_col = NULL,
+  gene_model = NULL,
+  genes_only = TRUE,
+  pval_use = NULL,
+  pval_snp_id = NULL,
+  pval_pval = NULL,
+  pval_duplicate = NULL,
+  bfile_synonyms = NULL,
+  bfile_synonym_dup = NULL,
+  gene_model_modifiers = NULL,
+  gene_settings = list(),
+  batch = NULL,
+  seed = NULL,
+  big_data = NULL,
+  step2_extra_args = character()
+) {
+  step2_args <- conseguiR_as_list_or_empty(step2_args)
+
+  if (is.null(step2_args$gene_model) && !is.null(gene_model)) {
+    step2_args$gene_model <- gene_model
+  }
+  if (is.null(step2_args$genes_only)) {
+    step2_args$genes_only <- genes_only
+  }
+  if (!is.null(step2_args$pval) && !is.list(step2_args$pval)) {
+    step2_args$pval <- list(use = step2_args$pval)
+  }
+  if (is.null(step2_args$pval)) {
+    step2_args$pval <- list()
+  }
+  if (!is.null(step2_args$bfile) && !is.list(step2_args$bfile)) {
+    step2_args$bfile <- list(synonyms = step2_args$bfile)
+  }
+  if (is.null(step2_args$bfile)) {
+    step2_args$bfile <- list()
+  }
+  if (is.null(step2_args$pval$use) && !is.null(pval_use)) {
+    step2_args$pval$use <- pval_use
+  }
+  if (is.null(step2_args$pval$snp_id) && !is.null(pval_snp_id)) {
+    step2_args$pval$snp_id <- pval_snp_id
+  }
+  if (is.null(step2_args$pval$pval) && !is.null(pval_pval)) {
+    step2_args$pval$pval <- pval_pval
+  }
+  if (is.null(step2_args$pval$duplicate) && !is.null(pval_duplicate)) {
+    step2_args$pval$duplicate <- pval_duplicate
+  }
+  if (is.null(step2_args$pval$N) && !is.null(sample_size)) {
+    step2_args$pval$N <- sample_size
+  }
+  if (is.null(step2_args$pval$ncol) && !is.null(sample_size_col)) {
+    step2_args$pval$ncol <- sample_size_col
+  }
+  if (is.null(step2_args$bfile$synonyms) && !is.null(bfile_synonyms)) {
+    step2_args$bfile$synonyms <- bfile_synonyms
+  }
+  if (is.null(step2_args$bfile$synonym_dup) && !is.null(bfile_synonym_dup)) {
+    step2_args$bfile$synonym_dup <- bfile_synonym_dup
+  }
+  if (is.null(step2_args$gene_model_modifiers) && !is.null(gene_model_modifiers)) {
+    step2_args$gene_model_modifiers <- gene_model_modifiers
+  }
+  if (is.null(step2_args$gene_settings) && length(gene_settings) > 0L) {
+    step2_args$gene_settings <- gene_settings
+  }
+  if (is.null(step2_args$batch) && !is.null(batch)) {
+    step2_args$batch <- batch
+  }
+  if (is.null(step2_args$seed) && !is.null(seed)) {
+    step2_args$seed <- seed
+  }
+  if (is.null(step2_args$big_data) && !is.null(big_data)) {
+    step2_args$big_data <- big_data
+  }
+  if (length(step2_extra_args) > 0L && is.null(step2_args$extra_args)) {
+    step2_args$extra_args <- step2_extra_args
+  }
+
+  if (!is.null(step2_args$pval_use) && is.null(step2_args$pval$use)) {
+    step2_args$pval$use <- step2_args$pval_use
+  }
+  if (!is.null(step2_args$pval_snp_id) && is.null(step2_args$pval$snp_id)) {
+    step2_args$pval$snp_id <- step2_args$pval_snp_id
+  }
+  if (!is.null(step2_args$pval_pval) && is.null(step2_args$pval$pval)) {
+    step2_args$pval$pval <- step2_args$pval_pval
+  }
+  if (!is.null(step2_args$pval_duplicate) && is.null(step2_args$pval$duplicate)) {
+    step2_args$pval$duplicate <- step2_args$pval_duplicate
+  }
+  if (!is.null(step2_args$bfile_synonyms) && is.null(step2_args$bfile$synonyms)) {
+    step2_args$bfile$synonyms <- step2_args$bfile_synonyms
+  }
+  if (!is.null(step2_args$bfile_synonym_dup) && is.null(step2_args$bfile$synonym_dup)) {
+    step2_args$bfile$synonym_dup <- step2_args$bfile_synonym_dup
+  }
+  if (!is.null(step2_args$step2_gene_model_modifiers) && is.null(step2_args$gene_model_modifiers)) {
+    step2_args$gene_model_modifiers <- step2_args$step2_gene_model_modifiers
+  }
+
+  step2_args
+}
+
 run_magma_step1_annotation <- function(
   gwas_sumstats,
   gene_loc_path,
@@ -290,6 +483,7 @@ run_magma_step1_annotation <- function(
   nonhuman = FALSE,
   reuse_prepared_inputs = TRUE,
   reuse_existing_annotation = FALSE,
+  step1_args = list(),
   extra_args = character(),
   verbose = FALSE
 ) {
@@ -314,6 +508,15 @@ run_magma_step1_annotation <- function(
   existing_annotation_ready <- file.exists(annot_path) &&
     file.info(annot_path)$size > 0
 
+  step1_args <- normalize_magma_step1_args(
+    step1_args = step1_args,
+    annotation_window = annotation_window,
+    filter_path = filter_path,
+    ignore_strand = ignore_strand,
+    nonhuman = nonhuman,
+    step1_extra_args = extra_args
+  )
+
   if (isTRUE(reuse_existing_annotation) && existing_annotation_ready) {
     return(list(
       status = 0L,
@@ -334,30 +537,48 @@ run_magma_step1_annotation <- function(
   annotate_flag <- "--annotate"
   annotate_modifiers <- character()
 
-  if (!is.null(annotation_window)) {
-    if (length(annotation_window) == 1L) {
-      annotate_modifiers <- c(annotate_modifiers, paste0("window=", annotation_window))
-    } else if (length(annotation_window) == 2L) {
-      annotate_modifiers <- c(annotate_modifiers, paste0("window=", annotation_window[[1]], ",", annotation_window[[2]]))
+  resolved_annotation_window <- step1_args$annotation_window %||% step1_args$window
+  if (!is.null(resolved_annotation_window)) {
+    if (length(resolved_annotation_window) == 1L) {
+      annotate_modifiers <- c(annotate_modifiers, paste0("window=", resolved_annotation_window))
+    } else if (length(resolved_annotation_window) == 2L) {
+      annotate_modifiers <- c(annotate_modifiers, paste0("window=", resolved_annotation_window[[1]], ",", resolved_annotation_window[[2]]))
     } else {
       stop("annotation_window must be NULL, length 1, or length 2.")
     }
   }
 
-  if (!is.null(filter_path)) {
-    if (!file.exists(filter_path)) {
-      stop("filter_path does not exist: ", filter_path)
+  resolved_filter_path <- step1_args$filter_path %||% step1_args$filter
+  if (!is.null(resolved_filter_path)) {
+    if (!file.exists(resolved_filter_path)) {
+      stop("filter_path does not exist: ", resolved_filter_path)
     }
-    annotate_modifiers <- c(annotate_modifiers, paste0("filter=", filter_path))
+    annotate_modifiers <- c(annotate_modifiers, paste0("filter=", resolved_filter_path))
   }
 
-  if (isTRUE(ignore_strand)) {
+  resolved_ignore_strand <- isTRUE(step1_args$ignore_strand %||% step1_args$ignore.strand)
+  if (resolved_ignore_strand) {
     annotate_modifiers <- c(annotate_modifiers, "ignore-strand")
   }
 
-  if (isTRUE(nonhuman)) {
+  resolved_nonhuman <- isTRUE(step1_args$nonhuman)
+  if (resolved_nonhuman) {
     annotate_modifiers <- c(annotate_modifiers, "nonhuman")
   }
+
+  if (!is.null(step1_args$annotate_modifiers)) {
+    annotate_modifiers <- c(annotate_modifiers, as.character(unlist(step1_args$annotate_modifiers, use.names = FALSE)))
+  }
+
+  known_step1_keys <- c(
+    "annotation_window", "window", "filter_path", "filter",
+    "ignore_strand", "ignore.strand", "nonhuman",
+    "annotate_modifiers", "extra_args", "general_args"
+  )
+  step1_general_args <- c(
+    conseguiR_magma_general_args(step1_args$general_args),
+    conseguiR_magma_general_args(step1_args[setdiff(names(step1_args), known_step1_keys)])
+  )
 
   if (length(annotate_modifiers) > 0) {
     annotate_flag <- paste0("--annotate ", paste(annotate_modifiers, collapse = " "))
@@ -368,7 +589,8 @@ run_magma_step1_annotation <- function(
     "--snp-loc", snp_loc_path,
     "--gene-loc", gene_loc_path,
     "--out", output_prefix,
-    extra_args
+    step1_general_args,
+    step1_args$extra_args %||% character()
   )
 
   command_string <- paste(c(shQuote(magma_path), shQuote(args)), collapse = " ")
@@ -423,10 +645,18 @@ run_magma_step2_gene_analysis <- function(
   gene_model = NULL,
   genes_only = TRUE,
   pval_use = c("SNP", "P"),
+  pval_snp_id = NULL,
+  pval_pval = NULL,
   pval_duplicate = NULL,
   bfile_synonyms = NULL,
   bfile_synonym_dup = NULL,
+  gene_model_modifiers = NULL,
+  gene_settings = list(),
+  batch = NULL,
+  seed = NULL,
+  big_data = NULL,
   reuse_existing_analysis = FALSE,
+  step2_args = list(),
   extra_args = character(),
   verbose = FALSE
 ) {
@@ -447,10 +677,33 @@ run_magma_step2_gene_analysis <- function(
     stop("Reference bfile is missing .fam: ", paste0(reference_bfile, ".fam"))
   }
 
-  if (is.null(sample_size) && is.null(sample_size_col)) {
+  step2_args <- normalize_magma_step2_args(
+    step2_args = step2_args,
+    sample_size = sample_size,
+    sample_size_col = sample_size_col,
+    gene_model = gene_model,
+    genes_only = genes_only,
+    pval_use = pval_use,
+    pval_snp_id = pval_snp_id,
+    pval_pval = pval_pval,
+    pval_duplicate = pval_duplicate,
+    bfile_synonyms = bfile_synonyms,
+    bfile_synonym_dup = bfile_synonym_dup,
+    gene_model_modifiers = gene_model_modifiers,
+    gene_settings = gene_settings,
+    batch = batch,
+    seed = seed,
+    big_data = big_data,
+    step2_extra_args = extra_args
+  )
+
+  resolved_sample_size <- step2_args$pval$N %||% NULL
+  resolved_sample_size_col <- step2_args$pval$ncol %||% NULL
+
+  if (is.null(resolved_sample_size) && is.null(resolved_sample_size_col)) {
     stop("Provide either `sample_size` or `sample_size_col` for MAGMA step 2.")
   }
-  if (!is.null(sample_size) && !is.null(sample_size_col)) {
+  if (!is.null(resolved_sample_size) && !is.null(resolved_sample_size_col)) {
     stop("Provide only one of `sample_size` or `sample_size_col`, not both.")
   }
 
@@ -479,29 +732,53 @@ run_magma_step2_gene_analysis <- function(
   }
 
   pval_modifier <- character()
-  if (!is.null(pval_use)) {
-    if (length(pval_use) != 2L) {
+  pval_settings <- conseguiR_as_list_or_empty(step2_args$pval)
+  resolved_pval_use <- pval_settings$use
+  if (!is.null(resolved_pval_use)) {
+    if (length(resolved_pval_use) != 2L) {
       stop("`pval_use` must have length 2: SNP column and p-value column.")
     }
-    pval_modifier <- c(pval_modifier, paste0("use=", paste(pval_use, collapse = ",")))
+    pval_modifier <- c(pval_modifier, paste0("use=", paste(resolved_pval_use, collapse = ",")))
   }
-  if (!is.null(sample_size)) {
-    pval_modifier <- c(pval_modifier, paste0("N=", sample_size))
+  if (!is.null(pval_settings$snp_id)) {
+    pval_modifier <- c(pval_modifier, paste0("snp-id=", pval_settings$snp_id))
   }
-  if (!is.null(sample_size_col)) {
-    pval_modifier <- c(pval_modifier, paste0("ncol=", sample_size_col))
+  if (!is.null(pval_settings$pval)) {
+    pval_modifier <- c(pval_modifier, paste0("pval=", pval_settings$pval))
   }
-  if (!is.null(pval_duplicate)) {
-    pval_modifier <- c(pval_modifier, paste0("duplicate=", pval_duplicate))
+  if (!is.null(pval_settings$N)) {
+    pval_modifier <- c(
+      pval_modifier,
+      paste0("N=", paste(as.character(unlist(pval_settings$N, use.names = FALSE)), collapse = ","))
+    )
+  }
+  if (!is.null(pval_settings$ncol)) {
+    pval_modifier <- c(pval_modifier, paste0("ncol=", pval_settings$ncol))
+  }
+  if (!is.null(pval_settings$duplicate)) {
+    pval_modifier <- c(pval_modifier, paste0("duplicate=", pval_settings$duplicate))
   }
 
   bfile_modifier <- character()
-  if (!is.null(bfile_synonyms)) {
-    bfile_modifier <- c(bfile_modifier, paste0("synonyms=", bfile_synonyms))
+  bfile_settings <- conseguiR_as_list_or_empty(step2_args$bfile)
+  if (!is.null(bfile_settings$synonyms)) {
+    bfile_modifier <- c(bfile_modifier, paste0("synonyms=", bfile_settings$synonyms))
   }
-  if (!is.null(bfile_synonym_dup)) {
-    bfile_modifier <- c(bfile_modifier, paste0("synonym-dup=", bfile_synonym_dup))
+  if (!is.null(bfile_settings$synonym_dup)) {
+    bfile_modifier <- c(bfile_modifier, paste0("synonym-dup=", bfile_settings$synonym_dup))
   }
+
+  known_step2_keys <- c(
+    "gene_model", "genes_only", "pval", "bfile",
+    "pval_use", "pval_snp_id", "pval_pval", "pval_duplicate",
+    "bfile_synonyms", "bfile_synonym_dup",
+    "gene_model_modifiers", "gene_settings", "batch", "seed", "big_data",
+    "extra_args", "general_args"
+  )
+  step2_general_args <- c(
+    conseguiR_magma_general_args(step2_args$general_args),
+    conseguiR_magma_general_args(step2_args[setdiff(names(step2_args), known_step2_keys)])
+  )
 
   args <- c(
     "--bfile", reference_bfile, bfile_modifier,
@@ -511,15 +788,47 @@ run_magma_step2_gene_analysis <- function(
     "--out", output_prefix
   )
 
-  if (!is.null(gene_model)) {
-    args <- c(args, "--gene-model", gene_model)
+  resolved_gene_model <- step2_args$gene_model
+  if (!is.null(resolved_gene_model)) {
+    args <- c(
+      args,
+      "--gene-model", resolved_gene_model,
+      as.character(unlist(step2_args$gene_model_modifiers %||% character(), use.names = FALSE))
+    )
   }
 
-  if (isTRUE(genes_only)) {
+  if (isTRUE(step2_args$genes_only)) {
     args <- c(args, "--genes-only")
   }
 
-  args <- c(args, extra_args)
+  gene_settings_modifiers <- conseguiR_magma_modifiers(step2_args$gene_settings)
+  if (length(gene_settings_modifiers) > 0L) {
+    args <- c(args, "--gene-settings", gene_settings_modifiers)
+  }
+
+  if (!is.null(step2_args$batch)) {
+    batch_values <- as.character(unlist(step2_args$batch, use.names = FALSE))
+    if (length(batch_values) != 2L) {
+      stop("`batch` must supply exactly two values for MAGMA `--batch`.")
+    }
+    args <- c(args, "--batch", batch_values)
+  }
+
+  if (!is.null(step2_args$seed)) {
+    args <- c(args, "--seed", as.character(step2_args$seed))
+  }
+
+  if (!is.null(step2_args$big_data)) {
+    if (isTRUE(step2_args$big_data)) {
+      args <- c(args, "--big-data")
+    } else if (identical(step2_args$big_data, FALSE)) {
+      args <- c(args, "--big-data", "off")
+    } else {
+      args <- c(args, "--big-data", as.character(step2_args$big_data))
+    }
+  }
+
+  args <- c(args, step2_general_args, step2_args$extra_args %||% character())
 
   command_string <- paste(c(shQuote(magma_path), shQuote(args)), collapse = " ")
   conseguiR_verbose_message(verbose, "Running MAGMA step 2 gene analysis command:")
@@ -647,13 +956,23 @@ run_magma_feature_scoring_pipeline <- function(
   gene_model = NULL,
   genes_only = TRUE,
   pval_use = NULL,
+  pval_snp_id = NULL,
+  pval_pval = NULL,
   pval_duplicate = NULL,
   bfile_synonyms = NULL,
   bfile_synonym_dup = NULL,
+  gene_model_modifiers = NULL,
+  gene_settings = list(),
+  batch = NULL,
+  seed = NULL,
+  big_data = NULL,
   magma_gwas_cache_prefix = NULL,
   reuse_existing_gwas_cache = TRUE,
   reuse_existing_annotation = FALSE,
   reuse_existing_analysis = FALSE,
+  step1_args = list(),
+  step2_args = list(),
+  step2_general_args = list(),
   step1_extra_args = character(),
   step2_extra_args = character(),
   keep_intermediates = FALSE,
@@ -693,6 +1012,10 @@ run_magma_feature_scoring_pipeline <- function(
     conseguiR_verbose_message(verbose, "Preparing MAGMA inputs for step 1...")
   }
 
+  if (is.null(step2_args$general_args) && length(step2_general_args) > 0L) {
+    step2_args$general_args <- step2_general_args
+  }
+
   step1 <- run_magma_step1_annotation(
     gwas_sumstats = gwas_sumstats,
     gene_loc_path = feature_loc_path,
@@ -706,6 +1029,7 @@ run_magma_feature_scoring_pipeline <- function(
     nonhuman = nonhuman,
     reuse_prepared_inputs = TRUE,
     reuse_existing_annotation = reuse_existing_annotation,
+    step1_args = step1_args,
     extra_args = step1_extra_args,
     verbose = verbose
   )
@@ -723,10 +1047,18 @@ run_magma_feature_scoring_pipeline <- function(
     gene_model = gene_model,
     genes_only = genes_only,
     pval_use = pval_use,
+    pval_snp_id = pval_snp_id,
+    pval_pval = pval_pval,
     pval_duplicate = pval_duplicate,
     bfile_synonyms = bfile_synonyms,
     bfile_synonym_dup = bfile_synonym_dup,
+    gene_model_modifiers = gene_model_modifiers,
+    gene_settings = gene_settings,
+    batch = batch,
+    seed = seed,
+    big_data = big_data,
     reuse_existing_analysis = reuse_existing_analysis,
+    step2_args = step2_args,
     extra_args = step2_extra_args,
     verbose = verbose
   )
