@@ -535,7 +535,7 @@ test_extract_fishhook_reg_scores_directional <- function() {
   expect_true(scores[reg_elem_id == "EH38E0080197", zstat] > 0)
   expect_true(scores[reg_elem_id == "EH38E2084302", zstat] < 0)
   expect_equal(scores[reg_elem_id == "EH38E0080197", p_value], 1e-4)
-  expect_equal(scores[reg_elem_id == "EH38E2084302", p_value], 1e-5)
+  expect_equal(scores[reg_elem_id == "EH38E2084302", p_value], 0.9)
 }
 
 test_somatic_extreme_scores_are_capped <- function() {

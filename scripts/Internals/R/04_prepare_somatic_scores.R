@@ -228,42 +228,16 @@ extract_fishhook_reg_scores <- function(
   fishhook_result,
   reg_col = c("id", "reg_elem_id", "element_id", "name"),
   p_col = c("p", "pvalue", "p_value", "p.val"),
-  neg_p_col = c("p.neg", "p_neg", "pneg"),
   effect_col = c("effectsize", "zscore", "z", "coef", "beta", "observed_over_expected")
 ) {
   dt <- as.data.table(fishhook_result)
 
   reg_col <- pick_first_existing_column(dt, reg_col, "fishHook regulatory element identifier")
   p_col <- pick_first_existing_column(dt, p_col, "fishHook p-value")
-  neg_p_col <- intersect(neg_p_col, names(dt))
-  neg_p_col <- if (length(neg_p_col) > 0) neg_p_col[[1]] else NULL
   effect_col <- intersect(effect_col, names(dt))
   effect_col <- if (length(effect_col) > 0) effect_col[[1]] else NULL
 
-  effect_direction <- NULL
-  if (!is.null(effect_col)) {
-    if (effect_col %in% c("effectsize", "observed_over_expected")) {
-      effect_direction <- effect_direction_from_ratio(dt[[effect_col]], null_value = 1)
-    } else {
-      effect_direction <- as.numeric(dt[[effect_col]])
-    }
-  }
-
-  if (!is.null(neg_p_col)) {
-    out <- data.table(
-      reg_elem_id = as.character(dt[[reg_col]]),
-      p_value = pick_signed_p_value(
-        pos_p = dt[[p_col]],
-        neg_p = dt[[neg_p_col]],
-        sign_value = effect_direction
-      ),
-      zstat = compute_signed_z_from_one_sided_ps(
-        pos_p = dt[[p_col]],
-        neg_p = dt[[neg_p_col]],
-        sign_value = effect_direction
-      )
-    )
-  } else if (!is.null(effect_col) && effect_col %in% c("zscore", "z")) {
+  if (!is.null(effect_col) && effect_col %in% c("zscore", "z")) {
     out <- data.table(
       reg_elem_id = as.character(dt[[reg_col]]),
       p_value = as.numeric(dt[[p_col]]),
@@ -273,10 +247,7 @@ extract_fishhook_reg_scores <- function(
     out <- data.table(
       reg_elem_id = as.character(dt[[reg_col]]),
       p_value = as.numeric(dt[[p_col]]),
-      zstat = compute_signed_z_from_p(
-        p_value = dt[[p_col]],
-        effect_direction = effect_direction
-      )
+      zstat = compute_one_sided_z_from_p(p_value = dt[[p_col]])
     )
   }
 
