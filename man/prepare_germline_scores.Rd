@@ -9,17 +9,16 @@ prepare_germline_scores(
   reference_bfile,
   gene_output_prefix = NULL,
   reg_output_prefix = NULL,
-  magma_gwas_cache_prefix = NULL,
   gene_sample_size = NULL,
   gene_sample_size_col = NULL,
   reg_sample_size = NULL,
   reg_sample_size_col = NULL,
-  gene_step1_args = list(),
+  gene_step1_args = list(annotation_window = c(15, 15)),
   gene_step2_args = list(),
-  reg_step1_args = list(),
+  reg_step1_args = list(annotation_window = c(15, 15)),
   reg_step2_args = list(),
   shared_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 )
 }
 \arguments{
@@ -30,8 +29,6 @@ prepare_germline_scores(
 \item{gene_output_prefix}{Output prefix for gene-level germline scores.}
 
 \item{reg_output_prefix}{Output prefix for regulatory germline scores.}
-
-\item{magma_gwas_cache_prefix}{Optional shared MAGMA GWAS cache prefix.}
 
 \item{gene_sample_size}{Fixed sample size for the gene run.}
 

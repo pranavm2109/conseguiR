@@ -12,12 +12,8 @@ run_germline_gene_scoring(
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = NULL,
-  magma_gwas_cache_prefix = NULL,
-  reuse_existing_gwas_cache = TRUE,
-  reuse_existing_annotation = FALSE,
-  reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
-  annotation_window = NULL,
+  annotation_window = c(15, 15),
   filter_path = NULL,
   ignore_strand = FALSE,
   nonhuman = FALSE,
@@ -41,7 +37,7 @@ run_germline_gene_scoring(
   step2_extra_args = character(),
   step1_args = list(),
   step2_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 )
 }
 \arguments{
@@ -61,16 +57,6 @@ run_germline_gene_scoring(
 \item{magma_path}{Optional path to the MAGMA executable. When \code{NULL},
 \code{conseguiR} searches in this order: \code{options(conseguiR.magma_path = ...)},
 \code{Sys.getenv("CONSEGUIR_MAGMA_PATH")}, then \code{magma} on \code{PATH}.}
-
-\item{magma_gwas_cache_prefix}{Optional shared MAGMA GWAS cache prefix.}
-
-\item{reuse_existing_gwas_cache}{Whether to reuse the shared MAGMA cache.}
-
-\item{reuse_existing_annotation}{Whether to reuse an existing MAGMA
-annotation output.}
-
-\item{reuse_existing_analysis}{Whether to reuse an existing MAGMA gene
-analysis output.}
 
 \item{keep_intermediates}{Whether to keep intermediate MAGMA files.}
 

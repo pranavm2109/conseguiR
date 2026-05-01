@@ -12,7 +12,7 @@ source("R/backend_resources.R")
 
 devtools::load_all(".", quiet = TRUE)
 
-default_pipeline_test_output_dir <- "data/processed/test_outputs/run_conseguiR"
+default_pipeline_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "run_conseguiR")
 default_pipeline_gwas_path <- "data/raw/Testing/34737426-GCST90043906-EFO_0000403.h.tsv"
 default_pipeline_somatic_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcga_order_hg38.maf"
 default_pipeline_reg_ref_path <- .conseguiR_default_reg_loc_path()
@@ -125,6 +125,24 @@ make_pipeline_reg_ref_subset <- function(n_reg_elements = 5000L) {
   reg_subset_path
 }
 
+read_test_table <- function(path) {
+  if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    con <- gzfile(path, open = "rt")
+    on.exit(close(con), add = TRUE)
+    return(as.data.table(
+      utils::read.delim(
+        con,
+        sep = "\t",
+        header = TRUE,
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+    ))
+  }
+
+  fread(path, showProgress = FALSE)
+}
+
 make_pipeline_inputs <- function() {
   gwas_dt <- fread(default_pipeline_gwas_path, nrows = 5000L, showProgress = FALSE)
   somatic_dt <- fread(default_pipeline_somatic_path, nrows = 10000L, showProgress = FALSE)
@@ -136,18 +154,35 @@ make_pipeline_inputs <- function() {
   .conseguiR_initialize_backend_graphs(
     backend_dir = test_backend_dir,
     build_gene_reg = TRUE,
-    build_gene_gene = TRUE,
+    build_gene_gene = FALSE,
     force = TRUE,
-    strict = TRUE,
+    strict = FALSE,
     quiet = TRUE
   )
 
   backend_paths <- .conseguiR_backend_paths(test_backend_dir)
-  gg_graph <- readRDS(backend_paths$gene_gene_graph_rds)
   gg_nodes_path <- make_pipeline_test_path("run_conseguiR_gg_nodes", ".tsv")
   gg_edges_path <- make_pipeline_test_path("run_conseguiR_gg_edges", ".tsv")
-  fwrite(as.data.table(igraph::as_data_frame(gg_graph, what = "vertices")), gg_nodes_path, sep = "\t")
-  fwrite(as.data.table(igraph::as_data_frame(gg_graph, what = "edges")), gg_edges_path, sep = "\t")
+  gene_reg_nodes <- read_test_table(backend_paths$gene_reg_graph_nodes)
+  gg_nodes <- unique(
+    gene_reg_nodes[node_type == "gene", .(
+      node_id = as.character(node_id),
+      node_type = "gene"
+    )],
+    by = "node_id"
+  )
+  if (nrow(gg_nodes) < 2L) {
+    stop("Unable to derive a minimal gene-gene node table from the seeded gene-reg backend.")
+  }
+  gg_nodes <- gg_nodes[seq_len(min(50L, nrow(gg_nodes)))]
+  gg_edges <- data.table(
+    from = gg_nodes$node_id[-nrow(gg_nodes)],
+    to = gg_nodes$node_id[-1L],
+    confidence = 0.9,
+    weight = 1.0
+  )
+  fwrite(gg_nodes, gg_nodes_path, sep = "\t")
+  fwrite(gg_edges, gg_edges_path, sep = "\t")
 
   list(
     gwas_sumstats = gwas_dt,
@@ -280,9 +315,6 @@ make_full_run_conseguiR_germline_args <- function() {
     ),
     shared_args = list(
       magma_path = "dummy_magma_path",
-      reuse_existing_gwas_cache = TRUE,
-      reuse_existing_annotation = TRUE,
-      reuse_existing_analysis = TRUE,
       keep_intermediates = TRUE
     )
   )

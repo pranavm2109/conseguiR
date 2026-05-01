@@ -1,13 +1,22 @@
 ## Shared basilisk-backed Python helpers for the installed/runtime wrapper path.
 
+.conseguiR_basilisk_pkgname <- function() {
+  if (requireNamespace("conseguiR", quietly = TRUE)) {
+    return("conseguiR")
+  }
+  "base"
+}
+
 .conseguiR_basilisk_env <- local({
   env <- NULL
+  env_pkgname <- NULL
 
   function() {
-    if (is.null(env)) {
-      env <<- basilisk::BasiliskEnvironment(
+    current_pkgname <- .conseguiR_basilisk_pkgname()
+    if (is.null(env) || !identical(env_pkgname, current_pkgname)) {
+      env_args <- list(
         envname = "conseguiR_py",
-        pkgname = "conseguiR",
+        pkgname = current_pkgname,
         packages = c(
           "python=3.11",
           "numpy=1.26.4",
@@ -17,6 +26,8 @@
           "ortools==9.10.4067"
         )
       )
+      env <<- do.call(basilisk::BasiliskEnvironment, env_args)
+      env_pkgname <<- current_pkgname
     }
 
     env
@@ -24,16 +35,51 @@
 })
 
 .conseguiR_direct_python_path <- function() {
-  if (!exists("consequIR_find_python", mode = "function")) {
+  candidates <- character()
+
+  configured_python <- Sys.getenv("CONSEGUIR_PYTHON", unset = "")
+  if (nzchar(configured_python)) {
+    candidates <- c(candidates, configured_python)
+  }
+
+  reticulate_python <- Sys.getenv("RETICULATE_PYTHON", unset = "")
+  if (nzchar(reticulate_python)) {
+    candidates <- c(candidates, reticulate_python)
+  }
+
+  conda_prefix <- Sys.getenv("CONDA_PREFIX", unset = "")
+  if (nzchar(conda_prefix)) {
+    candidates <- c(candidates, file.path(conda_prefix, "bin", "python"))
+  }
+
+  if (exists("consequIR_find_python", mode = "function")) {
+    discovered <- tryCatch(consequIR_find_python(), error = function(e) NULL)
+    if (is.character(discovered) && length(discovered) == 1L && nzchar(discovered)) {
+      candidates <- c(candidates, discovered)
+    }
+  }
+
+  python3_path <- Sys.which("python3")
+  if (nzchar(python3_path)) {
+    candidates <- c(candidates, python3_path)
+  }
+
+  python_path <- Sys.which("python")
+  if (nzchar(python_path)) {
+    candidates <- c(candidates, python_path)
+  }
+
+  candidates <- unique(candidates[nzchar(candidates)])
+  valid <- Filter(
+    function(path) is.character(path) && length(path) == 1L && file.exists(path) && !dir.exists(path),
+    candidates
+  )
+
+  if (length(valid) < 1L) {
     return(NULL)
   }
 
-  path <- tryCatch(consequIR_find_python(), error = function(e) NULL)
-  if (is.null(path) || !is.character(path) || length(path) != 1L || !nzchar(path)) {
-    return(NULL)
-  }
-
-  path
+  valid[[1]]
 }
 
 .conseguiR_run_python_module_direct <- function(

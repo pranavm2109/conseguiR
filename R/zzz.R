@@ -5,6 +5,8 @@
 .conseguiR_state <- new.env(parent = emptyenv())
 .conseguiR_state$pkg_root <- NULL
 .conseguiR_state$basilisk_status <- NULL
+.conseguiR_state$basilisk_env <- NULL
+.conseguiR_state$basilisk_env_pkgname <- NULL
 .conseguiR_state$magma_path <- NULL
 .conseguiR_default_conda_env <- function() {
   env <- getOption("conseguiR.conda_env", Sys.getenv("CONSEGUIR_CONDA_ENV", unset = ""))

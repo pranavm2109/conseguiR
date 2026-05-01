@@ -21,13 +21,12 @@ default_reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits =
 }
 default_reference_bfile <- "data/raw/g1000_eur/g1000_eur"
 default_sample_size <- 456348L
-default_germline_test_output_dir <- "data/processed/test_outputs/germline"
+default_germline_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "germline")
 default_run_full_magma_tests <- identical(Sys.getenv("CONSEGUIR_RUN_FULL_MAGMA_TESTS", unset = "0"), "1")
 
 expected_germline_wrapper_formals <- c(
   "gwas_sumstats", "reference_bfile", "sample_size", "sample_size_col",
-  "magma_path", "magma_gwas_cache_prefix", "reuse_existing_gwas_cache",
-  "reuse_existing_annotation", "reuse_existing_analysis", "keep_intermediates",
+  "magma_path", "keep_intermediates",
   "annotation_window", "filter_path", "ignore_strand", "nonhuman",
   "annotate_modifiers", "step1_general_args",
   "step1_extra_args", "gene_model", "gene_model_modifiers", "genes_only", "pval_use",
@@ -40,7 +39,7 @@ expected_germline_wrapper_formals <- c(
 
 expected_prepare_germline_formals <- c(
   "gwas_sumstats", "reference_bfile", "gene_output_prefix", "reg_output_prefix",
-  "magma_gwas_cache_prefix", "gene_sample_size", "gene_sample_size_col",
+  "gene_sample_size", "gene_sample_size_col",
   "reg_sample_size", "reg_sample_size_col", "gene_step1_args",
   "gene_step2_args", "reg_step1_args", "reg_step2_args", "shared_args",
   "verbose"
@@ -138,44 +137,28 @@ find_reference_bfile <- function() {
   NULL
 }
 
-test_prepare_magma_gwas_cache_reuses_cached_outputs <- function(
-  gwas_path = make_tiny_gwas_fixture()
-) {
-  output_prefix <- make_germline_test_path("magma_cached_inputs")
+skip_if_magma_unavailable <- function() {
+  magma_path <- tryCatch(resolve_magma_path(must_work = TRUE), error = function(e) NULL)
+  if (is.null(magma_path)) {
+    skip("No runnable MAGMA executable is available in this environment.")
+  }
 
-  first <- prepare_magma_gwas_cache(
-    gwas_sumstats = gwas_path,
-    cache_prefix = output_prefix,
-    reuse_existing = FALSE
-  )
+  probe <- suppressWarnings(tryCatch(
+    system2(magma_path, args = "--help", stdout = TRUE, stderr = TRUE),
+    error = function(e) structure(character(), status = 127L)
+  ))
+  probe_status <- attr(probe, "status")
+  if (!is.null(probe_status) && !identical(probe_status, 0L)) {
+    skip("MAGMA executable is present but not runnable in this environment.")
+  }
 
-  expect_true(file.exists(first$snp_loc_path))
-  expect_true(file.exists(first$pval_path))
-  expect_false(first$reused_existing)
-
-  first_snp_mtime <- file.info(first$snp_loc_path)$mtime
-  first_pval_mtime <- file.info(first$pval_path)$mtime
-
-  Sys.sleep(1)
-
-  second <- prepare_magma_gwas_cache(
-    gwas_sumstats = gwas_path,
-    cache_prefix = output_prefix,
-    reuse_existing = TRUE
-  )
-
-  expect_true(second$reused_existing)
-  expect_equal(file.info(second$snp_loc_path)$mtime, first_snp_mtime)
-  expect_equal(file.info(second$pval_path)$mtime, first_pval_mtime)
-
-  invisible(second)
+  invisible(magma_path)
 }
 
-test_run_magma_step1_annotation_reuses_existing_annotation <- function() {
+test_run_magma_step1_annotation_writes_annotation_outputs <- function() {
+  skip_if_magma_unavailable()
   output_prefix <- make_germline_test_path("magma_step1_reuse")
   snp_loc_path <- paste0(output_prefix, ".snp_loc.tsv")
-  pval_path <- paste0(output_prefix, ".pval.tsv")
-  annot_path <- paste0(output_prefix, ".genes.annot")
 
   tiny_gwas <- data.table(
     hm_rsid = c("rs1", "rs2"),
@@ -185,27 +168,22 @@ test_run_magma_step1_annotation_reuses_existing_annotation <- function() {
     p_value = c(0.01, 0.2)
   )
 
-  fwrite(data.table(V1 = c("rs1", "rs2"), V2 = c("1", "1"), V3 = c(100L, 200L)), snp_loc_path, sep = "\t", col.names = FALSE)
-  fwrite(data.table(SNP = c("rs1", "rs2"), P = c(0.01, 0.2)), pval_path, sep = "\t")
-  writeLines(c("GENE\tCHR\tSTART\tSTOP\tNSNPS\tSNPs", "TEST\t1\t1\t1000\t2\trs1,rs2"), annot_path)
-
   result <- run_magma_step1_annotation(
     gwas_sumstats = tiny_gwas,
     gene_loc_path = default_gene_loc_path,
-    output_prefix = output_prefix,
-    reuse_prepared_inputs = TRUE,
-    reuse_existing_annotation = TRUE
+    output_prefix = output_prefix
   )
 
-  expect_true(isTRUE(result$reused_existing_annotation))
+  expect_true(file.exists(snp_loc_path))
   expect_true(file.exists(result$annot_path))
-  expect_null(result$command)
+  expect_true(nzchar(result$command))
   invisible(result)
 }
 
-test_run_magma_step2_gene_analysis_reuses_existing_output <- function(
+test_run_magma_step2_gene_analysis_writes_output <- function(
   reference_bfile = find_reference_bfile()
 ) {
+  skip_if_magma_unavailable()
   if (is.null(reference_bfile)) {
     skip("No PLINK reference bfile found in the repository.")
   }
@@ -213,24 +191,20 @@ test_run_magma_step2_gene_analysis_reuses_existing_output <- function(
   output_prefix <- make_germline_test_path("magma_step2_reuse")
   gene_annot_path <- make_germline_test_path("magma_gene_annot", ".genes.annot")
   pval_path <- make_germline_test_path("magma_pval", ".tsv")
-  genes_out_path <- paste0(output_prefix, ".genes.out")
 
   writeLines(c("GENE\tCHR\tSTART\tSTOP\tNSNPS\tSNPs", "TEST\t1\t1\t1000\t2\trs1,rs2"), gene_annot_path)
   fwrite(data.table(SNP = c("rs1", "rs2"), P = c(0.01, 0.2)), pval_path, sep = "\t")
-  fwrite(data.table(GENE = "TEST", GENE_NAME = "TEST", ZSTAT = 2.1, P = 0.03), genes_out_path, sep = "\t")
 
   result <- run_magma_step2_gene_analysis(
     gene_annot_path = gene_annot_path,
     pval_path = pval_path,
     reference_bfile = reference_bfile,
     output_prefix = output_prefix,
-    sample_size = default_sample_size,
-    reuse_existing_analysis = TRUE
+    sample_size = default_sample_size
   )
 
-  expect_true(isTRUE(result$reused_existing_analysis))
   expect_true(file.exists(result$genes_out_path))
-  expect_null(result$command)
+  expect_true(nzchar(result$command))
   invisible(result)
 }
 
@@ -677,7 +651,7 @@ test_germline_wrapper_surface_matches_supported_api <- function() {
   expect_true(all(expected_prepare_germline_formals %in% prepare_formals))
 }
 
-test_germline_wrapper_respects_output_and_cache_controls <- function(
+test_germline_wrapper_respects_output_and_output_controls <- function(
   reference_bfile = find_reference_bfile()
 ) {
   if (is.null(reference_bfile)) {
@@ -685,44 +659,22 @@ test_germline_wrapper_respects_output_and_cache_controls <- function(
   }
 
   fake <- make_fake_magma_executable()
-  output_prefix <- make_germline_test_path("magma_wrapper_output_cache")
-  cache_prefix <- make_germline_test_path("magma_wrapper_cache")
+  output_prefix <- make_germline_test_path("magma_wrapper_output")
 
-  first <- run_germline_gene_scoring(
+  result <- run_germline_gene_scoring(
     gwas_sumstats = make_tiny_gwas_fixture(),
     gene_loc_path = default_gene_loc_path,
     reference_bfile = reference_bfile,
     output_prefix = output_prefix,
     sample_size = default_sample_size,
     magma_path = fake$path,
-    magma_gwas_cache_prefix = cache_prefix,
-    keep_intermediates = TRUE,
-    reuse_existing_gwas_cache = FALSE,
-    reuse_existing_annotation = FALSE,
-    reuse_existing_analysis = FALSE
+    keep_intermediates = TRUE
   )
 
   expect_true(file.exists(paste0(output_prefix, ".zstat.tsv")))
-  expect_true(file.exists(paste0(cache_prefix, ".snp_loc.tsv")))
-  expect_true(file.exists(paste0(cache_prefix, ".pval.tsv")))
-
-  second <- run_germline_gene_scoring(
-    gwas_sumstats = make_tiny_gwas_fixture(),
-    gene_loc_path = default_gene_loc_path,
-    reference_bfile = reference_bfile,
-    output_prefix = output_prefix,
-    sample_size = default_sample_size,
-    magma_path = fake$path,
-    magma_gwas_cache_prefix = cache_prefix,
-    keep_intermediates = TRUE,
-    reuse_existing_gwas_cache = TRUE,
-    reuse_existing_annotation = TRUE,
-    reuse_existing_analysis = TRUE
-  )
-
-  expect_true(isTRUE(second$pipeline$step1$reused_existing_annotation))
-  expect_true(isTRUE(second$pipeline$step2$reused_existing_analysis))
-  expect_true(file.exists(first$output_paths$gene_scores_path))
+  expect_true(file.exists(paste0(output_prefix, ".step1.snp_loc.tsv")))
+  expect_true(file.exists(paste0(output_prefix, ".step1.pval.tsv")))
+  expect_true(file.exists(result$output_paths$gene_scores_path))
 }
 
 test_germline_wrapper_forwards_explicit_step_args <- function(
@@ -879,6 +831,7 @@ test_run_magma_step1_annotation <- function(
   gene_loc_path = default_gene_loc_path,
   nrows = 50000L
 ) {
+  skip_if_magma_unavailable()
   output_prefix <- make_germline_test_path("magma_step1_test")
 
   result <- run_magma_step1_annotation(
@@ -1018,6 +971,7 @@ test_run_magma_step2_gene_analysis <- function(
   feature_type = "gene",
   nrows = 50000L
 ) {
+  skip_if_magma_unavailable()
   if (is.null(reference_bfile)) {
     message("Skipping MAGMA step 2 test: no PLINK reference bfile found in the repository.")
     return(invisible(NULL))
@@ -1059,6 +1013,7 @@ test_run_magma_feature_scoring_pipeline <- function(
   feature_type = "gene",
   print_scores = TRUE
 ) {
+  skip_if_magma_unavailable()
   if (is.null(reference_bfile)) {
     message("Skipping full MAGMA pipeline test: no PLINK reference bfile found in the repository.")
     return(invisible(NULL))
@@ -1095,9 +1050,8 @@ test_run_magma_feature_scoring_pipeline <- function(
 }
 
 run_all_germline_tests <- function(print_scores = TRUE) {
-  test_prepare_magma_gwas_cache_reuses_cached_outputs()
-  test_run_magma_step1_annotation_reuses_existing_annotation()
-  test_run_magma_step2_gene_analysis_reuses_existing_output()
+  test_run_magma_step1_annotation_writes_annotation_outputs()
+  test_run_magma_step2_gene_analysis_writes_output()
   test_extract_magma_zstat()
   test_extract_magma_feature_zstat_regulatory()
 }
@@ -1181,8 +1135,8 @@ main <- function() {
     test_germline_wrapper_surface_matches_supported_api()
   })
 
-  test_that("germline wrapper respects output and cache controls", {
-    test_germline_wrapper_respects_output_and_cache_controls()
+  test_that("germline wrapper respects output controls", {
+    test_germline_wrapper_respects_output_and_output_controls()
   })
 
   if (isTRUE(default_run_full_magma_tests)) {

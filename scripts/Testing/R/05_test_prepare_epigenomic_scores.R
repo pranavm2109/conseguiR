@@ -11,7 +11,7 @@ source("scripts/Internals/R/05_prepare_epigenomic_scores.R")
 default_epigenomic_track_dir <- "data/raw/Testing"
 default_reg_ref_path <- .conseguiR_default_reg_loc_path()
 default_broken_bigwig_path <- "data/raw/Testing/broken_signal_track.bw"
-default_epigenomic_test_output_dir <- "data/processed/test_outputs/epigenomic"
+default_epigenomic_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "epigenomic")
 
 select_epigenomic_test_bigwigs <- function(track_dir) {
   bw_files <- list.files(track_dir, pattern = "\\.(bw|bigWig)$", full.names = TRUE)

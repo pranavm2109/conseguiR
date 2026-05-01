@@ -16,7 +16,7 @@ devtools::load_all(".", quiet = TRUE)
 
 source("scripts/Externals/R/00_user_callable_functions.R")
 
-default_external_test_output_dir <- "data/processed/test_outputs/external_api"
+default_external_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "external_api")
 default_external_gwas_path <- "data/raw/Testing/34737426-GCST90043906-EFO_0000403.h.tsv"
 default_external_somatic_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf_tcga_order_hg38.maf"
 default_external_reg_ref_path <- "data/raw/Testing/reg_elements_valid.loc"
@@ -90,6 +90,9 @@ make_existing_score_bundles <- function() {
 
 materialize_plaintext_gene_gene_paths <- function() {
   backend_paths <- .conseguiR_backend_paths(test_backend_dir)
+  if (!file.exists(backend_paths$gene_gene_graph_rds)) {
+    skip("Gene-gene backend graph is unavailable in this environment.")
+  }
   graph <- readRDS(backend_paths$gene_gene_graph_rds)
 
   nodes_path <- make_external_test_path("gene_gene_nodes_plain", ".tsv")

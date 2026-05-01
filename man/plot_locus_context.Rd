@@ -68,7 +68,7 @@ locus SNP labeling.}
 \item{label_top_gwas_snp}{Logical scalar. If \code{TRUE}, label the top GWAS SNP
 inside the top germline regulatory element in the locus.}
 
-\item{rsid_pmid}{Optional cached rsID-to-PMID evidence table with at least
+\item{rsid_pmid}{Optional rsID-to-PMID evidence table with at least
 \code{rsid} and \code{pmid} columns.}
 
 \item{label_top_lit_snps}{Integer count of literature-backed SNPs to label.
@@ -117,7 +117,7 @@ containing node and edge tables
 \item \code{selected_subgraph}: the bundle returned by \code{call_selected_subgraph()}
 \item \code{label_features}: a character vector of gene symbols such as
 \code{c("MYC", "BCL2", "BCL6")}
-\item \code{rsid_pmid}: an optional cached literature-support table with at least
+\item \code{rsid_pmid}: an optional literature-support table with at least
 \code{rsid} and \code{pmid} columns
 \item \code{label_top_lit_snps}: number of literature-backed SNPs to label before
 falling back to top GWAS SNPs in the top germline regulatory elements

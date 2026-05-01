@@ -406,7 +406,7 @@ run_dndscv_gene_scoring <- function(
   numcode = 1L,
   outmats = FALSE,
   mingenecovs = 500L,
-  onesided = NULL,
+  onesided = TRUE,
   dc = NULL,
   verbose = FALSE,
   ...
@@ -659,7 +659,7 @@ run_somatic_scoring_pipeline <- function(
   numcode = 1L,
   outmats = FALSE,
   mingenecovs = 500L,
-  onesided = NULL,
+  onesided = TRUE,
   dc = NULL,
   eligible_gr = NULL,
   fishhook_covariates = NULL,

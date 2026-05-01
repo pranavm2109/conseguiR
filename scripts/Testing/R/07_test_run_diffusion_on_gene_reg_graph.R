@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 
 source("scripts/Internals/R/06b_python_basilisk.R")
 source("scripts/Internals/R/07_run_diffusion_on_gene_reg_graph.R")
-default_step7_test_output_dir <- "data/processed/test_outputs/step7"
+default_step7_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "step7")
 
 make_step7_test_path <- function(stem, ext = "") {
   dir.create(default_step7_test_output_dir, recursive = TRUE, showWarnings = FALSE)

@@ -15,8 +15,8 @@ initialize_backend_graphs(
 )
 }
 \arguments{
-\item{backend_dir}{Optional backend cache directory. When \code{NULL},
-\code{conseguiR} uses its default backend cache location.}
+\item{backend_dir}{Optional backend directory. When \code{NULL},
+\code{conseguiR} uses its default backend resource location.}
 
 \item{build_gene_reg}{Logical scalar. If \code{TRUE}, ensure the gene-regulatory
 backend graph resources are available.}
@@ -25,7 +25,7 @@ backend graph resources are available.}
 backend graph resources are available.}
 
 \item{force}{Logical scalar. If \code{TRUE}, re-materialize backend resources even
-when cached outputs already exist.}
+when previous outputs already exist.}
 
 \item{strict}{Logical scalar. If \code{TRUE}, error when required backend inputs
 are unavailable. If \code{FALSE}, return a best-effort status object instead.}
@@ -42,8 +42,7 @@ output paths, and graph materialization status.
 }
 \description{
 Materializes packaged backend graph seeds into a writable backend directory
-and primes an in-memory cache of the loaded graph objects for downstream
-stages.
+for downstream stages.
 }
 \examples{
 initialize_backend_graphs()

@@ -494,7 +494,7 @@ Main inputs:
 - locus coordinates (`chromosome`, `start`, `end`)
 - optional selected-subgraph inputs for highlighting/filtering
 - optional GWAS summary statistics for SNP labeling
-- optional cached `rsid_pmid` table or a disease term such as `"DLBCL"` or
+- optional `rsid_pmid` table or a disease term such as `"DLBCL"` or
   `"lymphoma"` for LitVar-backed SNP labeling
 
 Behavior:

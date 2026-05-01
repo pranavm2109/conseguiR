@@ -35,9 +35,74 @@
   }
 
   api_path <- .conseguiR_runtime_file("scripts/Externals/R/00_user_callable_functions.R")
+  old_wd <- getwd()
+  on.exit(setwd(old_wd), add = TRUE)
+
+  pkg_root <- .conseguiR_state$pkg_root
+  if (is.character(pkg_root) && length(pkg_root) == 1L && nzchar(pkg_root) && dir.exists(pkg_root)) {
+    setwd(pkg_root)
+  }
+
   sys.source(api_path, envir = .conseguiR_runtime_env)
   assign(".loaded", TRUE, envir = .conseguiR_runtime_env)
   invisible()
+}
+
+#' @keywords internal
+.conseguiR_reset_runtime_env <- function() {
+  loaded_names <- ls(envir = .conseguiR_runtime_env, all.names = TRUE)
+  if (length(loaded_names) > 0L) {
+    rm(list = loaded_names, envir = .conseguiR_runtime_env)
+  }
+
+  .conseguiR_state$basilisk_env <- NULL
+  .conseguiR_state$basilisk_env_pkgname <- NULL
+  .conseguiR_state$basilisk_status <- NULL
+
+  invisible()
+}
+
+#' Reload the sourced conseguiR runtime helpers
+#'
+#' Refreshes the mutable runtime environment used by the sourced external API
+#' path. This is mainly useful during development, vignette rendering from a
+#' live checkout, or after syncing updated source files into an existing R
+#' session. Installed-package users typically do not need to call this.
+#'
+#' @param pkg_root Optional repository root to use when resolving sourced
+#'   runtime files. When omitted, `conseguiR` reuses the currently recorded
+#'   package root if available.
+#' @param rebind Logical scalar. If `TRUE`, refresh convenience objects such as
+#'   `copy`, `fread`, and `fwrite` inside the runtime environment after
+#'   reloading.
+#'
+#' @return Invisibly returns the runtime environment.
+#' @export
+reload_conseguiR_runtime <- function(pkg_root = NULL, rebind = TRUE) {
+  if (!is.null(pkg_root)) {
+    pkg_root <- normalizePath(pkg_root, winslash = "/", mustWork = TRUE)
+    .conseguiR_state$pkg_root <- pkg_root
+  }
+
+  .conseguiR_reset_runtime_env()
+  .conseguiR_load_external_api()
+
+  if (isTRUE(rebind)) {
+    if (requireNamespace("data.table", quietly = TRUE)) {
+      assign("copy", data.table::copy, envir = .conseguiR_runtime_env)
+      assign("as.data.table", data.table::as.data.table, envir = .conseguiR_runtime_env)
+      assign("fread", data.table::fread, envir = .conseguiR_runtime_env)
+      assign("fwrite", data.table::fwrite, envir = .conseguiR_runtime_env)
+    }
+
+    assign(
+      "deep_copy_object",
+      function(x) unserialize(serialize(x, NULL)),
+      envir = .conseguiR_runtime_env
+    )
+  }
+
+  invisible(.conseguiR_runtime_env)
 }
 
 #' @keywords internal
@@ -196,7 +261,7 @@ validate_inputs <- function(
   reg_ref_path = NULL,
   epigenomic_tracks = NULL,
   epigenomic_track_dir = NULL,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("validate_inputs")(
     gwas_sumstats = gwas_sumstats,
@@ -211,17 +276,16 @@ validate_inputs <- function(
 #' Initialize backend graph resources
 #'
 #' Materializes packaged backend graph seeds into a writable backend directory
-#' and primes an in-memory cache of the loaded graph objects for downstream
-#' stages.
+#' for downstream stages.
 #'
-#' @param backend_dir Optional backend cache directory. When `NULL`,
-#'   `conseguiR` uses its default backend cache location.
+#' @param backend_dir Optional backend directory. When `NULL`, `conseguiR`
+#'   uses its default backend resource location.
 #' @param build_gene_reg Logical scalar. If `TRUE`, ensure the gene-regulatory
 #'   backend graph resources are available.
 #' @param build_gene_gene Logical scalar. If `TRUE`, ensure the gene-gene
 #'   backend graph resources are available.
 #' @param force Logical scalar. If `TRUE`, re-materialize backend resources even
-#'   when cached outputs already exist.
+#'   when previous outputs already exist.
 #' @param strict Logical scalar. If `TRUE`, error when required backend inputs
 #'   are unavailable. If `FALSE`, return a best-effort status object instead.
 #' @param quiet Logical scalar. If `TRUE`, suppress non-essential backend
@@ -242,7 +306,7 @@ initialize_backend_graphs <- function(
   force = FALSE,
   strict = TRUE,
   quiet = FALSE,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_initialize_backend_graphs(
     backend_dir = backend_dir,
@@ -297,12 +361,6 @@ setMAGMAPath <- function(path) {
 #' @param magma_path Optional path to the MAGMA executable. When `NULL`,
 #'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
 #'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, then `magma` on `PATH`.
-#' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
-#' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
-#' @param reuse_existing_annotation Whether to reuse an existing MAGMA
-#'   annotation output.
-#' @param reuse_existing_analysis Whether to reuse an existing MAGMA gene
-#'   analysis output.
 #' @param keep_intermediates Whether to keep intermediate MAGMA files.
 #' @param annotation_window Optional MAGMA step 1 window passed as
 #'   `window=before,after`.
@@ -369,7 +427,7 @@ setMAGMAPath <- function(path) {
 #' - `step1_args` and `step2_args`: named lists. For example:
 #'
 #' `step1_args = list(
-#'   annotation_window = c(35, 10),
+#'   annotation_window = c(15, 15),
 #'   filter_path = NULL,
 #'   ignore_strand = FALSE,
 #'   nonhuman = FALSE,
@@ -430,12 +488,8 @@ run_germline_gene_scoring <- function(
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = NULL,
-  magma_gwas_cache_prefix = NULL,
-  reuse_existing_gwas_cache = TRUE,
-  reuse_existing_annotation = FALSE,
-  reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
-  annotation_window = NULL,
+  annotation_window = c(15, 15),
   filter_path = NULL,
   ignore_strand = FALSE,
   nonhuman = FALSE,
@@ -459,7 +513,7 @@ run_germline_gene_scoring <- function(
   step2_extra_args = character(),
   step1_args = list(),
   step2_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   gene_loc_path <- gene_loc_path %||% .conseguiR_default_gene_loc_path()
   if (is.null(gene_loc_path)) {
@@ -474,10 +528,6 @@ run_germline_gene_scoring <- function(
     sample_size = sample_size,
     sample_size_col = sample_size_col,
     magma_path = magma_path,
-    magma_gwas_cache_prefix = magma_gwas_cache_prefix,
-    reuse_existing_gwas_cache = reuse_existing_gwas_cache,
-    reuse_existing_annotation = reuse_existing_annotation,
-    reuse_existing_analysis = reuse_existing_analysis,
     keep_intermediates = keep_intermediates,
     annotation_window = annotation_window,
     filter_path = filter_path,
@@ -532,9 +582,7 @@ run_germline_gene_scoring <- function(
 #'
 #' In practice this function behaves like the gene-level MAGMA wrapper, except
 #' that the "features" being annotated and scored are regulatory elements
-#' rather than genes. A common pattern is to use a narrower
-#' `annotation_window` here than for genes, because regulatory intervals are
-#' already localized genomic objects.
+#' rather than genes.
 #'
 #' MAGMA manual:
 #' \url{https://ibg.colorado.edu/cdrom2021/Day10-posthuma/magma_session/manual_v1.09a.pdf}
@@ -552,12 +600,8 @@ run_germline_regulatory_scoring <- function(
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = NULL,
-  magma_gwas_cache_prefix = NULL,
-  reuse_existing_gwas_cache = TRUE,
-  reuse_existing_annotation = FALSE,
-  reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
-  annotation_window = NULL,
+  annotation_window = c(15, 15),
   filter_path = NULL,
   ignore_strand = FALSE,
   nonhuman = FALSE,
@@ -581,7 +625,7 @@ run_germline_regulatory_scoring <- function(
   step2_extra_args = character(),
   step1_args = list(),
   step2_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   reg_loc_path <- reg_loc_path %||% .conseguiR_default_reg_loc_path()
   if (is.null(reg_loc_path)) {
@@ -596,10 +640,6 @@ run_germline_regulatory_scoring <- function(
     sample_size = sample_size,
     sample_size_col = sample_size_col,
     magma_path = magma_path,
-    magma_gwas_cache_prefix = magma_gwas_cache_prefix,
-    reuse_existing_gwas_cache = reuse_existing_gwas_cache,
-    reuse_existing_annotation = reuse_existing_annotation,
-    reuse_existing_analysis = reuse_existing_analysis,
     keep_intermediates = keep_intermediates,
     annotation_window = annotation_window,
     filter_path = filter_path,
@@ -680,9 +720,9 @@ run_germline_regulatory_scoring <- function(
 #' `prepare_germline_scores(
 #'   gwas_sumstats = gwas_path,
 #'   reference_bfile = \"/path/to/g1000_eur/g1000_eur\",
-#'   gene_step1_args = list(annotation_window = c(35, 10)),
+#'   gene_step1_args = list(annotation_window = c(15, 15)),
 #'   gene_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\")),
-#'   reg_step1_args = list(annotation_window = c(0, 0)),
+#'   reg_step1_args = list(annotation_window = c(15, 15)),
 #'   reg_step2_args = list(gene_model = \"snp-wise=mean\", pval_use = c(\"SNP\", \"P\"))
 #' )`
 #'
@@ -692,9 +732,8 @@ run_germline_regulatory_scoring <- function(
 #' - use `gene_sample_size` / `gene_sample_size_col` for the gene run and
 #'   `reg_sample_size` / `reg_sample_size_col` for the regulatory run when the
 #'   two branches need different MAGMA p-value inputs
-#' - keep `gene_step1_args` and `reg_step1_args` separate when you want a wider
-#'   annotation window for genes but a tighter one for already-localized
-#'   regulatory elements
+#' - keep `gene_step1_args` and `reg_step1_args` separate when you want
+#'   different annotation behavior between genes and regulatory elements
 #' - keep `shared_args` for wrapper-level settings you truly want to send to
 #'   both branches rather than duplicating them by hand
 #'
@@ -711,24 +750,22 @@ prepare_germline_scores <- function(
   reference_bfile,
   gene_output_prefix = NULL,
   reg_output_prefix = NULL,
-  magma_gwas_cache_prefix = NULL,
   gene_sample_size = NULL,
   gene_sample_size_col = NULL,
   reg_sample_size = NULL,
   reg_sample_size_col = NULL,
-  gene_step1_args = list(),
+  gene_step1_args = list(annotation_window = c(15, 15)),
   gene_step2_args = list(),
-  reg_step1_args = list(),
+  reg_step1_args = list(annotation_window = c(15, 15)),
   reg_step2_args = list(),
   shared_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("prepare_germline_scores")(
     gwas_sumstats = gwas_sumstats,
     reference_bfile = reference_bfile,
     gene_output_prefix = gene_output_prefix,
     reg_output_prefix = reg_output_prefix,
-    magma_gwas_cache_prefix = magma_gwas_cache_prefix,
     gene_sample_size = gene_sample_size,
     gene_sample_size_col = gene_sample_size_col,
     reg_sample_size = reg_sample_size,
@@ -764,7 +801,9 @@ prepare_germline_scores <- function(
 #' @param numcode Genetic code used by dndscv.
 #' @param outmats Whether dndscv should return count/exposure matrices.
 #' @param mingenecovs Minimum number of genes for dndscv covariate modeling.
-#' @param onesided Optional dndscv one-sided testing switch.
+#' @param onesided dndscv one-sided testing switch. Defaults to `TRUE` so the
+#'   returned somatic gene scores follow the directional enrichment-oriented
+#'   interpretation used throughout the package.
 #' @param dc Optional dndscv duplex-coverage vector.
 #' @param dndscv_args Named list of additional dndscv arguments.
 #' @param verbose Logical scalar. If `TRUE`, show stage messages and dndscv
@@ -844,10 +883,10 @@ run_somatic_gene_scoring <- function(
   numcode = 1L,
   outmats = FALSE,
   mingenecovs = 500L,
-  onesided = NULL,
+  onesided = TRUE,
   dc = NULL,
   dndscv_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("run_somatic_gene_scoring")(
     maf = maf,
@@ -1017,7 +1056,7 @@ run_somatic_regulatory_scoring <- function(
   score_p_randomized = NULL,
   score_class_return = TRUE,
   fishhook_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("run_somatic_regulatory_scoring")(
     maf = maf,
@@ -1165,7 +1204,7 @@ prepare_somatic_scores <- function(
   numcode = 1L,
   outmats = FALSE,
   mingenecovs = 500L,
-  onesided = NULL,
+  onesided = TRUE,
   dc = NULL,
   dndscv_args = list(),
   eligible_gr = NULL,
@@ -1196,7 +1235,7 @@ prepare_somatic_scores <- function(
   score_p_randomized = NULL,
   score_class_return = TRUE,
   fishhook_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("prepare_somatic_scores")(
     maf = maf,
@@ -1308,7 +1347,7 @@ prepare_epigenomic_scores <- function(
   transform = "log1p",
   return_diagnostics = TRUE,
   summary_fun = mean,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("prepare_epigenomic_scores")(
     reg_ref_path = reg_ref_path,
@@ -1403,7 +1442,7 @@ build_scored_gene_reg_graph <- function(
   reg_somatic_scores = NULL,
   reg_epigenomic_scores = NULL,
   save_outputs = FALSE,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   if (is.null(graph_rds_path)) {
     initialize_backend_graphs(strict = FALSE, quiet = TRUE)
@@ -1517,7 +1556,7 @@ run_gene_reg_diffusion <- function(
   reg_signal_clip = 5.0,
   top_n_to_save = 50L,
   python_path = NULL,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("run_gene_reg_diffusion")(
     scored_graph = scored_graph,
@@ -1634,7 +1673,7 @@ call_selected_subgraph <- function(
   confidence_column = "confidence",
   edge_cost_column = "weight",
   python_path = NULL,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   backend_paths <- .conseguiR_default_gene_gene_paths(
     gg_nodes_path = gg_nodes_path,
@@ -1650,8 +1689,7 @@ call_selected_subgraph <- function(
 
 #' Plot score tables from scoring or diffusion outputs
 #'
-#' Creates a rank plot for one-tailed outputs and a volcano plot for two-tailed
-#' outputs.
+#' Creates either a rank plot or a volcano plot for score tables.
 #'
 #' @param scores Optional bundle returned by a scoring wrapper or
 #'   `run_gene_reg_diffusion()`.
@@ -1659,13 +1697,25 @@ call_selected_subgraph <- function(
 #' @param which Optional bundle component name such as `gene_scores`,
 #'   `reg_scores`, `all_genes`, or `top_genes`.
 #' @param plot_file_path Optional output path for the saved figure.
-#' @param test_tail One of `auto`, `one_tailed`, or `two_tailed`.
+#' @param test_tail One of `auto`, `one_tailed`, or `two_tailed`. This
+#'   describes the score interpretation, not the plot geometry. When
+#'   `scores` is a conseguiR bundle and `test_tail = "auto"`, the plotting
+#'   helper uses the score semantics stored in that bundle.
+#' @param plot_mode One of `auto`, `rank`, or `volcano`. Use this to choose the
+#'   figure geometry explicitly when needed. In practice, use `plot_mode = "rank"`
+#'   for MAGMA-style germline rankings and `plot_mode = "volcano"` for somatic
+#'   plots where you want z-scores against `-log10(p)`.
 #' @param feature_column Optional explicit feature-label column.
 #' @param z_column Z-score column name.
 #' @param p_value_column Optional explicit p-value column for volcano plots.
 #' @param drop_tukey_outliers Logical scalar. If `TRUE`, remove extreme
 #'   volcano-plot outliers using Tukey's upper-fence rule on `-log10(p)`.
+#' @param clip_extreme_display Logical scalar. If `TRUE`, cap the displayed
+#'   volcano axes for readability. If `FALSE`, plot the actual z-scores and
+#'   `-log10(p)` values without display clipping.
 #' @param label_features Optional character vector of features to label.
+#' @param label_max_per_feature Positive integer. For any requested label, keep
+#'   at most this many plotted labels, prioritizing the largest z-scores.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -1685,7 +1735,12 @@ call_selected_subgraph <- function(
 #'   a `zstat`-like numeric column
 #' - `which`: when `scores` contains multiple tables, use values like
 #'   `"gene_scores"`, `"reg_scores"`, `"all_genes"`, or `"top_genes"`
-#' - `test_tail = "two_tailed"` expects a usable p-value column in the table
+#' - when `scores` is a conseguiR bundle, `test_tail = "auto"` uses the bundle
+#'   metadata instead of making you restate the score semantics manually
+#' - when `table` is supplied directly, `test_tail` remains an interpretation
+#'   hint because the raw table does not carry bundle metadata
+#' - `plot_mode`, not `test_tail`, is what decides whether the figure is drawn
+#'   as a rank plot or a volcano plot
 #' - `drop_tukey_outliers = TRUE` trims extreme volcano-plot y-axis outliers
 #'   before plotting, which can help when one feature is far more significant
 #'   than the rest
@@ -1696,6 +1751,20 @@ call_selected_subgraph <- function(
 #'   table = data.frame(feature_id = c("A", "B"), zstat = c(1, -1)),
 #'   feature_column = "feature_id",
 #'   z_column = "zstat",
+#'   plot_mode = "rank",
+#'   save_plot = FALSE
+#' )
+#'
+#' plot_scores(
+#'   table = data.frame(
+#'     feature_id = c("A", "B"),
+#'     zstat = c(3.2, 1.4),
+#'     p_value = c(1e-5, 0.03)
+#'   ),
+#'   feature_column = "feature_id",
+#'   z_column = "zstat",
+#'   p_value_column = "p_value",
+#'   plot_mode = "volcano",
 #'   save_plot = FALSE
 #' )
 #'
@@ -1707,17 +1776,20 @@ plot_scores <- function(
   which = NULL,
   plot_file_path = NULL,
   test_tail = "auto",
+  plot_mode = "auto",
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
   drop_tukey_outliers = FALSE,
+  clip_extreme_display = FALSE,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = "conseguiR Scores",
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("plot_scores")(
     scores = scores,
@@ -1725,11 +1797,14 @@ plot_scores <- function(
     which = which,
     plot_file_path = plot_file_path,
     test_tail = test_tail,
+    plot_mode = plot_mode,
     feature_column = feature_column,
     z_column = z_column,
     p_value_column = p_value_column,
     drop_tukey_outliers = drop_tukey_outliers,
+    clip_extreme_display = clip_extreme_display,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title,
     width = width,
     height = height,
@@ -1749,6 +1824,8 @@ plot_scores <- function(
 #' @param stage One of `"pre"` or `"post"`.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param label_features Optional gene symbols to highlight and label.
+#' @param label_max_per_feature Positive integer limiting the number of labels
+#'   retained per requested feature label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -1771,12 +1848,13 @@ plot_germline_gene_scores <- function(
   stage = c("pre", "post"),
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("plot_germline_gene_scores")(
     germline_scores = germline_scores,
@@ -1787,6 +1865,7 @@ plot_germline_gene_scores <- function(
     stage = stage,
     plot_file_path = plot_file_path,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title,
     width = width,
     height = height,
@@ -1803,6 +1882,8 @@ plot_germline_gene_scores <- function(
 #' @param nodes_path Optional explicit scored node-table path.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param label_features Optional gene symbols to highlight and label.
+#' @param label_max_per_feature Positive integer limiting the number of labels
+#'   retained per requested feature label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -1822,12 +1903,13 @@ plot_germline_reg_scores <- function(
   nodes_path = NULL,
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("plot_germline_reg_scores")(
     germline_scores = germline_scores,
@@ -1835,6 +1917,7 @@ plot_germline_reg_scores <- function(
     nodes_path = nodes_path,
     plot_file_path = plot_file_path,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title,
     width = width,
     height = height,
@@ -1854,6 +1937,8 @@ plot_germline_reg_scores <- function(
 #' @param stage One of `"pre"` or `"post"`.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param label_features Optional gene symbols to highlight and label.
+#' @param label_max_per_feature Positive integer limiting the number of labels
+#'   retained per requested feature label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -1878,12 +1963,13 @@ plot_somatic_gene_scores <- function(
   stage = c("pre", "post"),
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("plot_somatic_gene_scores")(
     somatic_scores = somatic_scores,
@@ -1894,6 +1980,7 @@ plot_somatic_gene_scores <- function(
     stage = stage,
     plot_file_path = plot_file_path,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title,
     width = width,
     height = height,
@@ -1910,6 +1997,8 @@ plot_somatic_gene_scores <- function(
 #' @param nodes_path Optional explicit scored node-table path.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param label_features Optional gene symbols to highlight and label.
+#' @param label_max_per_feature Positive integer limiting the number of labels
+#'   retained per requested feature label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -1931,12 +2020,13 @@ plot_somatic_reg_scores <- function(
   nodes_path = NULL,
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("plot_somatic_reg_scores")(
     somatic_scores = somatic_scores,
@@ -1944,6 +2034,7 @@ plot_somatic_reg_scores <- function(
     nodes_path = nodes_path,
     plot_file_path = plot_file_path,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title,
     width = width,
     height = height,
@@ -1959,6 +2050,8 @@ plot_somatic_reg_scores <- function(
 #' @param diffusion_path Optional explicit diffusion table path.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param label_features Optional gene symbols to highlight and label.
+#' @param label_max_per_feature Positive integer limiting the number of labels
+#'   retained per requested feature label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -1983,18 +2076,20 @@ plot_epigenomic_gene_scores <- function(
   diffusion_path = NULL,
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("plot_epigenomic_gene_scores")(
     diffusion = diffusion,
     diffusion_path = diffusion_path,
     plot_file_path = plot_file_path,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title,
     width = width,
     height = height,
@@ -2011,6 +2106,8 @@ plot_epigenomic_gene_scores <- function(
 #' @param nodes_path Optional explicit scored node-table path.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param label_features Optional features to highlight and label.
+#' @param label_max_per_feature Positive integer limiting the number of labels
+#'   retained per requested feature label.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -2030,12 +2127,13 @@ plot_epigenomic_reg_scores <- function(
   nodes_path = NULL,
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("plot_epigenomic_reg_scores")(
     epigenomic_scores = epigenomic_scores,
@@ -2043,6 +2141,7 @@ plot_epigenomic_reg_scores <- function(
     nodes_path = nodes_path,
     plot_file_path = plot_file_path,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title,
     width = width,
     height = height,
@@ -2079,8 +2178,8 @@ plot_epigenomic_reg_scores <- function(
 #' @param gwas_sumstats Optional GWAS summary statistics path or table used for
 #'   locus SNP labeling.
 #' @param label_top_gwas_snp Logical scalar. If `TRUE`, label the top GWAS SNP
-#'   inside the top germline regulatory element in the locus.
-#' @param rsid_pmid Optional cached rsID-to-PMID evidence table with at least
+#'   in the plotted locus.
+#' @param rsid_pmid Optional rsID-to-PMID evidence table with at least
 #'   `rsid` and `pmid` columns.
 #' @param label_top_lit_snps Integer count of literature-backed SNPs to label.
 #'   SNPs are restricted to regulatory elements in the locus. If no
@@ -2109,22 +2208,21 @@ plot_epigenomic_reg_scores <- function(
 #' - `selected_subgraph`: the bundle returned by `call_selected_subgraph()`
 #' - `label_features`: a character vector of gene symbols such as
 #'   `c("MYC", "BCL2", "BCL6")`
-#' - `rsid_pmid`: an optional cached literature-support table with at least
+#' - `rsid_pmid`: an optional literature-support table with at least
 #'   `rsid` and `pmid` columns
 #' - `label_top_lit_snps`: number of literature-backed SNPs to label before
 #'   falling back to top GWAS SNPs in the top germline regulatory elements
 #'
 #' Track semantics:
 #' - the top three rows show regulatory-element somatic, epigenomic, and
-#'   germline z-scores
+#'   germline input scores from the scored graph
 #' - the `Reg elements` row shows regulatory elements colored by their combined
 #'   pre-diffusion norm
 #' - the bottom gene row shows post-diffusion `conseguiR` scores for genes in
 #'   the locus
 #' - thin black diagonal curves connect regulatory elements to genes
 #' - locus SNP labels prefer literature-backed SNPs when available and
-#'   otherwise fall back to top GWAS SNPs in the top germline regulatory
-#'   elements
+#'   otherwise fall back to the top GWAS SNP in the plotted locus
 #'
 #' @examples
 #' names(formals(plot_locus_context))
@@ -2156,7 +2254,7 @@ plot_locus_context <- function(
   height = 9,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_call_external("plot_locus_context", as.list(environment()))
 }
@@ -2221,7 +2319,7 @@ plot_selected_subgraph <- function(
   dpi = 300,
   save_bundle = TRUE,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   .conseguiR_external_fun("plot_selected_subgraph")(
     selected_subgraph = selected_subgraph,
@@ -2258,8 +2356,8 @@ plot_selected_subgraph <- function(
 #' @param gg_nodes_path Gene-gene node table path.
 #' @param gg_edges_path Gene-gene edge table path.
 #' @param output_dir Optional output directory for saved pipeline artifacts.
-#'   When `NULL`, `run_conseguiR()` runs in object-first mode and returns the
-#'   stage bundles without treating disk output as the default interface.
+#'   When `NULL`, `run_conseguiR()` returns the stage bundles directly in
+#'   memory without treating disk output as the default interface.
 #' @param target_genes Requested selected-subgraph size.
 #' @param germline_args Named list of overrides passed to
 #'   `prepare_germline_scores()`. This list may contain both gene- and
@@ -2313,8 +2411,7 @@ plot_selected_subgraph <- function(
 #' The gene and regulatory location resources are backend-managed by the
 #' package and are not user-facing arguments in this high-level wrapper.
 #'
-#' `conseguiR` now uses an object-first design. In plain terms, that means the
-#' compute stages return R objects/bundles by default, and file writing is
+#' `conseguiR` returns R objects and bundles by default, and file writing is
 #' optional rather than being the main API. If you supply `output_dir`,
 #' `run_conseguiR()` will save stage artifacts there; if you leave
 #' `output_dir = NULL`, it will still run the full workflow and return the
@@ -2325,16 +2422,16 @@ plot_selected_subgraph <- function(
 #' `germline_args = list(
 #'   gene_sample_size = 456348,
 #'   reg_sample_size = 456348,
-#'   gene_step1_args = list(annotation_window = c(35, 10), ignore_strand = TRUE),
+#'   gene_step1_args = list(annotation_window = c(15, 15), ignore_strand = TRUE),
 #'   gene_step2_args = list(
 #'     gene_model = \"snp-wise=mean\",
 #'     pval = list(use = c(\"SNP\", \"P\"), duplicate = \"drop\")
 #'   ),
-#'   reg_step1_args = list(annotation_window = c(0, 0)),
+#'   reg_step1_args = list(annotation_window = c(15, 15)),
 #'   reg_step2_args = list(
 #'     pval = list(use = c(\"SNP\", \"P\"), duplicate = \"drop\")
 #'   ),
-#'   shared_args = list(reuse_existing_gwas_cache = TRUE)
+#'   shared_args = list()
 #' )`
 #'
 #' `somatic_args = list(
@@ -2379,7 +2476,7 @@ run_conseguiR <- function(
   diffusion_args = list(),
   subgraph_args = list(),
   plot_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   paths <- .conseguiR_pipeline_paths(
     graph_rds_path = graph_rds_path,

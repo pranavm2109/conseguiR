@@ -1,5 +1,3 @@
-.conseguiR_backend_cache <- new.env(parent = emptyenv())
-
 #' @keywords internal
 .conseguiR_backend_dir <- function(create = FALSE) {
   opt_dir <- getOption("conseguiR.backend_dir")
@@ -13,7 +11,7 @@
   candidates <- c(
     if (!is.null(.conseguiR_state$pkg_root)) file.path(.conseguiR_state$pkg_root, "data", "processed"),
     file.path(getwd(), "data", "processed"),
-    file.path(tools::R_user_dir("conseguiR", which = "cache"), "backend")
+    file.path(tempdir(), "conseguiR_backend")
   )
   candidates <- unique(candidates[!is.na(candidates) & nzchar(candidates)])
 
@@ -29,11 +27,6 @@
 
 #' @keywords internal
 .conseguiR_backend_paths <- function(backend_dir = .conseguiR_backend_dir(create = TRUE)) {
-  cache_key <- paste0("backend_paths::", normalizePath(backend_dir, winslash = "/", mustWork = FALSE))
-  if (exists(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
-    return(get(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE))
-  }
-
   paths <- list(
     backend_dir = backend_dir,
     gene_reg_graph_rds = file.path(backend_dir, "gene_reg_graph_no_scores.rds"),
@@ -43,55 +36,12 @@
     gene_gene_graph_nodes = file.path(backend_dir, "gene_gene_graph_nodes.tsv.gz"),
     gene_gene_graph_edges = file.path(backend_dir, "gene_gene_graph_edges.tsv.gz")
   )
-  assign(cache_key, paths, envir = .conseguiR_backend_cache)
   paths
-}
-
-#' @keywords internal
-.conseguiR_backend_graph_cache_key <- function(kind, backend_dir = .conseguiR_backend_dir(create = TRUE)) {
-  paths <- .conseguiR_backend_paths(backend_dir)
-  graph_path <- switch(
-    kind,
-    gene_reg = paths$gene_reg_graph_rds,
-    gene_gene = paths$gene_gene_graph_rds,
-    stop("Unsupported backend graph kind: ", kind)
-  )
-  paste0(kind, "::", normalizePath(graph_path, winslash = "/", mustWork = FALSE))
-}
-
-#' @keywords internal
-.conseguiR_cache_backend_graph <- function(kind, graph, backend_dir = .conseguiR_backend_dir(create = TRUE)) {
-  if (!inherits(graph, "igraph")) {
-    stop("Expected an igraph object when caching backend graph `", kind, "`.")
-  }
-  cache_key <- .conseguiR_backend_graph_cache_key(kind, backend_dir = backend_dir)
-  assign(cache_key, graph, envir = .conseguiR_backend_cache)
-  invisible(graph)
-}
-
-#' @keywords internal
-.conseguiR_cached_backend_graph <- function(kind, backend_dir = .conseguiR_backend_dir(create = TRUE)) {
-  cache_key <- .conseguiR_backend_graph_cache_key(kind, backend_dir = backend_dir)
-  if (!exists(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
-    return(NULL)
-  }
-
-  graph <- get(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)
-  if (!inherits(graph, "igraph")) {
-    rm(list = cache_key, envir = .conseguiR_backend_cache)
-    return(NULL)
-  }
-  graph
 }
 
 #' @keywords internal
 .conseguiR_load_backend_graph <- function(kind = c("gene_reg", "gene_gene"), backend_dir = .conseguiR_backend_dir(create = TRUE)) {
   kind <- match.arg(kind)
-  cached <- .conseguiR_cached_backend_graph(kind, backend_dir = backend_dir)
-  if (!is.null(cached)) {
-    return(cached)
-  }
-
   paths <- .conseguiR_backend_paths(backend_dir)
   graph_path <- switch(
     kind,
@@ -106,23 +56,7 @@
   if (!inherits(graph, "igraph")) {
     stop("Expected an igraph object at backend graph path: ", graph_path)
   }
-  .conseguiR_cache_backend_graph(kind, graph, backend_dir = backend_dir)
-}
-
-#' @keywords internal
-.conseguiR_prime_backend_graph_cache <- function(
-  paths,
-  backend_dir,
-  build_gene_reg = TRUE,
-  build_gene_gene = TRUE
-) {
-  if (isTRUE(build_gene_reg) && file.exists(paths$gene_reg_graph_rds)) {
-    .conseguiR_load_backend_graph("gene_reg", backend_dir = backend_dir)
-  }
-  if (isTRUE(build_gene_gene) && file.exists(paths$gene_gene_graph_rds)) {
-    .conseguiR_load_backend_graph("gene_gene", backend_dir = backend_dir)
-  }
-  invisible(TRUE)
+  graph
 }
 
 #' @keywords internal
@@ -132,11 +66,8 @@
 }
 
 #' @keywords internal
-.conseguiR_backend_resource_cache_dir <- function(create = FALSE) {
-  path <- file.path(
-    tools::R_user_dir("conseguiR", which = "cache"),
-    "backend_resources"
-  )
+.conseguiR_backend_resource_work_dir <- function(create = FALSE) {
+  path <- file.path(tempdir(), "conseguiR_backend_resources")
   if (isTRUE(create)) {
     dir.create(path, recursive = TRUE, showWarnings = FALSE)
   }
@@ -144,7 +75,7 @@
 }
 
 #' @keywords internal
-.conseguiR_backend_resource_dirs <- function(include_cache = TRUE) {
+.conseguiR_backend_resource_dirs <- function(include_work_dir = TRUE) {
   option_dir <- getOption("conseguiR.backend_resource_dir")
   if (!is.null(option_dir)) {
     option_dir <- trimws(as.character(option_dir))
@@ -161,7 +92,7 @@
     error = function(e) ""
   )
   candidates <- c(
-    if (isTRUE(include_cache)) .conseguiR_backend_resource_cache_dir(),
+    if (isTRUE(include_work_dir)) .conseguiR_backend_resource_work_dir(),
     option_dir,
     backend_dir,
     installed,
@@ -180,12 +111,7 @@
 
 #' @keywords internal
 .conseguiR_backend_seed_dir <- function() {
-  cache_key <- "backend_seed_dir"
-  if (exists(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
-    return(get(cache_key, envir = .conseguiR_backend_cache, inherits = FALSE))
-  }
-
-  existing <- .conseguiR_backend_resource_dirs(include_cache = TRUE)
+  existing <- .conseguiR_backend_resource_dirs(include_work_dir = TRUE)
   has_seed <- function(dir_path) {
     any(file.exists(file.path(dir_path, c(
       "gene_reg_graph_no_scores_nodes.tsv.gz",
@@ -204,13 +130,12 @@
   } else {
     NULL
   }
-  assign(cache_key, seed_dir, envir = .conseguiR_backend_cache)
   seed_dir
 }
 
 #' @keywords internal
 .conseguiR_backend_resource_candidates <- function(filename) {
-  dirs <- .conseguiR_backend_resource_dirs(include_cache = TRUE)
+  dirs <- .conseguiR_backend_resource_dirs(include_work_dir = TRUE)
   if (length(dirs) == 0L) {
     return(character())
   }
@@ -277,17 +202,14 @@
     return(NULL)
   }
 
-  cache_dir <- tryCatch(
-    .conseguiR_backend_resource_cache_dir(create = TRUE),
+  resource_dir <- tryCatch(
+    .conseguiR_backend_resource_work_dir(create = TRUE),
     error = function(e) NULL
   )
-  if (is.null(cache_dir) || !dir.exists(cache_dir)) {
-    cache_dir <- .conseguiR_backend_dir(create = TRUE)
+  if (is.null(resource_dir) || !dir.exists(resource_dir)) {
+    resource_dir <- .conseguiR_backend_dir(create = TRUE)
   }
-  loc_path <- file.path(cache_dir, "GRCh38-cCREs.loc")
-  if (file.exists(loc_path) && file.info(loc_path)$size > 0L) {
-    return(normalizePath(loc_path, winslash = "/", mustWork = TRUE))
-  }
+  loc_path <- tempfile(pattern = "GRCh38-cCREs_", fileext = ".loc", tmpdir = resource_dir)
 
   ccre_dt <- data.table::fread(ccre_bed_path, header = FALSE, showProgress = FALSE)
   if (ncol(ccre_dt) < 5L) {
@@ -738,73 +660,6 @@
 }
 
 #' @keywords internal
-.conseguiR_backend_init_cache_key <- function(
-  backend_dir,
-  build_gene_reg,
-  build_gene_gene,
-  force,
-  strict
-) {
-  paste(
-    "backend_init",
-    normalizePath(backend_dir, winslash = "/", mustWork = FALSE),
-    build_gene_reg,
-    build_gene_gene,
-    force,
-    strict,
-    sep = "::"
-  )
-}
-
-#' @keywords internal
-.conseguiR_cached_backend_init <- function(
-  init_cache_key,
-  paths,
-  build_gene_reg,
-  build_gene_gene,
-  quiet
-) {
-  if (!exists(init_cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)) {
-    return(NULL)
-  }
-
-  cached <- get(init_cache_key, envir = .conseguiR_backend_cache, inherits = FALSE)
-  required_paths <- c(
-    if (isTRUE(build_gene_reg)) {
-      .conseguiR_existing_graph_paths(
-        paths[c("gene_reg_graph_nodes", "gene_reg_graph_edges")]
-      )
-    },
-    if (isTRUE(build_gene_gene)) {
-      .conseguiR_existing_graph_paths(
-        paths[c("gene_gene_graph_nodes", "gene_gene_graph_edges")]
-      )
-    }
-  )
-
-  if (
-    is.null(cached) ||
-      length(required_paths) == 0L ||
-      !.conseguiR_graph_files_exist(required_paths)
-  ) {
-    return(NULL)
-  }
-
-  if (!isTRUE(quiet)) {
-    message("Backend graph initialization complete.")
-  }
-
-  .conseguiR_prime_backend_graph_cache(
-    paths = paths,
-    backend_dir = paths$backend_dir,
-    build_gene_reg = build_gene_reg,
-    build_gene_gene = build_gene_gene
-  )
-
-  cached
-}
-
-#' @keywords internal
 .conseguiR_initialize_gene_reg_backend <- function(
   paths,
   backend_dir,
@@ -869,7 +724,6 @@
   backend_dir,
   paths,
   status,
-  init_cache_key,
   force
 ) {
   result <- structure(
@@ -880,11 +734,6 @@
     ),
     class = c("conseguiR_backend_init", "list")
   )
-
-  if (!isTRUE(force)) {
-    assign(init_cache_key, result, envir = .conseguiR_backend_cache)
-  }
-
   result
 }
 
@@ -903,18 +752,10 @@
   resolved_backend_dir <- .conseguiR_backend_dir(create = TRUE)
   options(conseguiR.backend_dir = resolved_backend_dir)
   paths <- .conseguiR_backend_paths(resolved_backend_dir)
-  init_cache_key <- .conseguiR_backend_init_cache_key(
-    backend_dir = resolved_backend_dir,
-    build_gene_reg = build_gene_reg,
-    build_gene_gene = build_gene_gene,
-    force = force,
-    strict = strict
-  )
 
   list(
     backend_dir = resolved_backend_dir,
-    paths = paths,
-    init_cache_key = init_cache_key
+    paths = paths
   )
 }
 
@@ -950,28 +791,6 @@
   status
 }
 
-#' @keywords internal
-.conseguiR_backend_init_cached_result <- function(
-  init_cache_key,
-  paths,
-  build_gene_reg,
-  build_gene_gene,
-  force,
-  quiet
-) {
-  if (isTRUE(force)) {
-    return(NULL)
-  }
-
-  .conseguiR_cached_backend_init(
-    init_cache_key = init_cache_key,
-    paths = paths,
-    build_gene_reg = build_gene_reg,
-    build_gene_gene = build_gene_gene,
-    quiet = quiet
-  )
-}
-
 .conseguiR_initialize_backend_graphs <- function(
   backend_dir = NULL,
   build_gene_reg = TRUE,
@@ -989,19 +808,6 @@
   )
   paths <- context$paths
   backend_dir <- context$backend_dir
-  init_cache_key <- context$init_cache_key
-
-  cached <- .conseguiR_backend_init_cached_result(
-    init_cache_key = init_cache_key,
-    paths = paths,
-    build_gene_reg = build_gene_reg,
-    build_gene_gene = build_gene_gene,
-    force = force,
-    quiet = quiet
-  )
-  if (!is.null(cached)) {
-    return(cached)
-  }
 
   status <- .conseguiR_backend_init_status(
     paths = paths,
@@ -1016,18 +822,10 @@
     message("Backend graph initialization complete.")
   }
 
-  .conseguiR_prime_backend_graph_cache(
-    paths = paths,
-    backend_dir = backend_dir,
-    build_gene_reg = build_gene_reg,
-    build_gene_gene = build_gene_gene
-  )
-
   .conseguiR_backend_init_result(
     backend_dir = backend_dir,
     paths = paths,
     status = status,
-    init_cache_key = init_cache_key,
     force = force
   )
 }

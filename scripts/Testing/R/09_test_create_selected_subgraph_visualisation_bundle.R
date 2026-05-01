@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 
 source("scripts/Internals/R/09_create_selected_subgraph_visualisation_bundle.R")
 
-default_selected_bundle_test_output_dir <- "data/processed/test_outputs/selected_subgraph_bundle"
+default_selected_bundle_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "selected_subgraph_bundle")
 
 make_selected_bundle_test_path <- function(stem, ext = "") {
   dir.create(default_selected_bundle_test_output_dir, recursive = TRUE, showWarnings = FALSE)
@@ -190,15 +190,56 @@ test_validate_selected_subgraph_negative_bad_summary <- function() {
   )
 }
 
-test_prepare_subgraph_plot_edges_negative_no_overlap <- function() {
+test_prepare_subgraph_plot_edges_handles_no_overlap_as_edgeless_plot <- function() {
   fixture <- make_live_selected_subgraph_fixture()
   bad_edges <- data.table(gene_u = "NOT_IN_GRAPH_1", gene_v = "NOT_IN_GRAPH_2")
 
-  expect_error(
-    prepare_subgraph_plot_edges(bad_edges, fixture$nodes),
-    regexp = "do not overlap the selected node identifiers",
-    fixed = TRUE
+  out <- prepare_subgraph_plot_edges(bad_edges, fixture$nodes)
+  expect_true(all(c("from", "to") %in% names(out)))
+  expect_equal(nrow(out), 0L)
+}
+
+test_prepare_subgraph_plot_edges_accepts_gene_name_endpoints <- function() {
+  fixture <- make_live_selected_subgraph_fixture()
+  name_edges <- data.table(
+    gene_u = c("GENE1", "GENE2"),
+    gene_v = c("GENE2", "GENE3")
   )
+
+  out <- prepare_subgraph_plot_edges(name_edges, fixture$nodes)
+  expect_true(all(c("from", "to") %in% names(out)))
+  expect_identical(out$from, c("G1", "G2"))
+  expect_identical(out$to, c("G2", "G3"))
+}
+
+test_prepare_subgraph_plot_edges_accepts_mixed_endpoint_styles <- function() {
+  fixture <- make_live_selected_subgraph_fixture()
+  mixed_edges <- data.table(
+    gene_u = c("G1", "GENE2"),
+    gene_v = c("GENE2", "G3")
+  )
+
+  out <- prepare_subgraph_plot_edges(mixed_edges, fixture$nodes)
+  expect_true(all(c("from", "to") %in% names(out)))
+  expect_identical(out$from, c("G1", "G2"))
+  expect_identical(out$to, c("G2", "G3"))
+}
+
+test_prepare_subgraph_plot_edges_accepts_numeric_like_identifier_mismatches <- function() {
+  nodes <- data.table(
+    node_id = c(101L, 102L, 103L),
+    gene_name = c("GENE101", "GENE102", "GENE103"),
+    prize = c(5, 3, 2)
+  )
+  edges <- data.table(
+    gene_u = c("101", "102"),
+    gene_v = c("102", "103")
+  )
+
+  out <- prepare_subgraph_plot_edges(edges, nodes)
+  expect_true(all(c("from", "to") %in% names(out)))
+  expect_identical(out$from, c("101", "102"))
+  expect_identical(out$to, c("102", "103"))
 }
 
 test_save_selected_subgraph_plot_negative_missing_file_path <- function() {
@@ -245,8 +286,20 @@ main <- function() {
     test_validate_selected_subgraph_negative_bad_summary()
   })
 
-  test_that("plot-edge preparation fails clearly when edges do not overlap nodes", {
-    test_prepare_subgraph_plot_edges_negative_no_overlap()
+  test_that("plot-edge preparation can fall back to an edgeless plot when edges do not overlap nodes", {
+    test_prepare_subgraph_plot_edges_handles_no_overlap_as_edgeless_plot()
+  })
+
+  test_that("plot-edge preparation accepts gene-name endpoints when node ids differ", {
+    test_prepare_subgraph_plot_edges_accepts_gene_name_endpoints()
+  })
+
+  test_that("plot-edge preparation accepts mixed node-id and gene-name endpoints", {
+    test_prepare_subgraph_plot_edges_accepts_mixed_endpoint_styles()
+  })
+
+  test_that("plot-edge preparation accepts numeric-like node-id type mismatches", {
+    test_prepare_subgraph_plot_edges_accepts_numeric_like_identifier_mismatches()
   })
 
   test_that("plot saving fails clearly when file_path is missing", {

@@ -10,17 +10,20 @@ plot_scores(
   which = NULL,
   plot_file_path = NULL,
   test_tail = "auto",
+  plot_mode = "auto",
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
   drop_tukey_outliers = FALSE,
+  clip_extreme_display = FALSE,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = "conseguiR Scores",
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 )
 }
 \arguments{
@@ -34,7 +37,15 @@ plot_scores(
 
 \item{plot_file_path}{Optional output path for the saved figure.}
 
-\item{test_tail}{One of \code{auto}, \code{one_tailed}, or \code{two_tailed}.}
+\item{test_tail}{One of \code{auto}, \code{one_tailed}, or \code{two_tailed}.
+This describes the score interpretation, not the plot geometry. When
+\code{scores} is a conseguiR bundle and \code{test_tail = "auto"}, the plotting
+helper uses the score semantics stored in that bundle.}
+
+\item{plot_mode}{One of \code{auto}, \code{rank}, or \code{volcano}. Use this to choose the
+figure geometry explicitly when needed. In practice, use \code{plot_mode = "rank"}
+for MAGMA-style germline rankings and \code{plot_mode = "volcano"} for somatic
+plots where you want z-scores against \code{-log10(p)}.}
 
 \item{feature_column}{Optional explicit feature-label column.}
 
@@ -45,7 +56,14 @@ plot_scores(
 \item{drop_tukey_outliers}{Logical scalar. If \code{TRUE}, remove extreme
 volcano-plot outliers using Tukey's upper-fence rule on \code{-log10(p)}.}
 
+\item{clip_extreme_display}{Logical scalar. If \code{TRUE}, cap the displayed
+volcano axes for readability. If \code{FALSE}, plot the actual z-scores and
+\code{-log10(p)} values without display clipping.}
+
 \item{label_features}{Optional character vector of features to label.}
+
+\item{label_max_per_feature}{Positive integer. For any requested label, keep
+at most this many plotted labels, prioritizing the largest z-scores.}
 
 \item{title}{Plot title.}
 
@@ -64,8 +82,7 @@ the plot.}
 A plot bundle containing the ggplot object and plotting data.
 }
 \description{
-Creates a rank plot for one-tailed outputs and a volcano plot for two-tailed
-outputs.
+Creates either a rank plot or a volcano plot for score tables.
 }
 \details{
 Exact formatting:
@@ -79,7 +96,12 @@ Exact formatting:
 a \code{zstat}-like numeric column
 \item \code{which}: when \code{scores} contains multiple tables, use values like
 \code{"gene_scores"}, \code{"reg_scores"}, \code{"all_genes"}, or \code{"top_genes"}
-\item \code{test_tail = "two_tailed"} expects a usable p-value column in the table
+\item when \code{scores} is a conseguiR bundle, \code{test_tail = "auto"} uses the bundle
+metadata instead of making you restate the score semantics manually
+\item when \code{table} is supplied directly, \code{test_tail} remains an interpretation
+hint because the raw table does not carry bundle metadata
+\item \code{plot_mode}, not \code{test_tail}, is what decides whether the figure is drawn
+as a rank plot or a volcano plot
 \item \code{drop_tukey_outliers = TRUE} trims extreme volcano-plot y-axis outliers
 before plotting, which can help when one feature is far more significant
 than the rest
@@ -91,6 +113,20 @@ plot_scores(
   table = data.frame(feature_id = c("A", "B"), zstat = c(1, -1)),
   feature_column = "feature_id",
   z_column = "zstat",
+  plot_mode = "rank",
+  save_plot = FALSE
+)
+
+plot_scores(
+  table = data.frame(
+    feature_id = c("A", "B"),
+    zstat = c(3.2, 1.4),
+    p_value = c(1e-5, 0.03)
+  ),
+  feature_column = "feature_id",
+  z_column = "zstat",
+  p_value_column = "p_value",
+  plot_mode = "volcano",
   save_plot = FALSE
 )
 

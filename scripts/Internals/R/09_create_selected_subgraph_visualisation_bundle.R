@@ -61,6 +61,9 @@ validate_selected_subgraph_nodes <- function(nodes) {
     stop("Selected subgraph node table contains missing `gene_name` values.")
   }
 
+  dt[, node_id := as.character(node_id)]
+  dt[, gene_name := as.character(gene_name)]
+
   if (!is.numeric(dt$prize)) {
     suppressWarnings(dt[, prize := as.numeric(prize)])
   }
@@ -83,6 +86,9 @@ validate_selected_subgraph_edges <- function(edges) {
   if (any(is.na(dt$gene_u)) || any(dt$gene_u == "") || any(is.na(dt$gene_v)) || any(dt$gene_v == "")) {
     stop("Selected subgraph edge table contains missing gene endpoints.")
   }
+
+  dt[, gene_u := as.character(gene_u)]
+  dt[, gene_v := as.character(gene_v)]
 
   dt
 }
@@ -138,15 +144,69 @@ prepare_subgraph_plot_edges <- function(edges, nodes) {
   edge_dt <- validate_selected_subgraph_edges(edges)
   node_dt <- validate_selected_subgraph_nodes(nodes)
 
-  valid_ids <- unique(node_dt$node_id)
+  valid_ids <- unique(as.character(node_dt$node_id))
   edge_dt <- edge_dt[gene_u %in% valid_ids & gene_v %in% valid_ids]
 
   if (nrow(edge_dt) == 0L) {
-    stop("Selected subgraph edges do not overlap the selected node identifiers.")
+    raw_edge_dt <- validate_selected_subgraph_edges(edges)
+    if (nrow(raw_edge_dt) == 0L) {
+      out <- data.table::copy(raw_edge_dt)
+      out[, from := character()]
+      out[, to := character()]
+      return(out)
+    }
+
+    node_lookup <- unique(node_dt[, .(
+      node_id = as.character(node_id),
+      gene_name = as.character(gene_name)
+    )], by = "gene_name")
+
+    edge_dt <- merge(
+      raw_edge_dt,
+      node_lookup,
+      by.x = "gene_u",
+      by.y = "gene_name",
+      all.x = TRUE,
+      sort = FALSE
+    )
+    data.table::setnames(edge_dt, "node_id", "from")
+    edge_dt[, from := data.table::fifelse(
+      !is.na(from) & from != "",
+      from,
+      data.table::fifelse(gene_u %in% valid_ids, as.character(gene_u), NA_character_)
+    )]
+
+    edge_dt <- merge(
+      edge_dt,
+      node_lookup,
+      by.x = "gene_v",
+      by.y = "gene_name",
+      all.x = TRUE,
+      sort = FALSE
+    )
+    data.table::setnames(edge_dt, "node_id", "to")
+    edge_dt[, to := data.table::fifelse(
+      !is.na(to) & to != "",
+      to,
+      data.table::fifelse(gene_v %in% valid_ids, as.character(gene_v), NA_character_)
+    )]
+
+    edge_dt <- edge_dt[!is.na(from) & from != "" & !is.na(to) & to != ""]
   }
 
-  edge_dt[, from := gene_u]
-  edge_dt[, to := gene_v]
+  if (nrow(edge_dt) == 0L) {
+    return(data.table::data.table(
+      gene_u = character(),
+      gene_v = character(),
+      from = character(),
+      to = character()
+    ))
+  }
+
+  if (!all(c("from", "to") %in% names(edge_dt))) {
+    edge_dt[, from := gene_u]
+    edge_dt[, to := gene_v]
+  }
   edge_dt
 }
 

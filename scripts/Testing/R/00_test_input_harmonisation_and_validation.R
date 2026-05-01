@@ -70,7 +70,7 @@ default_bw_files <- c(
   "data/raw/Testing/SRR1020516_DLBCL_P286_H3K27ac_ChIPseq.bw",
   "data/raw/Testing/SRR1020518_DLBCL_P397_H3K27ac_ChIPseq.bw"
 )
-default_test_output_dir <- "data/processed/test_outputs"
+default_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "inputs")
 
 negative_epigenomic_test_cases <- list(
   list(

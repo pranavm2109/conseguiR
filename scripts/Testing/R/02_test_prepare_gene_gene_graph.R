@@ -10,7 +10,7 @@ source("scripts/Internals/R/02_prepare_gene_gene_graph.R")
 
 string_links_path <- "data/raw/STRING/9606.protein.links.v12.0.txt"
 string_info_path <- "data/raw/STRING/9606.protein.info.v12.0.txt"
-default_gene_gene_test_output_dir <- "data/processed/test_outputs/gene_gene_graph"
+default_gene_gene_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "gene_gene_graph")
 
 make_gene_gene_test_path <- function(stem, ext = "") {
   dir.create(default_gene_gene_test_output_dir, recursive = TRUE, showWarnings = FALSE)

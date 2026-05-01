@@ -4,12 +4,20 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
-.conseguiR_external_cache <- new.env(parent = emptyenv())
-
 conseguiR_runtime_file <- function(relpath) {
-  candidate <- file.path(getwd(), relpath)
-  if (file.exists(candidate)) {
-    return(candidate)
+  candidates <- unique(c(
+    file.path(.conseguiR_state$pkg_root %||% "", relpath),
+    file.path(getwd(), relpath)
+  ))
+  candidates <- candidates[nzchar(candidates)]
+  candidates <- vapply(
+    candidates,
+    function(path) normalizePath(path, winslash = "/", mustWork = FALSE),
+    character(1)
+  )
+  existing <- candidates[file.exists(candidates)]
+  if (length(existing) > 0L) {
+    return(existing[[1]])
   }
 
   pkg_path <- system.file(relpath, package = "conseguiR")
@@ -116,29 +124,10 @@ materialize_table_path <- function(table, path = NULL, stem = "table") {
   }
 
   if (is.null(path)) {
-    if (!requireNamespace("digest", quietly = TRUE)) {
-      stop("Package `digest` is required for cached table materialization.")
-    }
-
     table_dt <- data.table::as.data.table(table)
-    cache_key <- paste0(
-      "materialized::",
-      stem,
-      "::",
-      digest::digest(table_dt, algo = "xxhash64")
-    )
-
-    if (exists(cache_key, envir = .conseguiR_external_cache, inherits = FALSE)) {
-      cached_path <- get(cache_key, envir = .conseguiR_external_cache, inherits = FALSE)
-      if (!is.null(cached_path) && nzchar(cached_path) && file.exists(cached_path)) {
-        return(cached_path)
-      }
-    }
-
     path <- paste0(make_temp_output_prefix(stem), ".tsv")
     ensure_output_parent(path)
     data.table::fwrite(table_dt, path, sep = "\t")
-    assign(cache_key, path, envir = .conseguiR_external_cache)
     return(path)
   }
 
@@ -163,65 +152,16 @@ new_bundle <- function(type, objects = list(), output_paths = list(), config = l
   )
 }
 
-cache_digest <- function(x) {
-  if (!requireNamespace("digest", quietly = TRUE)) {
-    stop("Package `digest` is required for session-level caching.")
-  }
-
-  digest::digest(x, algo = "xxhash64")
+get_or_compute_validation <- function(compute) {
+  compute()
 }
 
-cache_get <- function(key) {
-  if (exists(key, envir = .conseguiR_external_cache, inherits = FALSE)) {
-    return(get(key, envir = .conseguiR_external_cache, inherits = FALSE))
-  }
-
-  NULL
-}
-
-cache_set <- function(key, value) {
-  assign(key, value, envir = .conseguiR_external_cache)
-  invisible(value)
-}
-
-normalize_cache_path <- function(path) {
+read_path_fresh <- function(path, reader) {
   if (is.null(path) || !nzchar(path)) {
     return(NULL)
   }
 
-  normalizePath(path, winslash = "/", mustWork = FALSE)
-}
-
-validation_cache_key <- function(prefix, payload) {
-  paste0("validation::", prefix, "::", cache_digest(payload))
-}
-
-get_or_compute_validation <- function(prefix, payload, compute) {
-  key <- validation_cache_key(prefix, payload)
-  cached_value <- cache_get(key)
-  if (!is.null(cached_value)) {
-    return(cached_value)
-  }
-
-  value <- compute()
-  cache_set(key, value)
-  value
-}
-
-read_cached_path <- function(path, reader, cache_prefix = "path_read") {
-  if (is.null(path) || !nzchar(path)) {
-    return(NULL)
-  }
-
-  cache_key <- paste0(cache_prefix, "::", normalizePath(path, winslash = "/", mustWork = FALSE))
-  cached_value <- cache_get(cache_key)
-  if (!is.null(cached_value)) {
-    return(cached_value)
-  }
-
-  value <- reader(path)
-  cache_set(cache_key, value)
-  value
+  reader(path)
 }
 
 resolve_bundle_component <- function(x, preferred_name) {
@@ -310,7 +250,7 @@ validate_inputs <- function(
   reg_ref_path = NULL,
   epigenomic_tracks = NULL,
   epigenomic_track_dir = NULL,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Validating inputs...")
   objects <- list()
@@ -319,8 +259,6 @@ validate_inputs <- function(
     verbose_message(verbose, "Validating GWAS summary statistics...")
     objects$gwas <- if (is.character(gwas_sumstats) && length(gwas_sumstats) == 1L) {
       get_or_compute_validation(
-        prefix = "gwas",
-        payload = list(sumstats_path = normalize_cache_path(gwas_sumstats)),
         compute = function() validate_gwas_sumstats_path(
           sumstats_path = gwas_sumstats,
           show_progress = isTRUE(verbose)
@@ -335,8 +273,6 @@ validate_inputs <- function(
     verbose_message(verbose, "Validating somatic MAF...")
     objects$somatic_maf <- if (is.character(somatic_maf) && length(somatic_maf) == 1L) {
       get_or_compute_validation(
-        prefix = "somatic_maf",
-        payload = list(maf_path = normalize_cache_path(somatic_maf)),
         compute = function() validate_somatic_maf_path(
           maf_path = somatic_maf,
           show_progress = isTRUE(verbose)
@@ -350,11 +286,6 @@ validate_inputs <- function(
   if (!is.null(reg_ref_path)) {
     verbose_message(verbose, "Validating regulatory-element reference...")
     objects$regulatory_elements <- get_or_compute_validation(
-      prefix = "reg_ref",
-      payload = list(
-        reg_ref_path = normalize_cache_path(reg_ref_path),
-        nrows = 1000L
-      ),
       compute = function() validate_regulatory_element_reference(
         reg_ref_path,
         nrows = 1000L
@@ -374,11 +305,6 @@ validate_inputs <- function(
     }
 
     objects$epigenomic <- get_or_compute_validation(
-      prefix = "epigenomic_inputs",
-      payload = list(
-        reg_ref_path = normalize_cache_path(reg_ref_path),
-        bw_files = sort(vapply(bw_files, normalize_cache_path, character(1)))
-      ),
       compute = function() validate_epigenomic_inputs(
         bw_files = bw_files,
         reg_ref_path = reg_ref_path,
@@ -419,12 +345,6 @@ validate_inputs <- function(
 #' @param magma_path Optional path to the MAGMA executable. When `NULL`,
 #'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
 #'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, then `magma` on `PATH`.
-#' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
-#' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
-#' @param reuse_existing_annotation Whether to reuse an existing MAGMA
-#'   annotation output.
-#' @param reuse_existing_analysis Whether to reuse an existing MAGMA gene
-#'   analysis output.
 #' @param keep_intermediates Whether to keep intermediate MAGMA files.
 #' @param step1_args Named list of MAGMA step 1 arguments. Supported entries
 #'   include `annotation_window`, `filter_path`, `ignore_strand`, `nonhuman`,
@@ -442,12 +362,8 @@ run_germline_gene_scoring <- function(
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = NULL,
-  magma_gwas_cache_prefix = NULL,
-  reuse_existing_gwas_cache = TRUE,
-  reuse_existing_annotation = FALSE,
-  reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
-  annotation_window = NULL,
+  annotation_window = c(15, 15),
   filter_path = NULL,
   ignore_strand = FALSE,
   nonhuman = FALSE,
@@ -471,7 +387,7 @@ run_germline_gene_scoring <- function(
   step2_extra_args = character(),
   step1_args = list(),
   step2_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   step1_args <- as_list_or_empty(step1_args)
   step2_args <- as_list_or_empty(step2_args)
@@ -512,15 +428,11 @@ run_germline_gene_scoring <- function(
       sample_size = sample_size,
       sample_size_col = sample_size_col,
       magma_path = magma_path,
-      magma_gwas_cache_prefix = magma_gwas_cache_prefix,
-      reuse_existing_gwas_cache = reuse_existing_gwas_cache,
-      reuse_existing_annotation = reuse_existing_annotation,
-      reuse_existing_analysis = reuse_existing_analysis,
       keep_intermediates = keep_intermediates,
       verbose = verbose,
       step1_args = step1_args,
       step2_args = step2_args,
-      annotation_window = step1_args$annotation_window %||% NULL,
+      annotation_window = step1_args$annotation_window %||% c(15, 15),
       filter_path = step1_args$filter_path %||% NULL,
       ignore_strand = step1_args$ignore_strand %||% FALSE,
       nonhuman = step1_args$nonhuman %||% FALSE,
@@ -557,6 +469,8 @@ run_germline_gene_scoring <- function(
       output_prefix = requested_output_prefix,
       sample_size = sample_size,
       sample_size_col = sample_size_col,
+      test_tail = "one_tailed",
+      default_plot_mode = "rank",
       step1_args = step1_args,
       step2_args = step2_args
     )
@@ -583,12 +497,6 @@ run_germline_gene_scoring <- function(
 #' @param magma_path Optional path to the MAGMA executable. When `NULL`,
 #'   `conseguiR` searches in this order: `options(conseguiR.magma_path = ...)`,
 #'   `Sys.getenv("CONSEGUIR_MAGMA_PATH")`, then `magma` on `PATH`.
-#' @param magma_gwas_cache_prefix Optional shared MAGMA GWAS cache prefix.
-#' @param reuse_existing_gwas_cache Whether to reuse the shared MAGMA cache.
-#' @param reuse_existing_annotation Whether to reuse an existing MAGMA
-#'   annotation output.
-#' @param reuse_existing_analysis Whether to reuse an existing MAGMA gene
-#'   analysis output.
 #' @param keep_intermediates Whether to keep intermediate MAGMA files.
 #' @param step1_args Named list of MAGMA step 1 arguments.
 #' @param step2_args Named list of MAGMA step 2 arguments.
@@ -602,12 +510,8 @@ run_germline_regulatory_scoring <- function(
   sample_size = NULL,
   sample_size_col = NULL,
   magma_path = NULL,
-  magma_gwas_cache_prefix = NULL,
-  reuse_existing_gwas_cache = TRUE,
-  reuse_existing_annotation = FALSE,
-  reuse_existing_analysis = FALSE,
   keep_intermediates = FALSE,
-  annotation_window = NULL,
+  annotation_window = c(15, 15),
   filter_path = NULL,
   ignore_strand = FALSE,
   nonhuman = FALSE,
@@ -631,7 +535,7 @@ run_germline_regulatory_scoring <- function(
   step2_extra_args = character(),
   step1_args = list(),
   step2_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   step1_args <- as_list_or_empty(step1_args)
   step2_args <- as_list_or_empty(step2_args)
@@ -672,15 +576,11 @@ run_germline_regulatory_scoring <- function(
       sample_size = sample_size,
       sample_size_col = sample_size_col,
       magma_path = magma_path,
-      magma_gwas_cache_prefix = magma_gwas_cache_prefix,
-      reuse_existing_gwas_cache = reuse_existing_gwas_cache,
-      reuse_existing_annotation = reuse_existing_annotation,
-      reuse_existing_analysis = reuse_existing_analysis,
       keep_intermediates = keep_intermediates,
       verbose = verbose,
       step1_args = step1_args,
       step2_args = step2_args,
-      annotation_window = step1_args$annotation_window %||% NULL,
+      annotation_window = step1_args$annotation_window %||% c(15, 15),
       filter_path = step1_args$filter_path %||% NULL,
       ignore_strand = step1_args$ignore_strand %||% FALSE,
       nonhuman = step1_args$nonhuman %||% FALSE,
@@ -717,6 +617,8 @@ run_germline_regulatory_scoring <- function(
       output_prefix = requested_output_prefix,
       sample_size = sample_size,
       sample_size_col = sample_size_col,
+      test_tail = "one_tailed",
+      default_plot_mode = "rank",
       step1_args = step1_args,
       step2_args = step2_args
     )
@@ -742,7 +644,6 @@ run_germline_regulatory_scoring <- function(
 #' @param reference_bfile PLINK reference prefix for MAGMA step 2.
 #' @param gene_output_prefix Output prefix for gene-level germline scores.
 #' @param reg_output_prefix Output prefix for regulatory germline scores.
-#' @param magma_gwas_cache_prefix Shared MAGMA GWAS cache prefix.
 #' @param gene_sample_size Fixed sample size for the gene run.
 #' @param gene_sample_size_col Optional sample size column for the gene run.
 #' @param reg_sample_size Fixed sample size for the regulatory run.
@@ -759,17 +660,16 @@ prepare_germline_scores <- function(
   reference_bfile,
   gene_output_prefix = NULL,
   reg_output_prefix = NULL,
-  magma_gwas_cache_prefix = NULL,
   gene_sample_size = NULL,
   gene_sample_size_col = NULL,
   reg_sample_size = NULL,
   reg_sample_size_col = NULL,
-  gene_step1_args = list(),
+  gene_step1_args = list(annotation_window = c(15, 15)),
   gene_step2_args = list(),
-  reg_step1_args = list(),
+  reg_step1_args = list(annotation_window = c(15, 15)),
   reg_step2_args = list(),
   shared_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   shared_args <- as_list_or_empty(shared_args)
   verbose_message(verbose, "Preparing germline scores...")
@@ -793,7 +693,6 @@ prepare_germline_scores <- function(
         output_prefix = gene_output_prefix,
         sample_size = gene_sample_size,
         sample_size_col = gene_sample_size_col,
-        magma_gwas_cache_prefix = magma_gwas_cache_prefix,
         verbose = verbose,
         step1_args = gene_step1_args,
         step2_args = gene_step2_args
@@ -812,7 +711,6 @@ prepare_germline_scores <- function(
         output_prefix = reg_output_prefix,
         sample_size = resolved_reg_sample_size,
         sample_size_col = resolved_reg_sample_size_col,
-        magma_gwas_cache_prefix = magma_gwas_cache_prefix,
         verbose = verbose,
         step1_args = reg_step1_args,
         step2_args = reg_step2_args
@@ -831,10 +729,13 @@ prepare_germline_scores <- function(
     ),
     output_paths = list(
       gene_scores_path = gene_bundle$output_paths$gene_scores_path,
-      reg_scores_path = reg_bundle$output_paths$reg_scores_path,
-      magma_gwas_cache_prefix = magma_gwas_cache_prefix
+      reg_scores_path = reg_bundle$output_paths$reg_scores_path
     ),
     config = list(
+      table_semantics = list(
+        gene_scores = list(test_tail = "one_tailed", default_plot_mode = "rank"),
+        reg_scores = list(test_tail = "one_tailed", default_plot_mode = "rank")
+      ),
       gene_step1_args = gene_step1_args,
       gene_step2_args = gene_step2_args,
       reg_step1_args = reg_step1_args,
@@ -875,10 +776,10 @@ run_somatic_gene_scoring <- function(
   numcode = 1L,
   outmats = FALSE,
   mingenecovs = 500L,
-  onesided = NULL,
+  onesided = TRUE,
   dc = NULL,
   dndscv_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   dndscv_args <- as_list_or_empty(dndscv_args)
   verbose_message(verbose, "Preparing somatic gene scores...")
@@ -923,6 +824,9 @@ run_somatic_gene_scoring <- function(
       cv = cv,
       max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
       max_coding_muts_per_sample = max_coding_muts_per_sample,
+      test_tail = "one_tailed",
+      default_plot_mode = "volcano",
+      onesided = onesided,
       dndscv_args = dndscv_args
     )
   )
@@ -976,7 +880,7 @@ run_somatic_regulatory_scoring <- function(
   score_p_randomized = NULL,
   score_class_return = TRUE,
   fishhook_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   fishhook_args <- as_list_or_empty(fishhook_args)
   verbose_message(verbose, "Preparing somatic regulatory scores...")
@@ -1030,6 +934,8 @@ run_somatic_regulatory_scoring <- function(
     config = list(
       reg_ref_path = reg_ref_path,
       idcol = idcol,
+      test_tail = "one_tailed",
+      default_plot_mode = "volcano",
       fishhook_args = fishhook_args
     )
   )
@@ -1081,7 +987,7 @@ prepare_somatic_scores <- function(
   numcode = 1L,
   outmats = FALSE,
   mingenecovs = 500L,
-  onesided = NULL,
+  onesided = TRUE,
   dc = NULL,
   dndscv_args = list(),
   eligible_gr = NULL,
@@ -1112,7 +1018,7 @@ prepare_somatic_scores <- function(
   score_p_randomized = NULL,
   score_class_return = TRUE,
   fishhook_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Preparing somatic scores...")
   gene_bundle <- run_somatic_gene_scoring(
@@ -1187,6 +1093,11 @@ prepare_somatic_scores <- function(
       reg_scores_path = reg_bundle$output_paths$reg_scores_path
     ),
     config = list(
+      table_semantics = list(
+        gene_scores = list(test_tail = "one_tailed", default_plot_mode = "volcano"),
+        reg_scores = list(test_tail = "one_tailed", default_plot_mode = "volcano")
+      ),
+      onesided = onesided,
       dndscv_args = dndscv_args,
       fishhook_args = fishhook_args
     )
@@ -1221,7 +1132,7 @@ prepare_epigenomic_scores <- function(
   transform = "log1p",
   return_diagnostics = TRUE,
   summary_fun = mean,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Preparing epigenomic scores...")
   result <- run_epigenomic_reg_scoring(
@@ -1261,7 +1172,9 @@ prepare_epigenomic_scores <- function(
       track_dir = track_dir,
       bw_files = bw_files,
       min_tracks = min_tracks,
-      transform = transform
+      transform = transform,
+      test_tail = "one_tailed",
+      default_plot_mode = "rank"
     )
   )
 }
@@ -1300,7 +1213,7 @@ build_scored_gene_reg_graph <- function(
   reg_somatic_scores = NULL,
   reg_epigenomic_scores = NULL,
   save_outputs = FALSE,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Building scored gene-regulatory graph...")
   gene_germline_scores <- gene_germline_scores %||% resolve_bundle_component(germline_scores, "gene_scores")
@@ -1402,7 +1315,7 @@ run_gene_reg_diffusion <- function(
   reg_signal_clip = 5.0,
   top_n_to_save = 50L,
   python_path = NULL,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Running gene-regulatory diffusion...")
   requested_output_dir <- output_dir
@@ -1419,45 +1332,18 @@ run_gene_reg_diffusion <- function(
     path = edges_path %||% resolve_output_path(scored_graph, "edges_path"),
     stem = "gene_reg_graph_scored_edges"
   )
-  cache_key <- NULL
-  if (is.null(requested_output_dir) && is.null(requested_output_stem)) {
-    cache_key <- paste0(
-      "diffusion::",
-      cache_digest(list(
-        nodes_path = nodes_path,
-        edges_path = edges_path,
-        top_k = top_k,
-        confidence_power = confidence_power,
-        beta_germline = beta_germline,
-        beta_somatic = beta_somatic,
-        beta_epigenomic = beta_epigenomic,
-        integration_weight_germline = integration_weight_germline,
-        integration_weight_somatic = integration_weight_somatic,
-        integration_weight_epigenomic = integration_weight_epigenomic,
-        positive_only = positive_only,
-        reg_signal_clip = reg_signal_clip,
-        top_n_to_save = top_n_to_save,
-        python_path = python_path
-      ))
-    )
-    cached_result <- cache_get(cache_key)
-    if (!is.null(cached_result)) {
-      verbose_message(verbose, "Reusing cached diffusion result for identical inputs and parameters.")
-      return(cached_result)
-    }
-  }
   output_dir <- output_dir %||% make_temp_output_dir("gene_reg_diffusion")
   output_stem <- output_stem %||% "gene_reg_graph_diffusion"
 
   nodes_dt <- if (!is.null(nodes)) {
     data.table::as.data.table(nodes)
   } else {
-    read_cached_path(nodes_path %||% default_diffusion_config$nodes_path, read_scored_gene_reg_nodes, "scored_nodes")
+    read_path_fresh(nodes_path %||% default_diffusion_config$nodes_path, read_scored_gene_reg_nodes)
   }
   edges_dt <- if (!is.null(edges)) {
     data.table::as.data.table(edges)
   } else {
-    read_cached_path(edges_path %||% default_diffusion_config$edges_path, read_scored_gene_reg_edges, "scored_edges")
+    read_path_fresh(edges_path %||% default_diffusion_config$edges_path, read_scored_gene_reg_edges)
   }
   validate_scored_gene_reg_nodes(nodes_dt)
   validate_scored_gene_reg_edges(edges_dt)
@@ -1499,9 +1385,6 @@ run_gene_reg_diffusion <- function(
       )
     )
   )
-  if (!is.null(cache_key)) {
-    cache_set(cache_key, bundle)
-  }
   bundle
 }
 
@@ -1566,7 +1449,7 @@ call_selected_subgraph <- function(
   confidence_column = "confidence",
   edge_cost_column = "weight",
   python_path = NULL,
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Calling selected subgraph...")
   requested_output_dir <- output_dir
@@ -1583,48 +1466,16 @@ call_selected_subgraph <- function(
     gg_nodes_path <- gg_nodes_path %||% backend_paths$gene_gene_graph_nodes
     gg_edges_path <- gg_edges_path %||% backend_paths$gene_gene_graph_edges
   }
-  cache_key <- NULL
-  if (is.null(requested_output_dir) && is.null(requested_output_stem)) {
-    cache_key <- paste0(
-      "selected_subgraph::",
-      cache_digest(list(
-        diffusion_path = diffusion_path,
-        gg_nodes_path = gg_nodes_path,
-        gg_edges_path = gg_edges_path,
-        target_genes = target_genes,
-        candidate_pool_size = candidate_pool_size,
-        min_confidence = min_confidence,
-        max_edges_in_model = max_edges_in_model,
-        node_prize_weight = node_prize_weight,
-        edge_conf_weight = edge_conf_weight,
-        edge_cost_weight = edge_cost_weight,
-        node_scale = node_scale,
-        edge_scale = edge_scale,
-        max_time_seconds = max_time_seconds,
-        num_workers = num_workers,
-        random_seed = random_seed,
-        prize_column = prize_column,
-        confidence_column = confidence_column,
-        edge_cost_column = edge_cost_column,
-        python_path = python_path
-      ))
-    )
-    cached_result <- cache_get(cache_key)
-    if (!is.null(cached_result)) {
-      verbose_message(verbose, "Reusing cached selected subgraph for identical inputs and parameters.")
-      return(cached_result)
-    }
-  }
   output_dir <- output_dir %||% make_temp_output_dir("selected_subgraph")
   output_stem <- output_stem %||% "gene_gene_selected_subgraph"
 
   diffusion_dt <- if (!is.null(diffusion_table)) {
     as.data.table(diffusion_table)
   } else {
-    read_cached_path(diffusion_path %||% default_subgraph_config$diffusion_path, read_diffusion_results, "diffusion_results")
+    read_path_fresh(diffusion_path %||% default_subgraph_config$diffusion_path, read_diffusion_results)
   }
-  gg_nodes_dt <- read_cached_path(gg_nodes_path, read_gene_gene_nodes, "gg_nodes")
-  gg_edges_dt <- read_cached_path(gg_edges_path, read_gene_gene_edges, "gg_edges")
+  gg_nodes_dt <- read_path_fresh(gg_nodes_path, read_gene_gene_nodes)
+  gg_edges_dt <- read_path_fresh(gg_edges_path, read_gene_gene_edges)
 
   validate_diffusion_results(diffusion_dt, prize_column = prize_column)
   validate_gene_gene_nodes(gg_nodes_dt)
@@ -1679,9 +1530,6 @@ call_selected_subgraph <- function(
       )
     )
   )
-  if (!is.null(cache_key)) {
-    cache_set(cache_key, bundle)
-  }
   bundle
 }
 
@@ -1727,7 +1575,7 @@ plot_selected_subgraph <- function(
   dpi = 300,
   save_bundle = TRUE,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Preparing selected-subgraph plot...")
   nodes <- nodes %||% resolve_bundle_component(selected_subgraph, "nodes")
@@ -1802,21 +1650,28 @@ plot_selected_subgraph <- function(
 
 #' Plot score tables from germline, somatic, epigenomic, or diffusion bundles
 #'
-#' Creates a rank plot for one-tailed outputs and a volcano plot for two-tailed
-#' outputs.
+#' Creates either a rank plot or a volcano plot for score tables.
 #'
 #' @param scores Optional bundle containing a plottable score table.
 #' @param table Optional explicit score table.
 #' @param which Optional bundle component name such as `gene_scores`,
 #'   `reg_scores`, `all_genes`, or `top_genes`.
 #' @param plot_file_path Optional output path for the saved figure.
-#' @param test_tail One of `auto`, `one_tailed`, or `two_tailed`.
+#' @param test_tail One of `auto`, `one_tailed`, or `two_tailed`. This
+#'   describes the score interpretation, not the plot geometry.
+#' @param plot_mode One of `auto`, `rank`, or `volcano`. Use this to choose the
+#'   figure geometry explicitly when needed.
 #' @param feature_column Optional explicit feature-label column.
 #' @param z_column Z-score column name.
 #' @param p_value_column Optional explicit p-value column for volcano plots.
 #' @param drop_tukey_outliers Logical scalar. If `TRUE`, remove extreme
 #'   volcano-plot outliers using Tukey's upper-fence rule on `-log10(p)`.
+#' @param clip_extreme_display Logical scalar. If `TRUE`, cap the displayed
+#'   volcano axes for readability. If `FALSE`, plot the actual z-scores and
+#'   `-log10(p)` values without display clipping.
 #' @param label_features Optional character vector of features to label.
+#' @param label_max_per_feature Positive integer. For any requested label, keep
+#'   at most this many plotted labels, prioritizing the largest z-scores.
 #' @param title Plot title.
 #' @param width Plot width in inches.
 #' @param height Plot height in inches.
@@ -1830,17 +1685,20 @@ plot_scores <- function(
   which = NULL,
   plot_file_path = NULL,
   test_tail = "auto",
+  plot_mode = "auto",
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
   drop_tukey_outliers = FALSE,
+  clip_extreme_display = FALSE,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = "conseguiR Scores",
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Preparing score plot...")
 
@@ -1849,11 +1707,14 @@ plot_scores <- function(
     table = table,
     which = which,
     test_tail = test_tail,
+    plot_mode = plot_mode,
     feature_column = feature_column,
     z_column = z_column,
     p_value_column = p_value_column,
     drop_tukey_outliers = drop_tukey_outliers,
+    clip_extreme_display = clip_extreme_display,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title
   )
 
@@ -1875,11 +1736,14 @@ plot_scores <- function(
       file_path = plot_file_path,
       which = which,
       test_tail = test_tail,
+      plot_mode = plot_mode,
       feature_column = feature_column,
       z_column = z_column,
       p_value_column = p_value_column,
       drop_tukey_outliers = drop_tukey_outliers,
+      clip_extreme_display = clip_extreme_display,
       label_features = label_features,
+      label_max_per_feature = label_max_per_feature,
       title = title,
       width = export_width,
       height = export_height,
@@ -1898,11 +1762,14 @@ plot_scores <- function(
     ),
     config = list(
       which = which,
-      test_tail = test_tail,
+      test_tail = plot_obj$test_tail,
+      requested_test_tail = test_tail,
+      requested_plot_mode = plot_mode,
       feature_column = feature_column,
       z_column = z_column,
       p_value_column = p_value_column,
       drop_tukey_outliers = drop_tukey_outliers,
+      clip_extreme_display = clip_extreme_display,
       plot_mode = plot_obj$plot_mode,
       export_width = export_width,
       export_height = export_height
@@ -2149,7 +2016,7 @@ build_postdiff_gene_table <- function(diffusion = NULL, diffusion_path = NULL, m
   )
 }
 
-run_score_plot_spec <- function(spec, plot_file_path = NULL, test_tail = "one_tailed", label_features = NULL, title = "conseguiR Scores", width = 10, height = 7, dpi = 300, save_plot = !is.null(plot_file_path), verbose = FALSE) {
+run_score_plot_spec <- function(spec, plot_file_path = NULL, test_tail = "one_tailed", plot_mode = "auto", label_features = NULL, label_max_per_feature = 1L, title = "conseguiR Scores", width = 10, height = 7, dpi = 300, save_plot = !is.null(plot_file_path), verbose = TRUE) {
   plot_scores(
     table = spec$table,
     feature_column = spec$feature_column,
@@ -2157,7 +2024,9 @@ run_score_plot_spec <- function(spec, plot_file_path = NULL, test_tail = "one_ta
     p_value_column = spec$p_value_column,
     plot_file_path = plot_file_path,
     test_tail = test_tail,
+    plot_mode = plot_mode,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title,
     width = width,
     height = height,
@@ -2177,12 +2046,13 @@ plot_germline_gene_scores <- function(
   stage = c("pre", "post"),
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   stage <- match.arg(stage)
   spec <- if (identical(stage, "pre")) {
@@ -2192,7 +2062,7 @@ plot_germline_gene_scores <- function(
   }
 
   title <- title %||% if (identical(stage, "pre")) "Pre-diffusion Germline Gene Signal" else "Post-diffusion Germline Gene Signal"
-  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", plot_mode = "rank", label_features = label_features, label_max_per_feature = label_max_per_feature, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
 }
 
 #' Plot germline regulatory signal
@@ -2202,16 +2072,17 @@ plot_germline_reg_scores <- function(
   nodes_path = NULL,
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   spec <- build_prediff_reg_table(germline_scores, scored_graph, nodes_path, modality = "germline")
   title <- title %||% "Germline Regulatory Signal"
-  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", plot_mode = "rank", label_features = label_features, label_max_per_feature = label_max_per_feature, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
 }
 
 #' Plot somatic gene signal before or after diffusion
@@ -2224,12 +2095,13 @@ plot_somatic_gene_scores <- function(
   stage = c("pre", "post"),
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   stage <- match.arg(stage)
   spec <- if (identical(stage, "pre")) {
@@ -2239,7 +2111,7 @@ plot_somatic_gene_scores <- function(
   }
 
   title <- title %||% if (identical(stage, "pre")) "Pre-diffusion Somatic Gene Signal" else "Post-diffusion Somatic Gene Signal"
-  run_score_plot_spec(spec, plot_file_path, test_tail = "two_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", plot_mode = "volcano", label_features = label_features, label_max_per_feature = label_max_per_feature, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
 }
 
 #' Plot somatic regulatory signal
@@ -2249,16 +2121,17 @@ plot_somatic_reg_scores <- function(
   nodes_path = NULL,
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   spec <- build_prediff_reg_table(somatic_scores, scored_graph, nodes_path, modality = "somatic")
   title <- title %||% "Somatic Regulatory Signal"
-  run_score_plot_spec(spec, plot_file_path, test_tail = "two_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", plot_mode = "volcano", label_features = label_features, label_max_per_feature = label_max_per_feature, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
 }
 
 #' Plot post-diffusion epigenomic gene signal
@@ -2267,16 +2140,17 @@ plot_epigenomic_gene_scores <- function(
   diffusion_path = NULL,
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   spec <- build_postdiff_gene_table(diffusion, diffusion_path, modality = "epigenomic")
   title <- title %||% "Post-diffusion Epigenomic Gene Signal"
-  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", plot_mode = "rank", label_features = label_features, label_max_per_feature = label_max_per_feature, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
 }
 
 #' Plot epigenomic regulatory signal
@@ -2286,16 +2160,17 @@ plot_epigenomic_reg_scores <- function(
   nodes_path = NULL,
   plot_file_path = NULL,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = NULL,
   width = 10,
   height = 7,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   spec <- build_prediff_reg_table(epigenomic_scores, scored_graph, nodes_path, modality = "epigenomic")
   title <- title %||% "Epigenomic Regulatory Signal"
-  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", label_features = label_features, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
+  run_score_plot_spec(spec, plot_file_path, test_tail = "one_tailed", plot_mode = "rank", label_features = label_features, label_max_per_feature = label_max_per_feature, title = title, width = width, height = height, dpi = dpi, save_plot = save_plot, verbose = verbose)
 }
 
 #' Run the full conseguiR pipeline end to end
@@ -2351,7 +2226,7 @@ run_conseguiR <- function(
   diffusion_args = list(),
   subgraph_args = list(),
   plot_args = list(),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Running end-to-end conseguiR pipeline...")
   requested_output_dir <- output_dir
@@ -2378,7 +2253,6 @@ run_conseguiR <- function(
       reference_bfile = reference_bfile,
       gene_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "germline_gene_scores") else NULL,
       reg_output_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "germline_reg_scores") else NULL,
-      magma_gwas_cache_prefix = if (!is.null(requested_output_dir)) file.path(requested_output_dir, "magma_shared_gwas_cache") else NULL,
       verbose = verbose
     ),
     extra_args = as_list_or_empty(germline_args)
@@ -2545,7 +2419,7 @@ plot_locus_context <- function(
   height = 9,
   dpi = 300,
   save_plot = !is.null(plot_file_path),
-  verbose = FALSE
+  verbose = TRUE
 ) {
   verbose_message(verbose, "Preparing locus context plot...")
 

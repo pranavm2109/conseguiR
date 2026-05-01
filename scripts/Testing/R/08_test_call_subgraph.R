@@ -9,7 +9,7 @@ suppressPackageStartupMessages({
 source("scripts/Internals/R/06b_python_basilisk.R")
 source("scripts/Internals/R/08_call_subgraph.R")
 source("R/backend_resources.R")
-default_step8_test_output_dir <- "data/processed/test_outputs/step8"
+default_step8_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "step8")
 
 make_step8_test_path <- function(stem, ext = "") {
   dir.create(default_step8_test_output_dir, recursive = TRUE, showWarnings = FALSE)

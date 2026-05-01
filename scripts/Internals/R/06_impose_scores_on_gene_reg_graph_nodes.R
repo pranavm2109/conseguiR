@@ -39,9 +39,9 @@ read_gene_reg_graph_no_scores <- function(path = default_gene_reg_scoring_config
         normalizePath(default_backend_path, winslash = "/", mustWork = FALSE)
       )
   ) {
-    cached_graph <- backend_loader("gene_reg", backend_dir = backend_dir)
-    if (inherits(cached_graph, "igraph")) {
-      return(cached_graph)
+    backend_graph <- backend_loader("gene_reg", backend_dir = backend_dir)
+    if (inherits(backend_graph, "igraph")) {
+      return(backend_graph)
     }
   }
 
@@ -130,17 +130,13 @@ read_backend_gene_id_map <- function() {
     helper("NCBI38.gene.loc")
   } else {
     loc_candidates <- c(
-      getOption("conseguiR.backend_resource_dir", NULL),
-      file.path(tools::R_user_dir("conseguiR", which = "cache"), "backend_resources"),
-      "inst/extdata/backend",
-      "extdata/backend",
+      file.path(getOption("conseguiR.backend_resource_dir", NULL), "NCBI38.gene.loc"),
+      file.path("inst/extdata/backend", "NCBI38.gene.loc"),
+      file.path("extdata/backend", "NCBI38.gene.loc"),
       "data/raw/NCBI38/NCBI38.gene.loc"
     )
     loc_candidates <- unique(as.character(loc_candidates))
     loc_candidates <- loc_candidates[!is.na(loc_candidates) & nzchar(loc_candidates)]
-    if (!any(grepl("NCBI38\\.gene\\.loc$", loc_candidates))) {
-      loc_candidates <- file.path(loc_candidates, "NCBI38.gene.loc")
-    }
     existing <- loc_candidates[file.exists(loc_candidates)]
     if (length(existing) == 0L) NULL else existing[[1]]
   }

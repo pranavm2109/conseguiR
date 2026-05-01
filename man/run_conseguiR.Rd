@@ -130,7 +130,7 @@ resulting objects in memory.
 
 Exact list formatting:
 
-\verb{germline_args = list( gene_sample_size = 456348, reg_sample_size = 456348, gene_step1_args = list(annotation_window = c(35, 10), ignore_strand = TRUE), gene_step2_args = list( gene_model = \\"snp-wise=mean\\", pval = list(use = c(\\"SNP\\", \\"P\\"), duplicate = \\"drop\\") ), reg_step1_args = list(annotation_window = c(0, 0)), reg_step2_args = list( pval = list(use = c(\\"SNP\\", \\"P\\"), duplicate = \\"drop\\") ), shared_args = list(reuse_existing_gwas_cache = TRUE) )}
+\verb{germline_args = list( gene_sample_size = 456348, reg_sample_size = 456348, gene_step1_args = list(annotation_window = c(15, 15), ignore_strand = TRUE), gene_step2_args = list( gene_model = \\"snp-wise=mean\\", pval = list(use = c(\\"SNP\\", \\"P\\"), duplicate = \\"drop\\") ), reg_step1_args = list(annotation_window = c(15, 15)), reg_step2_args = list( pval = list(use = c(\\"SNP\\", \\"P\\"), duplicate = \\"drop\\") ), shared_args = list() )}
 
 \verb{somatic_args = list( gene_cv = NULL, sm = \\"192r_3w\\", kc = \\"cgc81\\", eligible_gr = NULL, fishhook_covariate_data = covariate_dt, constructor_use_local_mut_density = FALSE, score_iter = 25L, fishhook_args = list() )}
 

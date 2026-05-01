@@ -16,13 +16,13 @@ options(conseguiR.backend_dir = test_backend_dir)
 .conseguiR_initialize_backend_graphs(
   backend_dir = test_backend_dir,
   build_gene_reg = TRUE,
-  build_gene_gene = TRUE,
+  build_gene_gene = FALSE,
   force = TRUE,
   strict = TRUE,
   quiet = TRUE
 )
 default_graph_rds_path <- .conseguiR_backend_paths(test_backend_dir)$gene_reg_graph_rds
-default_gene_reg_scored_test_output_dir <- "data/processed/test_outputs/gene_reg_scored"
+default_gene_reg_scored_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "gene_reg_scored")
 
 make_gene_reg_scored_test_path <- function(stem, ext = "") {
   dir.create(default_gene_reg_scored_test_output_dir, recursive = TRUE, showWarnings = FALSE)

@@ -57,7 +57,7 @@ default_somatic_path <- "data/raw/Testing/2026-01-09_no_CLL_lymph_only_pcawg_maf
 default_reg_ref_path <- .conseguiR_default_reg_loc_path()
 default_fishhook_covariate_path <- "data/raw/Testing/2026-01-26_all_reg_elems_sample_level_mut_frac_comparison_bet_only_memory_b_normal_and_non_cll_malig_b_cells.rds"
 default_dndscv_refdb <- "data/raw/Testing/RefCDS_human_GRCh38.p12.rda"
-default_somatic_test_output_dir <- "data/processed/test_outputs/somatic"
+default_somatic_test_output_dir <- file.path(tempdir(), "conseguiR_test_outputs", "somatic")
 
 make_somatic_test_path <- function(stem, ext = "") {
   dir.create(default_somatic_test_output_dir, recursive = TRUE, showWarnings = FALSE)
