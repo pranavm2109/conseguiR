@@ -1,79 +1,58 @@
 # conseguiR
 
-`conseguiR` is an R package for integrating germline, somatic, and epigenomic
-signals on gene-regulatory graphs, running diffusion, selecting a compact
-gene-gene subgraph, and generating both summary and exploratory plots.
+`conseguiR` is an R package for integrative prioritization of genes and
+regulatory elements using germline association signal, somatic mutation signal,
+and epigenomic regulatory signal in a graph-based framework.
 
-The package is designed to be object-first:
+The package is designed for analyses where no single modality is sufficient on
+its own. Instead of treating GWAS hits, somatic signals, and regulatory
+activity as disconnected results, `conseguiR` maps them into a shared
+gene-regulatory context, propagates signal through that context, and returns
+interpretable locus-level and network-level outputs.
 
-- compute functions return R objects and bundles by default
-- file writing is optional and should happen only when the user explicitly asks
-  for saved outputs
-- plotting functions are the natural place to save figures
+## What the package does
 
-This repository contains the end-to-end implementation of that workflow,
-including exported user-facing wrappers, internal pipeline stages, and
-plotting support.
+At a high level, `conseguiR` supports the following workflow:
 
-## Overview
+1. score germline signal with MAGMA at genes and regulatory elements
+2. score somatic signal with `dndscv` at genes and `fishHook` at regulatory
+   elements
+3. score epigenomic regulatory activity from bigWig tracks
+4. impose all modality-specific scores onto a backend gene-regulatory graph
+5. run diffusion to integrate regulatory evidence into gene-level support
+6. call a compact selected subgraph on a gene-gene network
+7. visualize scores, loci, and the final selected subgraph
 
-The current package workflow is:
+The package returns structured R objects by default. Disk output is optional.
 
-1. validate user inputs
-2. compute germline scores with MAGMA
-3. compute somatic scores with `dndscv` and `fishHook`
-4. compute regulatory epigenomic scores from bigWig tracks
-5. impose all scores onto the backend gene-regulatory graph
-6. run diffusion on the scored gene-regulatory graph
-7. call a cardinality-constrained gene-gene subgraph
-8. build a visualization bundle and save a plotted graph
-9. optionally inspect intermediate score outputs and specific genomic loci
+## Main exported workflow
 
-The package uses compact packaged backend graph seeds rather than asking normal
-users to rebuild backend graphs from raw ENCODE or STRING inputs.
-`initialize_backend_graphs()` materializes the available packaged seeds into a
-writable backend directory and primes an in-memory cache of the loaded graph
-objects for downstream scoring, diffusion, and subgraph stages.
+The package exposes both stage-wise functions and a top-level wrapper.
 
-Diffusion and selected-subgraph calling are now run inside a managed Python
-environment via `basilisk`. That means Python is still required for those two
-stages, but the package no longer expects users to wire up a project-specific
-interpreter by hand. The package provisions the required Python stack for those
-steps internally.
+### Core stage-wise functions
 
-Germline scoring still depends on MAGMA, but MAGMA is now treated as an
-external prerequisite rather than a bundled package binary. You can supply it
-explicitly with `magma_path`, register it once with
-`options(conseguiR.magma_path = "/path/to/magma")`, set
-`CONSEGUIR_MAGMA_PATH`, or make `magma` available on your system `PATH`.
-
-## User API
-
-The package-facing API currently exports:
-
-- `validate_inputs()`
-- `run_germline_gene_scoring()`
-- `run_germline_regulatory_scoring()`
 - `prepare_germline_scores()`
-- `run_somatic_gene_scoring()`
-- `run_somatic_regulatory_scoring()`
 - `prepare_somatic_scores()`
 - `prepare_epigenomic_scores()`
 - `build_scored_gene_reg_graph()`
 - `run_gene_reg_diffusion()`
-- `plot_scores()`
 - `call_selected_subgraph()`
+- `plot_scores()`
 - `plot_locus_context()`
 - `plot_selected_subgraph()`
+
+### End-to-end wrapper
+
 - `run_conseguiR()`
 
-Detailed API notes are in:
+The package also exports several lower-level branch-specific wrappers such as
+`run_germline_gene_scoring()` and `run_somatic_regulatory_scoring()`. Those are
+useful when a user wants direct branch-level control, but the functions above
+are the main user-facing workflow.
 
-- [scripts/Externals/R/EXTERNAL_API_OVERVIEW.md](scripts/Externals/R/EXTERNAL_API_OVERVIEW.md)
+## Quick start
 
-## Quickstart
-
-The highest-level workflow is through `run_conseguiR()`:
+### One-shot workflow
 
 ```r
 result <- run_conseguiR(
@@ -81,22 +60,41 @@ result <- run_conseguiR(
   somatic_maf = "<path-or-table>",
   reg_ref_path = "<regulatory-reference-path>",
   reference_bfile = "<plink-reference-prefix>",
-  dndscv_refdb = "<dndscv-refdb-path>",
-  epigenomic_track_dir = "<bigwig-directory>",
-  target_genes = 50L
+  dndscv_refdb = "<dndscv-reference-db>",
+  epigenomic_tracks = c("<track1.bw>", "<track2.bw>", "<track3.bw>"),
+  target_genes = 50L,
+  verbose = TRUE
 )
 ```
 
-By default, this returns a master pipeline bundle in memory. If you want the
-pipeline to also save artifacts to disk, pass an explicit `output_dir`.
+This returns a pipeline bundle containing:
 
-If you want a staged workflow instead of the one-shot wrapper, the intended
-sequence is:
+- germline score bundle
+- somatic score bundle
+- epigenomic score bundle
+- scored gene-regulatory graph
+- diffusion output
+- selected subgraph
+- final selected-subgraph plot bundle
+
+### Stage-wise workflow
 
 ```r
-germline <- prepare_germline_scores(...)
-somatic <- prepare_somatic_scores(...)
-epigenomic <- prepare_epigenomic_scores(...)
+germline <- prepare_germline_scores(
+  gwas_sumstats = "<path-or-table>",
+  reference_bfile = "<plink-reference-prefix>"
+)
+
+somatic <- prepare_somatic_scores(
+  maf = "<path-or-table>",
+  refdb = "<dndscv-reference-db>",
+  reg_ref_path = "<regulatory-reference-path>"
+)
+
+epigenomic <- prepare_epigenomic_scores(
+  reg_ref_path = "<regulatory-reference-path>",
+  bw_files = c("<track1.bw>", "<track2.bw>", "<track3.bw>")
+)
 
 scored_graph <- build_scored_gene_reg_graph(
   germline_scores = germline,
@@ -105,50 +103,50 @@ scored_graph <- build_scored_gene_reg_graph(
 )
 
 diffusion <- run_gene_reg_diffusion(scored_graph = scored_graph)
-selected_subgraph <- call_selected_subgraph(diffusion = diffusion)
+
+selected_subgraph <- call_selected_subgraph(
+  diffusion = diffusion,
+  target_genes = 50L
+)
+
+selected_plot <- plot_selected_subgraph(
+  selected_subgraph = selected_subgraph,
+  save_plot = FALSE
+)
 ```
 
 ## Plotting
 
-`conseguiR` currently supports three complementary plotting modes:
+`conseguiR` supports three main plotting layers.
 
-1. score-stage plots
-2. selected-subgraph plots
-3. exploratory locus plots
+### 1. Score plots
 
-Intermediate score plots:
+Use `plot_scores()` for generic score plots.
 
 ```r
-plot_germline_gene_scores(germline_scores = germline, stage = "pre")
-plot_germline_gene_scores(
-  germline_scores = germline,
-  diffusion = diffusion,
-  stage = "post"
+plot_scores(
+  scores = germline,
+  which = "gene_scores",
+  plot_mode = "rank",
+  save_plot = FALSE
 )
 
-plot_somatic_gene_scores(somatic_scores = somatic, stage = "pre")
-plot_somatic_gene_scores(
-  somatic_scores = somatic,
-  diffusion = diffusion,
-  stage = "post"
-)
-
-plot_epigenomic_gene_scores(diffusion = diffusion)
-plot_germline_reg_scores(germline_scores = germline)
-plot_somatic_reg_scores(somatic_scores = somatic)
-plot_epigenomic_reg_scores(epigenomic_scores = epigenomic)
-```
-
-Selected-subgraph plot:
-
-```r
-plot_selected_subgraph(
-  selected_subgraph = selected_subgraph,
-  plot_file_path = "selected_subgraph.pdf"
+plot_scores(
+  scores = somatic,
+  which = "gene_scores",
+  plot_mode = "volcano",
+  save_plot = FALSE
 )
 ```
 
-Exploratory locus plot:
+`plot_mode` controls geometry:
+
+- `plot_mode = "rank"` for ranked feature plots
+- `plot_mode = "volcano"` for z-score versus `-log10(p)` plots
+
+### 2. Locus plots
+
+Use `plot_locus_context()` to inspect a genomic region.
 
 ```r
 plot_locus_context(
@@ -160,37 +158,92 @@ plot_locus_context(
   selected_subgraph = selected_subgraph,
   gwas_sumstats = "<path-or-table>",
   label_top_lit_snps = 3L,
-  plot_file_path = "MYC_locus_context.pdf"
+  save_plot = FALSE
 )
 ```
 
-`plot_locus_context()` shows:
+This plot can show:
 
-- regulatory-element somatic, epigenomic, and germline z-score tracks
-- a combined regulatory score track
-- a post-diffusion gene score track
-- regulatory-element to gene links within the locus
-- optional SNP labels, preferring literature-backed SNPs when available and
-  falling back to top GWAS SNPs in the top germline regulatory elements
+- GWAS locus SNPs
+- regulatory-element input scores by modality
+- regulatory-to-gene links in the locus
+- post-diffusion gene support
+- optional SNP labels and highlighted genes
 
-## Installation
+### 3. Selected-subgraph plots
 
-For installation and setup notes, see:
+Use `plot_selected_subgraph()` for the final network view.
+
+```r
+plot_selected_subgraph(
+  selected_subgraph = selected_subgraph,
+  title = "Selected disease subgraph",
+  save_plot = FALSE
+)
+```
+
+All plotting functions return editable `ggplot` objects inside the returned
+bundle.
+
+## Package backend resources
+
+`conseguiR` ships backend seed resources with the package under
+`inst/extdata/backend`.
+
+These resources support:
+
+- the gene-regulatory graph
+- the gene-gene graph
+- gene and regulatory annotations needed by the workflow
+
+In a source-checkout or development workflow, the package may materialize or
+reuse working backend files in `data/processed`. In an installed-package
+workflow, users interact with the package-owned backend resources rather than
+rebuilding those graphs from scratch.
+
+## External dependencies
+
+`conseguiR` depends on a small number of nontrivial scientific tools.
+
+### MAGMA
+
+MAGMA is required for germline scoring and must be available externally.
+
+The package looks for MAGMA in this order:
+
+1. the explicit `magma_path` argument
+2. `options(conseguiR.magma_path = "/path/to/magma")`
+3. `Sys.getenv("CONSEGUIR_MAGMA_PATH")`
+4. `magma` on `PATH`
+
+### Python-backed stages
+
+Diffusion and selected-subgraph calling use Python-backed stages managed
+internally through `basilisk`. Users do not normally need to wire up a Python
+interpreter by hand just to run the package, although developer and HPC
+workflows may still use a project-specific conda environment for convenience.
+
+## Documentation
+
+For practical setup instructions, see:
 
 - [INSTALL.md](INSTALL.md)
 
-## Current status
+For the full package walkthrough, see:
 
-This is a research-grade GitHub package rather than a polished CRAN release.
+- `vignettes/conseguiR-overview.Rmd`
 
-The main remaining rough edges are:
+The vignette demonstrates the intended stage-wise workflow and the top-level
+`run_conseguiR()` workflow on real package-shaped inputs.
 
-- some package-facing wrappers still delegate into `scripts/...`
-- MAGMA still matters for germline scoring
-- the `basilisk`-managed Python path for
-  `run_gene_reg_diffusion()` and `call_selected_subgraph()` has been validated
-  in this development environment and still deserves one clean-machine check
-  before release
-- the ENCODE-backed gene-regulatory compact seed is still being finalized, so
-  the gene-gene backend path is currently the more mature of the two packaged
-  backend stories
+## Current package state
+
+`conseguiR` is a research package under active development rather than a CRAN
+release. The main public workflow is in place, the vignette is intended to be
+reproducible, and the installed package is designed to ship the backend seeds
+needed for normal use.
+
+## Repository
+
+- Source: <https://github.com/pranavm2109/conseguiR>
+- Issues: <https://github.com/pranavm2109/conseguiR/issues>

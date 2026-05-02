@@ -4,6 +4,38 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
+read_delimited_table <- function(path, sep = "\t") {
+  if (!file.exists(path)) {
+    stop("File does not exist: ", path)
+  }
+
+  if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    con <- gzfile(path, open = "rt")
+    on.exit(close(con), add = TRUE)
+    return(as.data.table(utils::read.delim(
+      file = con,
+      sep = sep,
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )))
+  }
+
+  if (grepl("\\.xz$", path, ignore.case = TRUE)) {
+    con <- xzfile(path, open = "rt")
+    on.exit(close(con), add = TRUE)
+    return(as.data.table(utils::read.delim(
+      file = con,
+      sep = sep,
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )))
+  }
+
+  data.table::as.data.table(data.table::fread(path, sep = sep, showProgress = FALSE))
+}
+
 conseguiR_runtime_file <- function(relpath) {
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
@@ -40,19 +72,11 @@ default_diffusion_config <- list(
 ## the user-facing external API runtime.
 
 read_scored_gene_reg_nodes <- function(path = default_diffusion_config$nodes_path) {
-  if (!file.exists(path)) {
-    stop("Scored gene-reg node file does not exist: ", path)
-  }
-
-  as.data.table(fread(path, sep = "\t", showProgress = FALSE))
+  read_delimited_table(path, sep = "\t")
 }
 
 read_scored_gene_reg_edges <- function(path = default_diffusion_config$edges_path) {
-  if (!file.exists(path)) {
-    stop("Scored gene-reg edge file does not exist: ", path)
-  }
-
-  as.data.table(fread(path, sep = "\t", showProgress = FALSE))
+  read_delimited_table(path, sep = "\t")
 }
 
 validate_scored_gene_reg_nodes <- function(nodes) {

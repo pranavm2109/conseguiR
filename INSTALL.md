@@ -1,145 +1,128 @@
 # Installation
 
-This document describes the current installation story for `conseguiR`.
+This document describes the intended installation path for `conseguiR` and the
+small number of external requirements that matter for a successful first run.
 
-It is intentionally practical and honest: the package is usable, but the setup
-is not yet fully polished into a one-command install.
+## What you need
 
-## Current status
+`conseguiR` combines:
 
-At the moment, `conseguiR` is best thought of as:
+- R
+- package-managed Python-backed stages via `basilisk`
+- MAGMA for germline scoring
+- package-shipped backend graph resources
 
-- an R package with exported user-facing wrappers
-- a mixed R + Python workflow
-- a package that also depends on external scientific tools and resources
+For most users, the two main setup tasks are:
 
-So installation currently involves four layers:
+1. install the R package and its dependencies
+2. make MAGMA available
 
-1. R
-2. Python
-3. MAGMA
-4. package-owned backend graph resources
+## 1. Install the package
 
-## 1. Clone the repository
-
-```bash
-git clone <your-repo-url>
-cd conseguiR
-```
-
-## 2. Install the R package and its R dependencies
-
-The intended GitHub-first install path is:
+### From GitHub
 
 ```r
 remotes::install_github("pranavm2109/conseguiR", dependencies = TRUE)
 ```
 
-With the current `DESCRIPTION`, that should pull the package's declared R
-dependencies automatically, including the GitHub-hosted somatic-scoring
-packages declared in `Remotes`.
-
-After installation, a normal:
+Then load it with:
 
 ```r
 library(conseguiR)
 ```
 
-now quietly warms up the managed Python runtime used by
-diffusion and selected-subgraph calling.
-
-For local development inside a cloned repo, the usual alternatives still work:
-
-```r
-devtools::load_all()
-```
-
-or
+### From a local clone
 
 ```r
 devtools::install()
 ```
 
-## 3. Prepare the Python environment
+or for active development:
 
-The recommended Python environment name is:
-
-- `lymphoma_graph_env`
-
-The repository now includes a matching conda specification:
-
-- `environment.yml`
-
-So on a fresh machine or HPC node, the intended first step is:
-
-```bash
-conda env create -f environment.yml
-conda activate lymphoma_graph_env
+```r
+devtools::load_all()
 ```
 
-This environment is used primarily for:
+## 2. MAGMA
 
-- diffusion
-- subgraph calling
-- developer and HPC execution of helper scripts such as backend-seed builders
+MAGMA is required for germline scoring.
 
-This conda environment is mainly for developer and HPC reproducibility. Normal
-end users do not need to activate it manually for diffusion or selected-subgraph
-calling, because those Python-backed stages run inside the package-managed
-`basilisk` environment and are warmed up on package attach.
+The package looks for MAGMA in the following order:
 
-## 4. Ensure MAGMA is available
+1. the explicit `magma_path` argument passed to a germline scoring function
+2. `options(conseguiR.magma_path = "/path/to/magma")`
+3. `Sys.getenv("CONSEGUIR_MAGMA_PATH")`
+4. `magma` on your system `PATH`
 
-The germline scoring stage uses MAGMA.
+Examples:
 
-`conseguiR` resolves MAGMA in this order:
+```r
+options(conseguiR.magma_path = "/path/to/magma")
+```
 
-- the explicit `magma_path` argument passed to a germline scoring function
-- `options(conseguiR.magma_path = "/path/to/magma")`
-- `Sys.getenv("CONSEGUIR_MAGMA_PATH")`
-- `magma` on your system `PATH`
+or in the shell:
 
-So before running germline scoring, make sure that:
+```bash
+export CONSEGUIR_MAGMA_PATH=/path/to/magma
+```
 
-- a MAGMA 1.1 binary is available through one of those paths
-- it is executable
-- the related reference inputs you plan to use are available
+If MAGMA is unavailable, germline scoring functions should fail with a clear
+message rather than silently misbehaving.
 
-If MAGMA is missing, the germline-scoring functions should fail with a clear
-message explaining the accepted discovery routes.
+## 3. Python-backed stages
 
-## 5. Understand the current backend-resource expectation
+`run_gene_reg_diffusion()` and `call_selected_subgraph()` use Python-backed
+stages managed internally through `basilisk`.
 
-`conseguiR` works with backend graph resources, especially:
+In a normal installed-package workflow, users do not usually need to configure
+Python manually. The package handles the managed Python environment for those
+stages.
 
-- a gene-regulatory graph without user-specific scores
-- a gene-gene graph used after diffusion
+For developer or HPC workflows, a project-specific conda environment can still
+be helpful for reproducibility, but it is not the main package interface.
 
-These backend graph resources are now intended to ship with the package as
-package-owned resources.
+## 4. Backend graph resources
 
-On package load, `conseguiR` attempts to ensure these backend graph files exist
-in the working backend directory. If they are missing there, it first tries to
-seed them from the packaged backend graph resources.
+`conseguiR` ships backend seed resources with the package under:
 
-At the moment, the gene-gene packaged seed is ready and the ENCODE gene-reg
-compact seed is generated as a one-time developer step before distribution.
+- `inst/extdata/backend`
 
-## 6. Sanity check package startup
+These packaged resources support the installed-package workflow and include the
+backend graph seeds needed for normal use.
 
-After loading the package, a useful first check is:
+In a source-checkout or development session, the package may also materialize
+working backend files in:
+
+- `data/processed`
+
+That working directory is for local or development use. Installed users should
+think of `inst/extdata/backend` as the package-owned backend resource layer.
+
+## 5. First-run sanity check
+
+After installation, a clean first check is:
 
 ```r
 library(conseguiR)
 check_conseguiR_runtime()
+initialize_backend_graphs()
 ```
 
-If the Python setup is healthy, the returned runtime status should report the
-managed Python stage as available.
+What to expect:
 
-## 7. Minimal workflow check
+- `library(conseguiR)` should load cleanly
+- `check_conseguiR_runtime()` should report a healthy runtime
+- `initialize_backend_graphs()` should seed or reuse backend resources
 
-The intended public workflow is through the exported wrappers, for example:
+If you want to inspect shipped backend resources directly:
+
+```r
+list.files(system.file("extdata", "backend", package = "conseguiR"))
+```
+
+## 6. Minimal usage check
+
+Once the package loads successfully, a minimal end-to-end call looks like:
 
 ```r
 result <- run_conseguiR(
@@ -147,68 +130,63 @@ result <- run_conseguiR(
   somatic_maf = "<path-or-table>",
   reg_ref_path = "<regulatory-reference-path>",
   reference_bfile = "<plink-reference-prefix>",
-  dndscv_refdb = "<dndscv-refdb-path>",
-  epigenomic_track_dir = "<bigwig-directory>",
-  target_genes = 50L
+  dndscv_refdb = "<dndscv-reference-db>",
+  epigenomic_tracks = c("<track1.bw>", "<track2.bw>", "<track3.bw>"),
+  target_genes = 50L,
+  verbose = TRUE
 )
 ```
 
-The final plotted graph path is then available from:
+This returns the stage bundles, selected subgraph, and final graph plot bundle
+in memory. If you also want saved outputs, provide `output_dir`.
 
-- `result$plot$output_paths$plot_file_path`
+## 7. Vignette and documentation
 
-## 8. Fresh-clone validation checklist
+The package vignette is the main workflow guide:
 
-After cloning the repository into a separate directory, a good first validation
-path is:
+- `vignettes/conseguiR-overview.Rmd`
 
-1. install the package with `devtools::install()`
-2. load the package with `library(conseguiR)`
-3. run `check_conseguiR_runtime()`
-4. run `initialize_backend_graphs()`
+It demonstrates:
 
-In a clean R session, that looks like:
+- stage-wise scoring
+- graph construction
+- diffusion
+- selected-subgraph calling
+- selected-subgraph plotting
+- the end-to-end `run_conseguiR()` wrapper
 
-```r
-devtools::install()
-library(conseguiR)
+## 8. Troubleshooting notes
 
-check_conseguiR_runtime()
-initialize_backend_graphs()
-```
+### If germline scoring fails
 
-The ideal success state is:
+Check:
 
-- `library(conseguiR)` loads cleanly
-- `check_conseguiR_runtime()` reports `OK`
-- `initialize_backend_graphs()` reports `reused` or `seeded`
+- that MAGMA is installed and executable
+- that `reference_bfile` points to a valid PLINK prefix
+- that the GWAS summary-statistics inputs match what MAGMA expects
 
-Useful follow-up checks:
+### If diffusion or subgraph calling fails
 
-```r
-check_conseguiR_runtime(quiet = TRUE)
-list.files(system.file("extdata", "backend", package = "conseguiR"))
-```
+Check:
 
-If you want to go one step further, then try one exported workflow function
-with real study inputs, for example `run_conseguiR(...)`.
+- that `check_conseguiR_runtime()` reports a healthy runtime
+- that the package was loaded in a clean session
+- that backend graph resources were initialized successfully
 
-## 9. What is still rough right now
+### If you are working from a source checkout
 
-The main installation-related caveats right now are:
+Remember that source-mode sessions may use a local working backend in
+`data/processed`, while installed-package sessions rely on the shipped package
+resources under `inst/extdata/backend`.
 
-- some package-facing wrappers still delegate into `scripts/...`
-- Python setup is important for a smooth first run
-- MAGMA is an external dependency rather than a pure R package dependency
-- installation and package-resource discovery still need final cleanup
+## 9. Recommended installation story
 
-## Recommended next improvement
+The intended user story is:
 
-The next installation improvement for the package should be:
+1. install the package from GitHub or from a local source bundle
+2. make MAGMA available
+3. load the package
+4. run `check_conseguiR_runtime()`
+5. run the vignette or call `run_conseguiR()` directly
 
-- a cleaner fully packaged install path with less reliance on development-time
-  repository structure
-
-That would move the package closer to the ideal user experience where loading
-the library and calling the exported wrappers is enough, without relying on any
-personal development-time folder layout.
+That is the level of setup the package is aiming to support reliably.
