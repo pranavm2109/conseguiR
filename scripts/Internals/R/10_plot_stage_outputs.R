@@ -96,6 +96,22 @@ read_backend_gene_label_map <- function() {
   out
 }
 
+read_backend_gene_position_map <- function() {
+  loc_path <- conseguiR_plot_backend_resource_path("NCBI38.gene.loc")
+  dt <- data.table::fread(loc_path, header = FALSE, showProgress = FALSE)
+  if (ncol(dt) < 6L) {
+    stop("Backend gene location file does not contain the expected coordinate columns.")
+  }
+
+  out <- unique(dt[, .(
+    gene_label = as.character(V6),
+    chromosome = normalize_locus_chromosome(as.character(V2)),
+    feature_start = as.integer(V3),
+    feature_end = as.integer(V4)
+  )], by = "gene_label")
+  out[!is.na(gene_label) & gene_label != ""]
+}
+
 read_backend_reg_label_map <- function() {
   mapping_path <- tryCatch(
     conseguiR_plot_backend_resource_path("reg_target_labels.tsv.gz"),
@@ -1302,11 +1318,44 @@ prepare_locus_plot_bundle <- function(
 
   nodes_dt <- data.table::as.data.table(data.table::copy(nodes))
   edges_dt <- data.table::as.data.table(data.table::copy(edges))
-  gene_nodes <- nodes_dt[
-    node_type == "gene" &
-      chr == locus_chr &
-      !is.na(start) & !is.na(end) &
-      end >= locus_start & start <= locus_end
+  if ("chr" %in% names(nodes_dt)) {
+    nodes_dt[, chr := normalize_locus_chromosome(chr)]
+  }
+  if ("reg_chr" %in% names(nodes_dt)) {
+    nodes_dt[, reg_chr := normalize_locus_chromosome(reg_chr)]
+  }
+  if ("reg_chr" %in% names(edges_dt)) {
+    edges_dt[, reg_chr := normalize_locus_chromosome(reg_chr)]
+  }
+  if ("gene_chr" %in% names(edges_dt)) {
+    edges_dt[, gene_chr := normalize_locus_chromosome(gene_chr)]
+  }
+  node_type_lookup <- unique(nodes_dt[, .(
+    node_id = as.character(node_id),
+    node_type = as.character(node_type),
+    node_label = as.character(name)
+  )], by = "node_id")
+  edge_from_type <- node_type_lookup[, .(
+    from = node_id,
+    from_type = node_type,
+    from_label = node_label
+  )]
+  edge_to_type <- node_type_lookup[, .(
+    to = node_id,
+    to_type = node_type,
+    to_label = node_label
+  )]
+  edges_dt <- merge(edges_dt, edge_from_type, by = "from", all.x = TRUE, sort = FALSE)
+  edges_dt <- merge(edges_dt, edge_to_type, by = "to", all.x = TRUE, sort = FALSE)
+  edges_dt <- edges_dt[
+    (from_type == "gene" & to_type == "reg") |
+      (from_type == "reg" & to_type == "gene")
+  ]
+  edges_dt[, gene_id_plot := fifelse(from_type == "gene", as.character(from), as.character(to))]
+  edges_dt[, reg_id_plot := fifelse(from_type == "reg", as.character(from), as.character(to))]
+  edges_dt[, gene_label_plot := fifelse(from_type == "gene", as.character(from_label), as.character(to_label))]
+  gene_score_lookup <- nodes_dt[
+    node_type == "gene"
   ][, .(
     feature_id = as.character(node_id),
     feature_label = as.character(name),
@@ -1323,6 +1372,81 @@ prepare_locus_plot_bundle <- function(
     post_vulnerability = if ("post_vulnerability" %in% names(.SD)) safe_numeric(post_vulnerability) else NA_real_,
     post_norm = if ("post_norm" %in% names(.SD)) safe_numeric(post_norm) else NA_real_
   )]
+
+  gene_coords_from_edges <- unique(
+    edges_dt[
+      gene_chr == locus_chr &
+        !is.na(gene_start) & !is.na(gene_end) &
+        gene_end >= locus_start & gene_start <= locus_end
+    ][, .(
+      feature_id = as.character(gene_id_plot),
+      feature_label = as.character(gene_label_plot),
+      chromosome = as.character(gene_chr),
+      feature_start = as.integer(gene_start),
+      feature_end = as.integer(gene_end)
+    )],
+    by = "feature_id"
+  )
+
+  gene_nodes <- merge(
+    gene_score_lookup,
+    gene_coords_from_edges,
+    by = c("feature_id", "feature_label"),
+    all.y = TRUE,
+    suffixes = c("_score", "")
+  )
+  if (nrow(gene_nodes) == 0L) {
+    gene_nodes <- gene_score_lookup[
+      (
+        chromosome == locus_chr &
+          !is.na(feature_start) & !is.na(feature_end) &
+          feature_end >= locus_start & feature_start <= locus_end
+      ) |
+        (is.na(feature_start) | is.na(feature_end))
+    ]
+  }
+  if (nrow(gene_nodes) > 0L) {
+    gene_position_map <- read_backend_gene_position_map()
+    gene_nodes <- merge(
+      gene_nodes,
+      gene_position_map,
+      by.x = "feature_label",
+      by.y = "gene_label",
+      all.x = TRUE,
+      suffixes = c("", "_map")
+    )
+    gene_nodes[, chromosome := fifelse(
+      is.na(chromosome) | chromosome == "",
+      chromosome_map,
+      chromosome
+    )]
+    gene_nodes[, feature_start := fifelse(
+      is.na(feature_start),
+      feature_start_map,
+      feature_start
+    )]
+    gene_nodes[, feature_end := fifelse(
+      is.na(feature_end),
+      feature_end_map,
+      feature_end
+    )]
+    drop_cols <- intersect(c(
+      "chromosome_score",
+      "feature_start_score",
+      "feature_end_score",
+      "chromosome_map",
+      "feature_start_map",
+      "feature_end_map"
+    ), names(gene_nodes))
+    if (length(drop_cols) > 0L) {
+      gene_nodes[, (drop_cols) := NULL]
+    }
+    gene_nodes <- gene_nodes[
+      chromosome == locus_chr &
+        !is.na(feature_start) & !is.na(feature_end) &
+        feature_end >= locus_start & feature_start <= locus_end
+    ]
+  }
 
   reg_nodes <- nodes_dt[
     node_type == "reg" &
@@ -1540,8 +1664,8 @@ prepare_locus_plot_bundle <- function(
       reg_end >= locus_start & reg_start <= locus_end &
       gene_end >= locus_start & gene_start <= locus_end
   ][, .(
-    gene_id = as.character(from),
-    reg_id = as.character(to),
+    gene_id = as.character(gene_id_plot),
+    reg_id = as.character(reg_id_plot),
     reg_start = as.integer(reg_start),
     reg_end = as.integer(reg_end),
     gene_start = as.integer(gene_start),
@@ -1585,11 +1709,15 @@ prepare_locus_plot_bundle <- function(
   }
 
   if (length(selected_gene_set) > 0L) {
-    edges_locus <- edges_locus[gene_label %in% selected_gene_set | vapply(
-      strsplit(linked_label %||% "", "|", fixed = TRUE),
-      function(x) any(x %in% selected_gene_set),
-      logical(1)
-    )]
+    edges_locus <- edges_locus[
+      gene_id %in% selected_gene_set |
+        gene_label %in% selected_gene_set |
+        vapply(
+          strsplit(linked_label %||% "", "|", fixed = TRUE),
+          function(x) any(x %in% selected_gene_set),
+          logical(1)
+        )
+    ]
   }
 
   reg_label_dt <- unique(reg_nodes[, .(feature_id, linked_label, current_norm, feature_start, feature_end)])
@@ -1683,19 +1811,11 @@ create_locus_context_plot <- function(
     feature_mid,
     y,
     score,
-    highlighted
+    highlighted,
+    gene_lane
   )])
   if (nrow(gene_label_dt) > 0L) {
-    highlighted_gene_labels <- gene_label_dt[highlighted %in% TRUE]
-    if (nrow(highlighted_gene_labels) > 0L) {
-      gene_label_dt <- highlighted_gene_labels
-    } else {
-      data.table::setorderv(gene_label_dt, "score", order = -1L)
-      gene_label_dt <- gene_label_dt[seq_len(min(.N, 6L))]
-    }
-  }
-  if (nrow(gene_label_dt) > 0L) {
-    gene_label_dt[, y_label := y - 0.30]
+    gene_label_dt[, y_label := y - 0.22]
   }
 
   gene_width <- max(ceiling((locus$end - locus$start) * 0.025), 60000L)
@@ -1843,38 +1963,39 @@ create_locus_context_plot <- function(
     )
 
   if (nrow(gene_label_dt) > 0L) {
-    p <- p + ggrepel::geom_text_repel(
+    p <- p + ggplot2::geom_text(
       data = gene_label_dt,
       ggplot2::aes(x = feature_mid, y = y_label, label = feature_label),
       inherit.aes = FALSE,
       colour = "#111111",
-      size = 3.0,
-      min.segment.length = 0,
-      box.padding = 0.2,
-      point.padding = 0.08,
-      seed = 1,
-      max.overlaps = Inf
+      size = 2.9,
+      vjust = 1
     )
   }
 
   if (!is.null(bundle$reg_labels) && nrow(bundle$reg_labels) > 0L) {
     reg_annot_dt <- data.table::copy(bundle$reg_labels)
+    if (nrow(gene_label_dt) > 0L) {
+      reg_annot_dt <- reg_annot_dt[!matched_label %in% gene_label_dt$feature_label]
+    }
     reg_annot_dt[, label_y := reg_track_id + 0.30]
-    p <- p + ggrepel::geom_label_repel(
-      data = reg_annot_dt,
-      ggplot2::aes(x = reg_mid, y = label_y, label = matched_label),
-      inherit.aes = FALSE,
-      size = 2.6,
-      min.segment.length = 0,
-      label.size = 0.15,
-      label.padding = grid::unit(0.10, "lines"),
-      box.padding = 0.2,
-      point.padding = 0.08,
-      fill = "#fff7ed",
-      colour = "#7c2d12",
-      seed = 1,
-      max.overlaps = Inf
-    )
+    if (nrow(reg_annot_dt) > 0L) {
+      p <- p + ggrepel::geom_label_repel(
+        data = reg_annot_dt,
+        ggplot2::aes(x = reg_mid, y = label_y, label = matched_label),
+        inherit.aes = FALSE,
+        size = 2.6,
+        min.segment.length = 0,
+        label.size = 0.15,
+        label.padding = grid::unit(0.10, "lines"),
+        box.padding = 0.2,
+        point.padding = 0.08,
+        fill = "#fff7ed",
+        colour = "#7c2d12",
+        seed = 1,
+        max.overlaps = Inf
+      )
+    }
   }
 
   if (!is.null(bundle$lit_snp_labels) && nrow(bundle$lit_snp_labels) > 0L) {
@@ -1948,6 +2069,9 @@ create_locus_context_plot <- function(
   if (!is.null(snp_label_top_y) && is.finite(snp_label_top_y)) {
     top_ylim <- max(top_ylim, snp_label_top_y + 0.35)
   }
+  locus_width <- as.numeric(locus$end) - as.numeric(locus$start)
+  x_pad_left <- max(locus_width * 0.08, 25000)
+  x_pad_right <- max(locus_width * 0.02, 10000)
 
   p <- p +
     ggplot2::scale_fill_gradientn(
@@ -1959,7 +2083,8 @@ create_locus_context_plot <- function(
     ) +
     ggplot2::scale_x_continuous(
       n.breaks = 5,
-      labels = function(x) format(round(x), big.mark = ",", scientific = FALSE, trim = TRUE)
+      labels = function(x) format(round(x), big.mark = ",", scientific = FALSE, trim = TRUE),
+      expand = ggplot2::expansion(mult = c(0.04, 0.02))
     ) +
     ggplot2::scale_y_continuous(
       breaks = bundle$tracks$track_id,
@@ -1967,7 +2092,7 @@ create_locus_context_plot <- function(
       minor_breaks = NULL
     ) +
     ggplot2::coord_cartesian(
-      xlim = c(locus$start, locus$end),
+      xlim = c(locus$start - x_pad_left, locus$end + x_pad_right),
       ylim = c(min(bundle$tracks$track_id) - 1.4, top_ylim),
       expand = FALSE,
       clip = "off"
@@ -1982,12 +2107,12 @@ create_locus_context_plot <- function(
       plot.title.position = "plot",
       plot.title = ggplot2::element_text(hjust = 0.5, face = "bold", colour = "#111827"),
       axis.title.x = ggplot2::element_text(face = "bold"),
-      axis.text.y = ggplot2::element_text(face = "bold", colour = "#111827"),
+      axis.text.y = ggplot2::element_text(face = "bold", colour = "#111827", margin = ggplot2::margin(r = 16)),
       legend.title = ggplot2::element_text(face = "bold"),
       panel.grid.major = ggplot2::element_blank(),
       panel.grid.minor = ggplot2::element_blank(),
       legend.position = "right",
-      plot.margin = grid::unit(c(10, 18, 10, 10), "pt")
+      plot.margin = grid::unit(c(10, 18, 10, 28), "pt")
     )
 
   list(

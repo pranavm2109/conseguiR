@@ -4,15 +4,16 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
-read_delimited_table <- function(path, sep = "\t") {
-  if (!file.exists(path)) {
-    stop("File does not exist: ", path)
-  }
-
+read_diffusion_delimited_table <- function(path, sep = "\t") {
   if (grepl("\\.gz$", path, ignore.case = TRUE)) {
-    con <- gzfile(path, open = "rt")
+    con <- tryCatch(
+      gzfile(path, open = "rt"),
+      error = function(e) {
+        stop("File does not exist: ", path, call. = FALSE)
+      }
+    )
     on.exit(close(con), add = TRUE)
-    return(as.data.table(utils::read.delim(
+    return(as.data.table(utils::read.table(
       file = con,
       sep = sep,
       header = TRUE,
@@ -22,9 +23,14 @@ read_delimited_table <- function(path, sep = "\t") {
   }
 
   if (grepl("\\.xz$", path, ignore.case = TRUE)) {
-    con <- xzfile(path, open = "rt")
+    con <- tryCatch(
+      xzfile(path, open = "rt"),
+      error = function(e) {
+        stop("File does not exist: ", path, call. = FALSE)
+      }
+    )
     on.exit(close(con), add = TRUE)
-    return(as.data.table(utils::read.delim(
+    return(as.data.table(utils::read.table(
       file = con,
       sep = sep,
       header = TRUE,
@@ -33,7 +39,17 @@ read_delimited_table <- function(path, sep = "\t") {
     )))
   }
 
-  data.table::as.data.table(data.table::fread(path, sep = sep, showProgress = FALSE))
+  if (!file.exists(path)) {
+    stop("File does not exist: ", path)
+  }
+
+  data.table::as.data.table(utils::read.table(
+    file = path,
+    sep = sep,
+    header = TRUE,
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  ))
 }
 
 conseguiR_runtime_file <- function(relpath) {
@@ -72,11 +88,17 @@ default_diffusion_config <- list(
 ## the user-facing external API runtime.
 
 read_scored_gene_reg_nodes <- function(path = default_diffusion_config$nodes_path) {
-  read_delimited_table(path, sep = "\t")
+  if (!file.exists(path)) {
+    stop("Scored gene-reg node file does not exist: ", path)
+  }
+  read_diffusion_delimited_table(path, sep = "\t")
 }
 
 read_scored_gene_reg_edges <- function(path = default_diffusion_config$edges_path) {
-  read_delimited_table(path, sep = "\t")
+  if (!file.exists(path)) {
+    stop("Scored gene-reg edge file does not exist: ", path)
+  }
+  read_diffusion_delimited_table(path, sep = "\t")
 }
 
 validate_scored_gene_reg_nodes <- function(nodes) {
