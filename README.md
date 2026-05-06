@@ -58,7 +58,6 @@ are the main user-facing workflow.
 result <- run_conseguiR(
   gwas_sumstats = "<path-or-table>",
   somatic_maf = "<path-or-table>",
-  reg_ref_path = "<regulatory-reference-path>",
   reference_bfile = "<plink-reference-prefix>",
   dndscv_refdb = "<dndscv-reference-db>",
   epigenomic_tracks = c("<track1.bw>", "<track2.bw>", "<track3.bw>"),
@@ -77,6 +76,10 @@ This returns a pipeline bundle containing:
 - selected subgraph
 - final selected-subgraph plot bundle
 
+By default, `conseguiR` uses its backend-owned ENCODE-derived regulatory
+universe for regulatory scoring and graph imposition. In the common workflow,
+you do not need to supply `reg_ref_path` manually.
+
 ### Stage-wise workflow
 
 ```r
@@ -87,12 +90,10 @@ germline <- prepare_germline_scores(
 
 somatic <- prepare_somatic_scores(
   maf = "<path-or-table>",
-  refdb = "<dndscv-reference-db>",
-  reg_ref_path = "<regulatory-reference-path>"
+  refdb = "<dndscv-reference-db>"
 )
 
 epigenomic <- prepare_epigenomic_scores(
-  reg_ref_path = "<regulatory-reference-path>",
   bw_files = c("<track1.bw>", "<track2.bw>", "<track3.bw>")
 )
 

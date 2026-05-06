@@ -7,7 +7,7 @@
 prepare_somatic_scores(
   maf,
   refdb,
-  reg_ref_path,
+  reg_ref_path = NULL,
   gene_output_path = NULL,
   reg_output_path = NULL,
   gene_cv = NULL,
@@ -63,7 +63,9 @@ prepare_somatic_scores(
 
 \item{refdb}{dndscv reference database path.}
 
-\item{reg_ref_path}{Regulatory-element reference path.}
+\item{reg_ref_path}{Optional regulatory-element reference path. When
+\code{NULL}, \code{conseguiR} uses its backend-owned ENCODE-derived
+regulatory universe.}
 
 \item{gene_output_path}{Output path for somatic gene scores.}
 
@@ -177,7 +179,7 @@ In practice, a simple starting configuration is often:
 
 Example:
 
-\verb{prepare_somatic_scores( maf = maf_path, refdb = dndscv_refdb, reg_ref_path = reg_ref_path, dndscv_args = list(sm = \\"192r_3w\\"), fishhook_args = list() )}
+\verb{prepare_somatic_scores( maf = maf_path, refdb = dndscv_refdb, dndscv_args = list(sm = \\"192r_3w\\"), fishhook_args = list() )}
 
 dndscv documentation:
 \url{https://rdrr.io/github/im3sanger/dndscv/man/dndscv.html}

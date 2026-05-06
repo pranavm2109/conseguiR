@@ -850,7 +850,7 @@ run_somatic_gene_scoring <- function(
 #' @return A somatic regulatory score bundle.
 run_somatic_regulatory_scoring <- function(
   maf,
-  reg_ref_path,
+  reg_ref_path = NULL,
   output_path = NULL,
   eligible_gr = NULL,
   fishhook_covariates = NULL,
@@ -882,6 +882,11 @@ run_somatic_regulatory_scoring <- function(
   fishhook_args = list(),
   verbose = TRUE
 ) {
+  reg_ref_path <- reg_ref_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_ref_path)) {
+    stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
+  }
+
   fishhook_args <- as_list_or_empty(fishhook_args)
   verbose_message(verbose, "Preparing somatic regulatory scores...")
   maf <- read_table_if_path(maf, showProgress = FALSE)
@@ -970,7 +975,7 @@ run_somatic_regulatory_scoring <- function(
 prepare_somatic_scores <- function(
   maf,
   refdb,
-  reg_ref_path,
+  reg_ref_path = NULL,
   gene_output_path = NULL,
   reg_output_path = NULL,
   gene_cv = NULL,
@@ -1020,6 +1025,11 @@ prepare_somatic_scores <- function(
   fishhook_args = list(),
   verbose = TRUE
 ) {
+  reg_ref_path <- reg_ref_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_ref_path)) {
+    stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
+  }
+
   verbose_message(verbose, "Preparing somatic scores...")
   gene_bundle <- run_somatic_gene_scoring(
     maf = maf,
@@ -1123,7 +1133,7 @@ prepare_somatic_scores <- function(
 #'
 #' @return An epigenomic score bundle.
 prepare_epigenomic_scores <- function(
-  reg_ref_path,
+  reg_ref_path = NULL,
   track_dir = NULL,
   bw_files = NULL,
   output_path = NULL,
@@ -1134,6 +1144,11 @@ prepare_epigenomic_scores <- function(
   summary_fun = mean,
   verbose = TRUE
 ) {
+  reg_ref_path <- reg_ref_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_ref_path)) {
+    stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
+  }
+
   verbose_message(verbose, "Preparing epigenomic scores...")
   result <- run_epigenomic_reg_scoring(
     track_dir = track_dir,
@@ -2209,7 +2224,7 @@ plot_epigenomic_reg_scores <- function(
 run_conseguiR <- function(
   gwas_sumstats,
   somatic_maf,
-  reg_ref_path,
+  reg_ref_path = NULL,
   reference_bfile,
   dndscv_refdb,
   epigenomic_track_dir = NULL,
@@ -2229,6 +2244,11 @@ run_conseguiR <- function(
   verbose = TRUE
 ) {
   verbose_message(verbose, "Running end-to-end conseguiR pipeline...")
+  reg_ref_path <- reg_ref_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_ref_path)) {
+    stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
+  }
+
   requested_output_dir <- output_dir
   if (is.null(graph_rds_path) || is.null(gg_nodes_path) || is.null(gg_edges_path)) {
     initialize_backend_graphs(strict = FALSE, quiet = TRUE)

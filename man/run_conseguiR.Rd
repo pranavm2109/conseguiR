@@ -7,7 +7,7 @@
 run_conseguiR(
   gwas_sumstats,
   somatic_maf,
-  reg_ref_path,
+  reg_ref_path = NULL,
   reference_bfile,
   dndscv_refdb,
   epigenomic_track_dir = NULL,
@@ -32,7 +32,9 @@ run_conseguiR(
 
 \item{somatic_maf}{Somatic MAF path or table.}
 
-\item{reg_ref_path}{Regulatory-element reference path.}
+\item{reg_ref_path}{Optional regulatory-element reference path. When
+\code{NULL}, \code{conseguiR} uses its backend-owned ENCODE-derived
+regulatory universe.}
 
 \item{reference_bfile}{PLINK reference prefix for MAGMA.}
 

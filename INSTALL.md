@@ -147,7 +147,6 @@ Once the package loads successfully, a minimal end-to-end call looks like:
 result <- run_conseguiR(
   gwas_sumstats = "<path-or-table>",
   somatic_maf = "<path-or-table>",
-  reg_ref_path = "<regulatory-reference-path>",
   reference_bfile = "<plink-reference-prefix>",
   dndscv_refdb = "<dndscv-reference-db>",
   epigenomic_tracks = c("<track1.bw>", "<track2.bw>", "<track3.bw>"),
@@ -158,6 +157,10 @@ result <- run_conseguiR(
 
 This returns the stage bundles, selected subgraph, and final graph plot bundle
 in memory. If you also want saved outputs, provide `output_dir`.
+
+By default, `conseguiR` uses its backend-owned ENCODE-derived regulatory
+universe for regulatory scoring and graph imposition. In the common workflow,
+you do not need to supply `reg_ref_path` manually.
 
 ## 7. Vignette and documentation
 

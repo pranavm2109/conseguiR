@@ -6,7 +6,7 @@
 \usage{
 run_somatic_regulatory_scoring(
   maf,
-  reg_ref_path,
+  reg_ref_path = NULL,
   output_path = NULL,
   eligible_gr = NULL,
   fishhook_covariates = NULL,
@@ -42,7 +42,9 @@ run_somatic_regulatory_scoring(
 \arguments{
 \item{maf}{Somatic MAF path or table.}
 
-\item{reg_ref_path}{Regulatory-element reference path.}
+\item{reg_ref_path}{Optional regulatory-element reference path. When
+\code{NULL}, \code{conseguiR} uses its backend-owned ENCODE-derived
+regulatory universe.}
 
 \item{output_path}{Optional output path for saved scores.}
 

@@ -210,7 +210,8 @@ reload_conseguiR_runtime <- function(pkg_root = NULL, rebind = TRUE) {
 #'
 #' @param gwas_sumstats GWAS summary statistics path or table.
 #' @param somatic_maf Somatic MAF path or table.
-#' @param reg_ref_path Regulatory-element reference path.
+#' @param reg_ref_path Optional regulatory-element reference path. When `NULL`,
+#'   `conseguiR` uses its backend-owned ENCODE-derived regulatory universe.
 #' @param epigenomic_tracks Optional vector of bigWig paths.
 #' @param epigenomic_track_dir Optional directory containing bigWig tracks.
 #' @param verbose Logical scalar. If `TRUE`, show progress bars and stage
@@ -263,6 +264,10 @@ validate_inputs <- function(
   epigenomic_track_dir = NULL,
   verbose = TRUE
 ) {
+  if (is.null(reg_ref_path) && (!is.null(epigenomic_tracks) || !is.null(epigenomic_track_dir))) {
+    reg_ref_path <- .conseguiR_default_reg_loc_path()
+  }
+
   .conseguiR_external_fun("validate_inputs")(
     gwas_sumstats = gwas_sumstats,
     somatic_maf = somatic_maf,
@@ -1026,7 +1031,7 @@ run_somatic_gene_scoring <- function(
 #' @export
 run_somatic_regulatory_scoring <- function(
   maf,
-  reg_ref_path,
+  reg_ref_path = NULL,
   output_path = NULL,
   eligible_gr = NULL,
   fishhook_covariates = NULL,
@@ -1058,6 +1063,11 @@ run_somatic_regulatory_scoring <- function(
   fishhook_args = list(),
   verbose = TRUE
 ) {
+  reg_ref_path <- reg_ref_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_ref_path)) {
+    stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
+  }
+
   .conseguiR_external_fun("run_somatic_regulatory_scoring")(
     maf = maf,
     reg_ref_path = reg_ref_path,
@@ -1105,7 +1115,8 @@ run_somatic_regulatory_scoring <- function(
 #' modeling framework independently.
 #'
 #' @inheritParams run_somatic_gene_scoring
-#' @param reg_ref_path Regulatory-element reference path.
+#' @param reg_ref_path Optional regulatory-element reference path. When `NULL`,
+#'   `conseguiR` uses its backend-owned ENCODE-derived regulatory universe.
 #' @param gene_output_path Output path for somatic gene scores.
 #' @param reg_output_path Output path for somatic regulatory scores.
 #' @param gene_cv Optional dndscv covariates.
@@ -1165,7 +1176,6 @@ run_somatic_regulatory_scoring <- function(
 #' `prepare_somatic_scores(
 #'   maf = maf_path,
 #'   refdb = dndscv_refdb,
-#'   reg_ref_path = reg_ref_path,
 #'   dndscv_args = list(sm = \"192r_3w\"),
 #'   fishhook_args = list()
 #' )`
@@ -1187,7 +1197,7 @@ run_somatic_regulatory_scoring <- function(
 prepare_somatic_scores <- function(
   maf,
   refdb,
-  reg_ref_path,
+  reg_ref_path = NULL,
   gene_output_path = NULL,
   reg_output_path = NULL,
   gene_cv = NULL,
@@ -1237,6 +1247,11 @@ prepare_somatic_scores <- function(
   fishhook_args = list(),
   verbose = TRUE
 ) {
+  reg_ref_path <- reg_ref_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_ref_path)) {
+    stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
+  }
+
   .conseguiR_external_fun("prepare_somatic_scores")(
     maf = maf,
     refdb = refdb,
@@ -1294,7 +1309,8 @@ prepare_somatic_scores <- function(
 
 #' Prepare regulatory epigenomic scores
 #'
-#' @param reg_ref_path Regulatory-element reference path.
+#' @param reg_ref_path Optional regulatory-element reference path. When `NULL`,
+#'   `conseguiR` uses its backend-owned ENCODE-derived regulatory universe.
 #' @param track_dir Optional directory containing bigWig tracks.
 #' @param bw_files Optional explicit vector of bigWig paths.
 #' @param output_path Optional output path for saved scores.
@@ -1338,7 +1354,7 @@ prepare_somatic_scores <- function(
 #' @return An epigenomic score bundle.
 #' @export
 prepare_epigenomic_scores <- function(
-  reg_ref_path,
+  reg_ref_path = NULL,
   track_dir = NULL,
   bw_files = NULL,
   output_path = NULL,
@@ -1349,6 +1365,11 @@ prepare_epigenomic_scores <- function(
   summary_fun = mean,
   verbose = TRUE
 ) {
+  reg_ref_path <- reg_ref_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_ref_path)) {
+    stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
+  }
+
   .conseguiR_external_fun("prepare_epigenomic_scores")(
     reg_ref_path = reg_ref_path,
     track_dir = track_dir,
@@ -2408,8 +2429,9 @@ plot_selected_subgraph <- function(
 #'   `fishhook_covariate_data`, and a preformatted fishHook-ready object in
 #'   `fishhook_covariates` if supplied
 #'
-#' The gene and regulatory location resources are backend-managed by the
-#' package and are not user-facing arguments in this high-level wrapper.
+#' The regulatory-element universe used across germline, somatic, and
+#' epigenomic scoring is backend-managed by the package by default. In the
+#' common workflow, users do not need to provide `reg_ref_path` manually.
 #'
 #' `conseguiR` returns R objects and bundles by default, and file writing is
 #' optional rather than being the main API. If you supply `output_dir`,
@@ -2459,7 +2481,7 @@ plot_selected_subgraph <- function(
 run_conseguiR <- function(
   gwas_sumstats,
   somatic_maf,
-  reg_ref_path,
+  reg_ref_path = NULL,
   reference_bfile,
   dndscv_refdb,
   epigenomic_track_dir = NULL,
@@ -2478,6 +2500,11 @@ run_conseguiR <- function(
   plot_args = list(),
   verbose = TRUE
 ) {
+  reg_ref_path <- reg_ref_path %||% .conseguiR_default_reg_loc_path()
+  if (is.null(reg_ref_path)) {
+    stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
+  }
+
   paths <- .conseguiR_pipeline_paths(
     graph_rds_path = graph_rds_path,
     gg_nodes_path = gg_nodes_path,

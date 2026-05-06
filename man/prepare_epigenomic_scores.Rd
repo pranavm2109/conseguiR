@@ -5,7 +5,7 @@
 \title{Prepare regulatory epigenomic scores}
 \usage{
 prepare_epigenomic_scores(
-  reg_ref_path,
+  reg_ref_path = NULL,
   track_dir = NULL,
   bw_files = NULL,
   output_path = NULL,
@@ -18,7 +18,9 @@ prepare_epigenomic_scores(
 )
 }
 \arguments{
-\item{reg_ref_path}{Regulatory-element reference path.}
+\item{reg_ref_path}{Optional regulatory-element reference path. When
+\code{NULL}, \code{conseguiR} uses its backend-owned ENCODE-derived
+regulatory universe.}
 
 \item{track_dir}{Optional directory containing bigWig tracks.}
 
