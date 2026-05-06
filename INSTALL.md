@@ -54,6 +54,19 @@ The package looks for MAGMA in the following order:
 3. `Sys.getenv("CONSEGUIR_MAGMA_PATH")`
 4. `magma` on your system `PATH`
 
+Important:
+
+- these settings should point to the MAGMA executable itself, not just the
+  containing folder
+- for example, use `/path/to/magma` rather than `/path/to/`
+- the `PATH` fallback only works if MAGMA can be run directly by typing
+  `magma` in the same shell environment seen by R
+
+In other words, autodiscovery is mainly a convenience for systems where MAGMA
+has already been installed in a standard executable location or has already
+been added to `PATH`. On HPC systems or project-specific installs, it is often
+safer to set the executable path explicitly.
+
 Examples:
 
 ```r
@@ -64,6 +77,12 @@ or in the shell:
 
 ```bash
 export CONSEGUIR_MAGMA_PATH=/path/to/magma
+```
+
+For example, on HPC:
+
+```bash
+export CONSEGUIR_MAGMA_PATH="/path/to/project/tools/magma_v1/magma"
 ```
 
 If MAGMA is unavailable, germline scoring functions should fail with a clear

@@ -216,6 +216,12 @@ The package looks for MAGMA in this order:
 3. `Sys.getenv("CONSEGUIR_MAGMA_PATH")`
 4. `magma` on `PATH`
 
+These settings should point to the MAGMA executable itself, not just its
+folder. The `PATH` fallback only works when MAGMA can already be invoked by
+typing `magma` in the shell environment seen by R. This makes autodiscovery a
+useful convenience on standard installs, but explicit configuration is often
+safer on HPC or project-local setups.
+
 ### Python-backed stages
 
 Diffusion and selected-subgraph calling use Python-backed stages managed
