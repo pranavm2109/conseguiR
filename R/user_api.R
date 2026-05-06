@@ -525,41 +525,44 @@ run_germline_gene_scoring <- function(
     stop("No gene location resource was provided and no backend gene location resource could be found.")
   }
 
-  .conseguiR_external_fun("run_germline_gene_scoring")(
+  args <- list(
     gwas_sumstats = gwas_sumstats,
     gene_loc_path = gene_loc_path,
     reference_bfile = reference_bfile,
-    output_prefix = output_prefix,
-    sample_size = sample_size,
-    sample_size_col = sample_size_col,
-    magma_path = magma_path,
-    keep_intermediates = keep_intermediates,
-    annotation_window = annotation_window,
-    filter_path = filter_path,
-    ignore_strand = ignore_strand,
-    nonhuman = nonhuman,
-    annotate_modifiers = annotate_modifiers,
-    step1_general_args = step1_general_args,
-    step1_extra_args = step1_extra_args,
-    gene_model = gene_model,
-    gene_model_modifiers = gene_model_modifiers,
-    genes_only = genes_only,
-    pval_use = pval_use,
-    pval_snp_id = pval_snp_id,
-    pval_pval = pval_pval,
-    pval_duplicate = pval_duplicate,
-    bfile_synonyms = bfile_synonyms,
-    bfile_synonym_dup = bfile_synonym_dup,
-    gene_settings = gene_settings,
-    batch = batch,
-    seed = seed,
-    big_data = big_data,
-    step2_general_args = step2_general_args,
-    step2_extra_args = step2_extra_args,
-    step1_args = step1_args,
-    step2_args = step2_args,
     verbose = verbose
   )
+
+  if (!missing(output_prefix)) args$output_prefix <- output_prefix
+  if (!missing(sample_size)) args$sample_size <- sample_size
+  if (!missing(sample_size_col)) args$sample_size_col <- sample_size_col
+  if (!missing(magma_path)) args$magma_path <- magma_path
+  if (!missing(keep_intermediates)) args$keep_intermediates <- keep_intermediates
+  if (!missing(annotation_window)) args$annotation_window <- annotation_window
+  if (!missing(filter_path)) args$filter_path <- filter_path
+  if (!missing(ignore_strand)) args$ignore_strand <- ignore_strand
+  if (!missing(nonhuman)) args$nonhuman <- nonhuman
+  if (!missing(annotate_modifiers)) args$annotate_modifiers <- annotate_modifiers
+  if (!missing(step1_general_args)) args$step1_general_args <- step1_general_args
+  if (!missing(step1_extra_args)) args$step1_extra_args <- step1_extra_args
+  if (!missing(gene_model)) args$gene_model <- gene_model
+  if (!missing(gene_model_modifiers)) args$gene_model_modifiers <- gene_model_modifiers
+  if (!missing(genes_only)) args$genes_only <- genes_only
+  if (!missing(pval_use)) args$pval_use <- pval_use
+  if (!missing(pval_snp_id)) args$pval_snp_id <- pval_snp_id
+  if (!missing(pval_pval)) args$pval_pval <- pval_pval
+  if (!missing(pval_duplicate)) args$pval_duplicate <- pval_duplicate
+  if (!missing(bfile_synonyms)) args$bfile_synonyms <- bfile_synonyms
+  if (!missing(bfile_synonym_dup)) args$bfile_synonym_dup <- bfile_synonym_dup
+  if (!missing(gene_settings)) args$gene_settings <- gene_settings
+  if (!missing(batch)) args$batch <- batch
+  if (!missing(seed)) args$seed <- seed
+  if (!missing(big_data)) args$big_data <- big_data
+  if (!missing(step2_general_args)) args$step2_general_args <- step2_general_args
+  if (!missing(step2_extra_args)) args$step2_extra_args <- step2_extra_args
+  if (!missing(step1_args)) args$step1_args <- step1_args
+  if (!missing(step2_args)) args$step2_args <- step2_args
+
+  do.call(.conseguiR_external_fun("run_germline_gene_scoring"), args)
 }
 
 #' Run MAGMA germline regulatory scoring
@@ -637,41 +640,44 @@ run_germline_regulatory_scoring <- function(
     stop("No regulatory location resource was provided and no backend regulatory location resource could be found.")
   }
 
-  .conseguiR_external_fun("run_germline_regulatory_scoring")(
+  args <- list(
     gwas_sumstats = gwas_sumstats,
     reg_loc_path = reg_loc_path,
     reference_bfile = reference_bfile,
-    output_prefix = output_prefix,
-    sample_size = sample_size,
-    sample_size_col = sample_size_col,
-    magma_path = magma_path,
-    keep_intermediates = keep_intermediates,
-    annotation_window = annotation_window,
-    filter_path = filter_path,
-    ignore_strand = ignore_strand,
-    nonhuman = nonhuman,
-    annotate_modifiers = annotate_modifiers,
-    step1_general_args = step1_general_args,
-    step1_extra_args = step1_extra_args,
-    gene_model = gene_model,
-    gene_model_modifiers = gene_model_modifiers,
-    genes_only = genes_only,
-    pval_use = pval_use,
-    pval_snp_id = pval_snp_id,
-    pval_pval = pval_pval,
-    pval_duplicate = pval_duplicate,
-    bfile_synonyms = bfile_synonyms,
-    bfile_synonym_dup = bfile_synonym_dup,
-    gene_settings = gene_settings,
-    batch = batch,
-    seed = seed,
-    big_data = big_data,
-    step2_general_args = step2_general_args,
-    step2_extra_args = step2_extra_args,
-    step1_args = step1_args,
-    step2_args = step2_args,
     verbose = verbose
   )
+
+  if (!missing(output_prefix)) args$output_prefix <- output_prefix
+  if (!missing(sample_size)) args$sample_size <- sample_size
+  if (!missing(sample_size_col)) args$sample_size_col <- sample_size_col
+  if (!missing(magma_path)) args$magma_path <- magma_path
+  if (!missing(keep_intermediates)) args$keep_intermediates <- keep_intermediates
+  if (!missing(annotation_window)) args$annotation_window <- annotation_window
+  if (!missing(filter_path)) args$filter_path <- filter_path
+  if (!missing(ignore_strand)) args$ignore_strand <- ignore_strand
+  if (!missing(nonhuman)) args$nonhuman <- nonhuman
+  if (!missing(annotate_modifiers)) args$annotate_modifiers <- annotate_modifiers
+  if (!missing(step1_general_args)) args$step1_general_args <- step1_general_args
+  if (!missing(step1_extra_args)) args$step1_extra_args <- step1_extra_args
+  if (!missing(gene_model)) args$gene_model <- gene_model
+  if (!missing(gene_model_modifiers)) args$gene_model_modifiers <- gene_model_modifiers
+  if (!missing(genes_only)) args$genes_only <- genes_only
+  if (!missing(pval_use)) args$pval_use <- pval_use
+  if (!missing(pval_snp_id)) args$pval_snp_id <- pval_snp_id
+  if (!missing(pval_pval)) args$pval_pval <- pval_pval
+  if (!missing(pval_duplicate)) args$pval_duplicate <- pval_duplicate
+  if (!missing(bfile_synonyms)) args$bfile_synonyms <- bfile_synonyms
+  if (!missing(bfile_synonym_dup)) args$bfile_synonym_dup <- bfile_synonym_dup
+  if (!missing(gene_settings)) args$gene_settings <- gene_settings
+  if (!missing(batch)) args$batch <- batch
+  if (!missing(seed)) args$seed <- seed
+  if (!missing(big_data)) args$big_data <- big_data
+  if (!missing(step2_general_args)) args$step2_general_args <- step2_general_args
+  if (!missing(step2_extra_args)) args$step2_extra_args <- step2_extra_args
+  if (!missing(step1_args)) args$step1_args <- step1_args
+  if (!missing(step2_args)) args$step2_args <- step2_args
+
+  do.call(.conseguiR_external_fun("run_germline_regulatory_scoring"), args)
 }
 
 #' Prepare germline scores for genes and regulatory elements
@@ -893,29 +899,32 @@ run_somatic_gene_scoring <- function(
   dndscv_args = list(),
   verbose = TRUE
 ) {
-  .conseguiR_external_fun("run_somatic_gene_scoring")(
+  args <- list(
     maf = maf,
     refdb = refdb,
-    output_path = output_path,
-    cv = cv,
-    max_muts_per_gene_per_sample = max_muts_per_gene_per_sample,
-    max_coding_muts_per_sample = max_coding_muts_per_sample,
-    gene_list = gene_list,
-    sm = sm,
-    kc = kc,
-    use_indel_sites = use_indel_sites,
-    min_indels = min_indels,
-    maxcovs = maxcovs,
-    constrain_wnon_wspl = constrain_wnon_wspl,
-    outp = outp,
-    numcode = numcode,
-    outmats = outmats,
-    mingenecovs = mingenecovs,
-    onesided = onesided,
-    dc = dc,
-    dndscv_args = dndscv_args,
     verbose = verbose
   )
+
+  if (!missing(output_path)) args$output_path <- output_path
+  if (!missing(cv)) args$cv <- cv
+  if (!missing(max_muts_per_gene_per_sample)) args$max_muts_per_gene_per_sample <- max_muts_per_gene_per_sample
+  if (!missing(max_coding_muts_per_sample)) args$max_coding_muts_per_sample <- max_coding_muts_per_sample
+  if (!missing(gene_list)) args$gene_list <- gene_list
+  if (!missing(sm)) args$sm <- sm
+  if (!missing(kc)) args$kc <- kc
+  if (!missing(use_indel_sites)) args$use_indel_sites <- use_indel_sites
+  if (!missing(min_indels)) args$min_indels <- min_indels
+  if (!missing(maxcovs)) args$maxcovs <- maxcovs
+  if (!missing(constrain_wnon_wspl)) args$constrain_wnon_wspl <- constrain_wnon_wspl
+  if (!missing(outp)) args$outp <- outp
+  if (!missing(numcode)) args$numcode <- numcode
+  if (!missing(outmats)) args$outmats <- outmats
+  if (!missing(mingenecovs)) args$mingenecovs <- mingenecovs
+  if (!missing(onesided)) args$onesided <- onesided
+  if (!missing(dc)) args$dc <- dc
+  if (!missing(dndscv_args)) args$dndscv_args <- dndscv_args
+
+  do.call(.conseguiR_external_fun("run_somatic_gene_scoring"), args)
 }
 
 #' Run fishHook somatic regulatory scoring
@@ -1068,40 +1077,43 @@ run_somatic_regulatory_scoring <- function(
     stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
   }
 
-  .conseguiR_external_fun("run_somatic_regulatory_scoring")(
+  args <- list(
     maf = maf,
     reg_ref_path = reg_ref_path,
-    output_path = output_path,
-    eligible_gr = eligible_gr,
-    fishhook_covariates = fishhook_covariates,
-    fishhook_covariate_data = fishhook_covariate_data,
-    idcol = idcol,
-    constructor_out_path = constructor_out_path,
-    constructor_use_local_mut_density = constructor_use_local_mut_density,
-    constructor_local_mut_density_bin = constructor_local_mut_density_bin,
-    constructor_mc_cores = constructor_mc_cores,
-    constructor_na_rm = constructor_na_rm,
-    constructor_pad = constructor_pad,
-    constructor_max_slice = constructor_max_slice,
-    constructor_ff_chunk = constructor_ff_chunk,
-    constructor_max_chunk = constructor_max_chunk,
-    constructor_idcap = constructor_idcap,
-    constructor_weight_events = constructor_weight_events,
-    constructor_nb = constructor_nb,
-    score_sets = score_sets,
-    score_model = score_model,
-    score_return_model = score_return_model,
-    score_nb = score_nb,
-    score_iter = score_iter,
-    score_subsample = score_subsample,
-    score_seed = score_seed,
-    score_verbose = score_verbose,
-    score_mc_cores = score_mc_cores,
-    score_p_randomized = score_p_randomized,
-    score_class_return = score_class_return,
-    fishhook_args = fishhook_args,
     verbose = verbose
   )
+
+  if (!missing(output_path)) args$output_path <- output_path
+  if (!missing(eligible_gr)) args$eligible_gr <- eligible_gr
+  if (!missing(fishhook_covariates)) args$fishhook_covariates <- fishhook_covariates
+  if (!missing(fishhook_covariate_data)) args$fishhook_covariate_data <- fishhook_covariate_data
+  if (!missing(idcol)) args$idcol <- idcol
+  if (!missing(constructor_out_path)) args$constructor_out_path <- constructor_out_path
+  if (!missing(constructor_use_local_mut_density)) args$constructor_use_local_mut_density <- constructor_use_local_mut_density
+  if (!missing(constructor_local_mut_density_bin)) args$constructor_local_mut_density_bin <- constructor_local_mut_density_bin
+  if (!missing(constructor_mc_cores)) args$constructor_mc_cores <- constructor_mc_cores
+  if (!missing(constructor_na_rm)) args$constructor_na_rm <- constructor_na_rm
+  if (!missing(constructor_pad)) args$constructor_pad <- constructor_pad
+  if (!missing(constructor_max_slice)) args$constructor_max_slice <- constructor_max_slice
+  if (!missing(constructor_ff_chunk)) args$constructor_ff_chunk <- constructor_ff_chunk
+  if (!missing(constructor_max_chunk)) args$constructor_max_chunk <- constructor_max_chunk
+  if (!missing(constructor_idcap)) args$constructor_idcap <- constructor_idcap
+  if (!missing(constructor_weight_events)) args$constructor_weight_events <- constructor_weight_events
+  if (!missing(constructor_nb)) args$constructor_nb <- constructor_nb
+  if (!missing(score_sets)) args$score_sets <- score_sets
+  if (!missing(score_model)) args$score_model <- score_model
+  if (!missing(score_return_model)) args$score_return_model <- score_return_model
+  if (!missing(score_nb)) args$score_nb <- score_nb
+  if (!missing(score_iter)) args$score_iter <- score_iter
+  if (!missing(score_subsample)) args$score_subsample <- score_subsample
+  if (!missing(score_seed)) args$score_seed <- score_seed
+  if (!missing(score_verbose)) args$score_verbose <- score_verbose
+  if (!missing(score_mc_cores)) args$score_mc_cores <- score_mc_cores
+  if (!missing(score_p_randomized)) args$score_p_randomized <- score_p_randomized
+  if (!missing(score_class_return)) args$score_class_return <- score_class_return
+  if (!missing(fishhook_args)) args$fishhook_args <- fishhook_args
+
+  do.call(.conseguiR_external_fun("run_somatic_regulatory_scoring"), args)
 }
 
 #' Prepare somatic scores for genes and regulatory elements
@@ -1252,59 +1264,62 @@ prepare_somatic_scores <- function(
     stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
   }
 
-  .conseguiR_external_fun("prepare_somatic_scores")(
+  args <- list(
     maf = maf,
     refdb = refdb,
     reg_ref_path = reg_ref_path,
-    gene_output_path = gene_output_path,
-    reg_output_path = reg_output_path,
-    gene_cv = gene_cv,
-    gene_max_muts_per_gene_per_sample = gene_max_muts_per_gene_per_sample,
-    gene_max_coding_muts_per_sample = gene_max_coding_muts_per_sample,
-    gene_list = gene_list,
-    sm = sm,
-    kc = kc,
-    use_indel_sites = use_indel_sites,
-    min_indels = min_indels,
-    maxcovs = maxcovs,
-    constrain_wnon_wspl = constrain_wnon_wspl,
-    outp = outp,
-    numcode = numcode,
-    outmats = outmats,
-    mingenecovs = mingenecovs,
-    onesided = onesided,
-    dc = dc,
-    dndscv_args = dndscv_args,
-    eligible_gr = eligible_gr,
-    fishhook_covariates = fishhook_covariates,
-    fishhook_covariate_data = fishhook_covariate_data,
-    fishhook_idcol = fishhook_idcol,
-    constructor_out_path = constructor_out_path,
-    constructor_use_local_mut_density = constructor_use_local_mut_density,
-    constructor_local_mut_density_bin = constructor_local_mut_density_bin,
-    constructor_mc_cores = constructor_mc_cores,
-    constructor_na_rm = constructor_na_rm,
-    constructor_pad = constructor_pad,
-    constructor_max_slice = constructor_max_slice,
-    constructor_ff_chunk = constructor_ff_chunk,
-    constructor_max_chunk = constructor_max_chunk,
-    constructor_idcap = constructor_idcap,
-    constructor_weight_events = constructor_weight_events,
-    constructor_nb = constructor_nb,
-    score_sets = score_sets,
-    score_model = score_model,
-    score_return_model = score_return_model,
-    score_nb = score_nb,
-    score_iter = score_iter,
-    score_subsample = score_subsample,
-    score_seed = score_seed,
-    score_verbose = score_verbose,
-    score_mc_cores = score_mc_cores,
-    score_p_randomized = score_p_randomized,
-    score_class_return = score_class_return,
-    fishhook_args = fishhook_args,
     verbose = verbose
   )
+
+  if (!missing(gene_output_path)) args$gene_output_path <- gene_output_path
+  if (!missing(reg_output_path)) args$reg_output_path <- reg_output_path
+  if (!missing(gene_cv)) args$gene_cv <- gene_cv
+  if (!missing(gene_max_muts_per_gene_per_sample)) args$gene_max_muts_per_gene_per_sample <- gene_max_muts_per_gene_per_sample
+  if (!missing(gene_max_coding_muts_per_sample)) args$gene_max_coding_muts_per_sample <- gene_max_coding_muts_per_sample
+  if (!missing(gene_list)) args$gene_list <- gene_list
+  if (!missing(sm)) args$sm <- sm
+  if (!missing(kc)) args$kc <- kc
+  if (!missing(use_indel_sites)) args$use_indel_sites <- use_indel_sites
+  if (!missing(min_indels)) args$min_indels <- min_indels
+  if (!missing(maxcovs)) args$maxcovs <- maxcovs
+  if (!missing(constrain_wnon_wspl)) args$constrain_wnon_wspl <- constrain_wnon_wspl
+  if (!missing(outp)) args$outp <- outp
+  if (!missing(numcode)) args$numcode <- numcode
+  if (!missing(outmats)) args$outmats <- outmats
+  if (!missing(mingenecovs)) args$mingenecovs <- mingenecovs
+  if (!missing(onesided)) args$onesided <- onesided
+  if (!missing(dc)) args$dc <- dc
+  if (!missing(dndscv_args)) args$dndscv_args <- dndscv_args
+  if (!missing(eligible_gr)) args$eligible_gr <- eligible_gr
+  if (!missing(fishhook_covariates)) args$fishhook_covariates <- fishhook_covariates
+  if (!missing(fishhook_covariate_data)) args$fishhook_covariate_data <- fishhook_covariate_data
+  if (!missing(fishhook_idcol)) args$fishhook_idcol <- fishhook_idcol
+  if (!missing(constructor_out_path)) args$constructor_out_path <- constructor_out_path
+  if (!missing(constructor_use_local_mut_density)) args$constructor_use_local_mut_density <- constructor_use_local_mut_density
+  if (!missing(constructor_local_mut_density_bin)) args$constructor_local_mut_density_bin <- constructor_local_mut_density_bin
+  if (!missing(constructor_mc_cores)) args$constructor_mc_cores <- constructor_mc_cores
+  if (!missing(constructor_na_rm)) args$constructor_na_rm <- constructor_na_rm
+  if (!missing(constructor_pad)) args$constructor_pad <- constructor_pad
+  if (!missing(constructor_max_slice)) args$constructor_max_slice <- constructor_max_slice
+  if (!missing(constructor_ff_chunk)) args$constructor_ff_chunk <- constructor_ff_chunk
+  if (!missing(constructor_max_chunk)) args$constructor_max_chunk <- constructor_max_chunk
+  if (!missing(constructor_idcap)) args$constructor_idcap <- constructor_idcap
+  if (!missing(constructor_weight_events)) args$constructor_weight_events <- constructor_weight_events
+  if (!missing(constructor_nb)) args$constructor_nb <- constructor_nb
+  if (!missing(score_sets)) args$score_sets <- score_sets
+  if (!missing(score_model)) args$score_model <- score_model
+  if (!missing(score_return_model)) args$score_return_model <- score_return_model
+  if (!missing(score_nb)) args$score_nb <- score_nb
+  if (!missing(score_iter)) args$score_iter <- score_iter
+  if (!missing(score_subsample)) args$score_subsample <- score_subsample
+  if (!missing(score_seed)) args$score_seed <- score_seed
+  if (!missing(score_verbose)) args$score_verbose <- score_verbose
+  if (!missing(score_mc_cores)) args$score_mc_cores <- score_mc_cores
+  if (!missing(score_p_randomized)) args$score_p_randomized <- score_p_randomized
+  if (!missing(score_class_return)) args$score_class_return <- score_class_return
+  if (!missing(fishhook_args)) args$fishhook_args <- fishhook_args
+
+  do.call(.conseguiR_external_fun("prepare_somatic_scores"), args)
 }
 
 #' Prepare regulatory epigenomic scores
@@ -1370,18 +1385,21 @@ prepare_epigenomic_scores <- function(
     stop("No regulatory reference was provided and no backend ENCODE-derived regulatory resource could be found.")
   }
 
-  .conseguiR_external_fun("prepare_epigenomic_scores")(
+  args <- list(
     reg_ref_path = reg_ref_path,
-    track_dir = track_dir,
-    bw_files = bw_files,
-    output_path = output_path,
-    min_tracks = min_tracks,
-    drop_mhc = drop_mhc,
-    transform = transform,
-    return_diagnostics = return_diagnostics,
-    summary_fun = summary_fun,
     verbose = verbose
   )
+
+  if (!missing(track_dir)) args$track_dir <- track_dir
+  if (!missing(bw_files)) args$bw_files <- bw_files
+  if (!missing(output_path)) args$output_path <- output_path
+  if (!missing(min_tracks)) args$min_tracks <- min_tracks
+  if (!missing(drop_mhc)) args$drop_mhc <- drop_mhc
+  if (!missing(transform)) args$transform <- transform
+  if (!missing(return_diagnostics)) args$return_diagnostics <- return_diagnostics
+  if (!missing(summary_fun)) args$summary_fun <- summary_fun
+
+  do.call(.conseguiR_external_fun("prepare_epigenomic_scores"), args)
 }
 
 #' Build a scored gene-regulatory graph
