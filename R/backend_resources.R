@@ -110,27 +110,38 @@
 }
 
 #' @keywords internal
-.conseguiR_backend_seed_dir <- function() {
-  existing <- .conseguiR_backend_resource_dirs(include_work_dir = TRUE)
-  has_seed <- function(dir_path) {
-    any(file.exists(file.path(dir_path, c(
+.conseguiR_backend_seed_files <- function(kind = c("gene_reg", "gene_gene")) {
+  kind <- match.arg(kind)
+  switch(
+    kind,
+    gene_reg = c(
       "gene_reg_graph_no_scores_nodes.tsv.gz",
       "gene_reg_graph_no_scores_edges.tsv.gz",
       "gene_reg_graph_no_scores_nodes_compact.tsv.xz",
-      "gene_reg_graph_no_scores_edges_compact.tsv.xz",
+      "gene_reg_graph_no_scores_edges_compact.tsv.xz"
+    ),
+    gene_gene = c(
       "gene_gene_graph_nodes.tsv.gz",
       "gene_gene_graph_edges.tsv.gz",
       "gene_gene_graph_nodes_compact.tsv.xz",
       "gene_gene_graph_edges_compact.tsv.xz"
-    ))))
+    )
+  )
+}
+
+#' @keywords internal
+.conseguiR_backend_seed_dir <- function(kind = c("gene_reg", "gene_gene")) {
+  kind <- match.arg(kind)
+  existing <- .conseguiR_backend_resource_dirs(include_work_dir = TRUE)
+  seed_files <- .conseguiR_backend_seed_files(kind)
+  has_seed <- function(dir_path) {
+    any(file.exists(file.path(dir_path, seed_files)))
   }
   seeded_dirs <- existing[vapply(existing, has_seed, logical(1))]
-  seed_dir <- if (length(seeded_dirs) > 0L) {
-    normalizePath(seeded_dirs[[1]], winslash = "/", mustWork = TRUE)
-  } else {
-    NULL
+  if (length(seeded_dirs) == 0L) {
+    return(NULL)
   }
-  seed_dir
+  normalizePath(seeded_dirs[[1]], winslash = "/", mustWork = TRUE)
 }
 
 #' @keywords internal
@@ -350,7 +361,7 @@
 #' @keywords internal
 .conseguiR_seed_backend_graph <- function(kind = c("gene_reg", "gene_gene"), backend_dir) {
   kind <- match.arg(kind)
-  seed_dir <- .conseguiR_backend_seed_dir()
+  seed_dir <- .conseguiR_backend_seed_dir(kind)
   if (is.null(seed_dir)) {
     return(FALSE)
   }

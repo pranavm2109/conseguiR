@@ -107,6 +107,50 @@ materialize_plaintext_gene_gene_paths <- function() {
   )
 }
 
+test_backend_seed_resolution_graph_specific <- function() {
+  pkg_backend_dir <- system.file("extdata", "backend", package = "conseguiR")
+  if (!nzchar(pkg_backend_dir) || !dir.exists(pkg_backend_dir)) {
+    skip("Installed backend resource directory is unavailable in this environment.")
+  }
+
+  mixed_backend_dir <- file.path(tempdir(), "conseguiR_backend_seed_resolution_mixed")
+  dir.create(mixed_backend_dir, recursive = TRUE, showWarnings = FALSE)
+
+  seed_files <- c(
+    "gene_reg_graph_no_scores_nodes_compact.tsv.xz",
+    "gene_reg_graph_no_scores_edges_compact.tsv.xz"
+  )
+  file.copy(
+    from = file.path(pkg_backend_dir, seed_files),
+    to = mixed_backend_dir,
+    overwrite = TRUE
+  )
+
+  old_backend_dir <- getOption("conseguiR.backend_dir")
+  old_resource_dir <- getOption("conseguiR.backend_resource_dir")
+  on.exit({
+    options(
+      conseguiR.backend_dir = old_backend_dir,
+      conseguiR.backend_resource_dir = old_resource_dir
+    )
+  }, add = TRUE)
+
+  options(
+    conseguiR.backend_dir = mixed_backend_dir,
+    conseguiR.backend_resource_dir = pkg_backend_dir
+  )
+
+  expect_equal(
+    .conseguiR_backend_seed_dir("gene_reg"),
+    normalizePath(mixed_backend_dir, winslash = "/", mustWork = TRUE)
+  )
+
+  expect_equal(
+    .conseguiR_backend_seed_dir("gene_gene"),
+    normalizePath(pkg_backend_dir, winslash = "/", mustWork = TRUE)
+  )
+}
+
 test_validate_inputs_external_live <- function() {
   inputs <- make_live_validation_inputs()
 
@@ -329,6 +373,10 @@ main <- function() {
 
   test_that("external plotting fails clearly when a plot save path is missing", {
     test_plot_selected_subgraph_external_negative_missing_plot_path()
+  })
+
+  test_that("backend seed resolution is graph specific", {
+    test_backend_seed_resolution_graph_specific()
   })
 }
 
