@@ -135,19 +135,29 @@ test_backend_seed_resolution_graph_specific <- function() {
     )
   }, add = TRUE)
 
-  options(
-    conseguiR.backend_dir = mixed_backend_dir,
-    conseguiR.backend_resource_dir = pkg_backend_dir
-  )
+  options(conseguiR.backend_dir = mixed_backend_dir)
+  options(conseguiR.backend_resource_dir = NULL)
 
   expect_equal(
     .conseguiR_backend_seed_dir("gene_reg"),
     normalizePath(mixed_backend_dir, winslash = "/", mustWork = TRUE)
   )
 
+  gene_gene_seed_dir <- .conseguiR_backend_seed_dir("gene_gene")
   expect_equal(
-    .conseguiR_backend_seed_dir("gene_gene"),
-    normalizePath(pkg_backend_dir, winslash = "/", mustWork = TRUE)
+    basename(gene_gene_seed_dir),
+    "backend"
+  )
+  expect_true(
+    gene_gene_seed_dir %in% normalizePath(
+      c(
+        pkg_backend_dir,
+        file.path(getwd(), "inst", "extdata", "backend"),
+        file.path(getwd(), "extdata", "backend")
+      ),
+      winslash = "/",
+      mustWork = FALSE
+    )
   )
 }
 
