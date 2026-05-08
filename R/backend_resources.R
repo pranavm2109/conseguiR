@@ -177,7 +177,7 @@
 
 #' @keywords internal
 .conseguiR_default_gene_loc_path <- function() {
-  path <- .conseguiR_prefer_repo_relative_path("data/raw/NCBI38/NCBI38.gene.loc")
+  path <- .conseguiR_backend_resource_path("NCBI38.gene.loc")
   if (!is.null(path)) {
     return(path)
   }
@@ -185,8 +185,11 @@
   if (!is.null(path)) {
     return(path)
   }
-
-  .conseguiR_backend_resource_path("NCBI38.gene.loc")
+  path <- .conseguiR_prefer_repo_relative_path("data/raw/NCBI38/NCBI38.gene.loc")
+  if (!is.null(path)) {
+    return(normalizePath(path, winslash = "/", mustWork = TRUE))
+  }
+  NULL
 }
 
 #' @keywords internal
