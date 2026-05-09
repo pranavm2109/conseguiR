@@ -230,17 +230,11 @@
     stop("ENCODE cCRE BED must have at least 5 columns to create a loc file.")
   }
 
-  reg_elem_name <- if (ncol(ccre_dt) >= 6L) {
-    as.character(ccre_dt[[6L]])
-  } else {
-    rep(NA_character_, nrow(ccre_dt))
-  }
   loc_dt <- data.table::data.table(
     reg_elem_id = as.character(ccre_dt[[5L]]),
     chrom = sub("^chr", "", as.character(ccre_dt[[1L]])),
     start = as.integer(ccre_dt[[2L]]) + 1L,
-    end = as.integer(ccre_dt[[3L]]),
-    reg_elem_name = reg_elem_name
+    end = as.integer(ccre_dt[[3L]])
   )
   loc_dt <- unique(loc_dt)
   loc_dt <- loc_dt[
@@ -248,7 +242,7 @@
       !is.na(loc_dt[["chrom"]]) & loc_dt[["chrom"]] != "" &
       !is.na(loc_dt[["start"]]) & !is.na(loc_dt[["end"]])
   ]
-  data.table::fwrite(loc_dt, loc_path, sep = "\t", col.names = FALSE)
+  data.table::fwrite(loc_dt[, .(reg_elem_id, chrom, start, end)], loc_path, sep = "\t", col.names = FALSE)
   normalizePath(loc_path, winslash = "/", mustWork = TRUE)
 }
 
@@ -315,17 +309,59 @@
 }
 
 #' @keywords internal
+.conseguiR_is_valid_magma_loc <- function(loc_path, max_rows = 50L) {
+  if (is.null(loc_path) || !file.exists(loc_path) || is.na(file.info(loc_path)$size) || file.info(loc_path)$size <= 0L) {
+    return(FALSE)
+  }
+
+  loc_dt <- tryCatch(
+    data.table::fread(loc_path, header = FALSE, nrows = max_rows, sep = "\t", showProgress = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(loc_dt) || nrow(loc_dt) == 0L) {
+    return(FALSE)
+  }
+
+  n_cols <- ncol(loc_dt)
+  if (!(n_cols %in% c(4L, 5L))) {
+    return(FALSE)
+  }
+
+  id_col <- as.character(loc_dt[[1L]])
+  chr_col <- as.character(loc_dt[[2L]])
+  start_col <- suppressWarnings(as.integer(loc_dt[[3L]]))
+  end_col <- suppressWarnings(as.integer(loc_dt[[4L]]))
+
+  core_ok <- !is.na(id_col) & id_col != "" &
+    !is.na(chr_col) & chr_col != "" &
+    !is.na(start_col) & !is.na(end_col)
+
+  if (!all(core_ok)) {
+    return(FALSE)
+  }
+
+  if (n_cols == 5L) {
+    strand_col <- trimws(as.character(loc_dt[[5L]]))
+    if (!all(strand_col %in% c("+", "-"))) {
+      return(FALSE)
+    }
+  }
+
+  TRUE
+}
+
+#' @keywords internal
 .conseguiR_write_reg_loc <- function(nodes, loc_path) {
   loc_dt <- .conseguiR_reg_loc_from_nodes(nodes)
   dir.create(dirname(loc_path), recursive = TRUE, showWarnings = FALSE)
-  data.table::fwrite(loc_dt, loc_path, sep = "\t", col.names = FALSE)
+  data.table::fwrite(loc_dt[, .(reg_elem_id, chrom, start, end)], loc_path, sep = "\t", col.names = FALSE)
   normalizePath(loc_path, winslash = "/", mustWork = TRUE)
 }
 
 #' @keywords internal
 .conseguiR_backend_reg_loc_path <- function(backend_dir = .conseguiR_backend_dir(create = TRUE)) {
   loc_path <- file.path(backend_dir, "GRCh38-cCREs.loc")
-  if (file.exists(loc_path) && file.info(loc_path)$size > 0L) {
+  if (.conseguiR_is_valid_magma_loc(loc_path)) {
     return(normalizePath(loc_path, winslash = "/", mustWork = TRUE))
   }
 

@@ -161,6 +161,69 @@ test_backend_seed_resolution_graph_specific <- function() {
   )
 }
 
+test_backend_reg_loc_writer_emits_strict_magma_format <- function() {
+  loc_path <- make_external_test_path("backend_reg_loc_strict", ".loc")
+  nodes_dt <- data.table(
+    node_id = c("EH38E0000001", "EH38E0000002"),
+    node_type = c("reg", "reg"),
+    chr = c("chr1", "chr2"),
+    start = c(100L, 200L),
+    end = c(150L, 260L),
+    reg_chr = c("chr1", "chr2"),
+    reg_start = c(100L, 200L),
+    reg_end = c(150L, 260L),
+    node_label = c("feature_a", "feature_b")
+  )
+
+  out <- .conseguiR_write_reg_loc(nodes_dt, loc_path)
+  expect_true(file.exists(out))
+  loc_dt <- fread(out, header = FALSE, showProgress = FALSE)
+  expect_equal(ncol(loc_dt), 4L)
+  expect_true(all(loc_dt[[2]] %in% c("1", "2")))
+}
+
+test_backend_reg_loc_path_regenerates_invalid_five_column_file <- function() {
+  backend_dir <- make_external_test_path("backend_reg_loc_dir")
+  dir.create(backend_dir, recursive = TRUE, showWarnings = FALSE)
+
+  invalid_loc_path <- file.path(backend_dir, "GRCh38-cCREs.loc")
+  fwrite(
+    data.table(
+      V1 = "EH38E0000001",
+      V2 = "1",
+      V3 = 100L,
+      V4 = 150L,
+      V5 = ""
+    ),
+    invalid_loc_path,
+    sep = "\t",
+    col.names = FALSE
+  )
+
+  nodes_path <- file.path(backend_dir, "gene_reg_graph_no_scores_nodes.tsv.gz")
+  fwrite(
+    data.table(
+      node_id = c("EH38E0000001", "EH38E0000002"),
+      node_type = c("reg", "reg"),
+      chr = c("chr1", "chr2"),
+      start = c(100L, 200L),
+      end = c(150L, 260L),
+      reg_chr = c("chr1", "chr2"),
+      reg_start = c(100L, 200L),
+      reg_end = c(150L, 260L)
+    ),
+    nodes_path,
+    sep = "\t"
+  )
+
+  out <- .conseguiR_backend_reg_loc_path(backend_dir = backend_dir)
+  expect_true(file.exists(out))
+  expect_true(.conseguiR_is_valid_magma_loc(out))
+  loc_dt <- fread(out, header = FALSE, showProgress = FALSE)
+  expect_equal(ncol(loc_dt), 4L)
+  expect_equal(nrow(loc_dt), 2L)
+}
+
 test_validate_inputs_external_live <- function() {
   inputs <- make_live_validation_inputs()
 
@@ -387,6 +450,14 @@ main <- function() {
 
   test_that("backend seed resolution is graph specific", {
     test_backend_seed_resolution_graph_specific()
+  })
+
+  test_that("backend regulatory loc writer emits strict MAGMA format", {
+    test_backend_reg_loc_writer_emits_strict_magma_format()
+  })
+
+  test_that("backend regulatory loc path regenerates invalid five-column files", {
+    test_backend_reg_loc_path_regenerates_invalid_five_column_file()
   })
 }
 
