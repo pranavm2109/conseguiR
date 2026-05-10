@@ -367,7 +367,7 @@
 
   nodes_path <- file.path(backend_dir, "gene_reg_graph_no_scores_nodes.tsv.gz")
   if (file.exists(nodes_path)) {
-    nodes <- data.table::as.data.table(data.table::fread(nodes_path, showProgress = FALSE))
+    nodes <- .conseguiR_read_backend_table(nodes_path)
     return(.conseguiR_write_reg_loc(nodes, loc_path))
   }
 
@@ -442,6 +442,21 @@
 
 #' @keywords internal
 .conseguiR_read_backend_table <- function(path) {
+  if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    con <- gzfile(path, open = "rt")
+    on.exit(close(con), add = TRUE)
+    return(
+      data.table::as.data.table(
+        utils::read.delim(
+          con,
+          sep = "\t",
+          stringsAsFactors = FALSE,
+          check.names = FALSE
+        )
+      )
+    )
+  }
+
   if (grepl("\\.xz$", path, ignore.case = TRUE)) {
     con <- xzfile(path, open = "rt")
     on.exit(close(con), add = TRUE)
