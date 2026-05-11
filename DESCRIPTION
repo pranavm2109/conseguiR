@@ -9,7 +9,7 @@ Authors@R: c(
 Description: Tools for scoring somatic, germline, and epigenomic evidence at genes and regulatory elements,
     projecting scores onto biological graphs, running diffusion, calling subnetworks, and exporting results for
     downstream visualization and app development.
-License: MIT + file LICENSE
+License: GPL-3
 URL: https://github.com/pranavm2109/conseguiR
 BugReports: https://github.com/pranavm2109/conseguiR/issues
 Encoding: UTF-8
