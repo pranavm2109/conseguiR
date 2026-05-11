@@ -1,6 +1,6 @@
 # conseguiR NEWS
 
-## 0.0.1
+## 0.99.0
 
 - Refined the package toward an object-first workflow so compute stages return
   in-memory bundles by default and only write outputs when explicitly asked.

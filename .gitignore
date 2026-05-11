@@ -37,3 +37,7 @@ tools/magma_v*.*/
 
 # Local BiocCheck output
 conseguiR.BiocCheck/
+
+# Generated vignette build artifacts
+vignettes/*.log
+vignettes/*_cache/

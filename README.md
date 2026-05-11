@@ -236,19 +236,15 @@ For practical setup instructions, see:
 
 - [INSTALL.md](INSTALL.md)
 
-For the full package walkthrough, see:
-
-- `vignettes/conseguiR-overview.Rmd`
-
-The vignette demonstrates the intended stage-wise workflow and the top-level
-`run_conseguiR()` workflow on real package-shaped inputs.
+The package documentation is currently centered on the function-level help
+pages and installation guide. A refreshed installed-package vignette will be
+added back after the public release cleanup.
 
 ## Current package state
 
 `conseguiR` is a research package under active development rather than a CRAN
-release. The main public workflow is in place, the vignette is intended to be
-reproducible, and the installed package is designed to ship the backend seeds
-needed for normal use.
+release. The main public workflow is in place, and the installed package is
+designed to ship the backend seeds needed for normal use.
 
 ## Repository
 

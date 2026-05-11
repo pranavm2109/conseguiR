@@ -164,18 +164,14 @@ you do not need to supply `reg_ref_path` manually.
 
 ## 7. Vignette and documentation
 
-The package vignette is the main workflow guide:
+The current public documentation is centered on:
 
-- `vignettes/conseguiR-overview.Rmd`
+- this installation guide
+- function-level help pages
+- the package README
 
-It demonstrates:
-
-- stage-wise scoring
-- graph construction
-- diffusion
-- selected-subgraph calling
-- selected-subgraph plotting
-- the end-to-end `run_conseguiR()` wrapper
+A refreshed installed-package vignette will be added back after the release
+cleanup pass.
 
 ## 8. Troubleshooting notes
 
@@ -209,6 +205,6 @@ The intended user story is:
 2. make MAGMA available
 3. load the package
 4. run `check_conseguiR_runtime()`
-5. run the vignette or call `run_conseguiR()` directly
+5. call `run_conseguiR()` directly or work stage-wise through the exported API
 
 That is the level of setup the package is aiming to support reliably.

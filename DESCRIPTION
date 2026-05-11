@@ -60,4 +60,3 @@ Suggests:
     testthat (>= 3.0.0),
     tidygraph
 Config/testthat/edition: 3
-VignetteBuilder: knitr
