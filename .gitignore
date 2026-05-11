@@ -41,3 +41,6 @@ conseguiR.BiocCheck/
 # Generated vignette build artifacts
 vignettes/*.log
 vignettes/*_cache/
+
+# Temporary/generated local analysis artifacts
+conseguiR_tmp/
