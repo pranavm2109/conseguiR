@@ -1631,7 +1631,10 @@ run_gene_reg_diffusion <- function(
 #' @param output_dir Output directory for selected-subgraph artifacts.
 #' @param output_stem Output stem for selected-subgraph artifacts.
 #' @param target_genes Requested number of genes in the selected subgraph.
-#' @param candidate_pool_size Candidate pool size for the solver.
+#' @param candidate_pool_size Candidate pool size for the solver. Must be at
+#'   least as large as `target_genes`, and must not exceed the number of
+#'   available diffusion-ranked genes. Larger values expand the solver search
+#'   space and can increase runtime.
 #' @param min_confidence Minimum edge confidence allowed into the solver.
 #' @param max_edges_in_model Maximum number of edges in the optimization model.
 #' @param node_prize_weight Node prize weight.
@@ -1678,6 +1681,11 @@ run_gene_reg_diffusion <- function(
 #' - `target_genes` is the size of the final selected subgraph you want back
 #' - `candidate_pool_size` is the number of top candidate genes that are handed
 #'   to the optimization stage before the final smaller subgraph is chosen
+#' - `candidate_pool_size` must be at least as large as `target_genes`
+#' - `candidate_pool_size` must not exceed the number of available
+#'   diffusion-ranked genes
+#' - larger `candidate_pool_size` values increase the solver search space and
+#'   can increase runtime
 #' - `node_prize_weight` rewards high-scoring genes from diffusion
 #' - `edge_conf_weight` rewards keeping confident gene-gene edges
 #' - `edge_cost_weight` penalizes expensive edges
@@ -2398,6 +2406,11 @@ plot_selected_subgraph <- function(
 #'   When `NULL`, `run_conseguiR()` returns the stage bundles directly in
 #'   memory without treating disk output as the default interface.
 #' @param target_genes Requested selected-subgraph size.
+#' @param candidate_pool_size Number of top diffusion-ranked candidate genes
+#'   handed to the selected-subgraph solver. Must be at least as large as
+#'   `target_genes`, and must not exceed the number of candidate genes
+#'   available after diffusion. Larger values expand the solver search space
+#'   and can increase runtime.
 #' @param germline_args Named list of overrides passed to
 #'   `prepare_germline_scores()`. This list may contain both gene- and
 #'   regulatory-run settings, for example `gene_sample_size`,
@@ -2434,6 +2447,9 @@ plot_selected_subgraph <- function(
 #' - `somatic_args` controls the dndscv and fishHook branches inside
 #'   `prepare_somatic_scores()`
 #' - `epigenomic_args` controls `prepare_epigenomic_scores()`
+#' - `candidate_pool_size` controls how many top diffusion-ranked genes are
+#'   considered by the selected-subgraph optimization stage before the final
+#'   `target_genes` solution is chosen
 #' - `scored_graph_args`, `diffusion_args`, `subgraph_args`, and `plot_args`
 #'   are forwarded to their corresponding downstream stages
 #'
@@ -2509,6 +2525,7 @@ run_conseguiR <- function(
   gg_edges_path = NULL,
   output_dir = NULL,
   target_genes = 50L,
+  candidate_pool_size = 400L,
   germline_args = list(),
   somatic_args = list(),
   epigenomic_args = list(),
@@ -2540,6 +2557,7 @@ run_conseguiR <- function(
     paths = paths,
     output_dir = output_dir,
     target_genes = target_genes,
+    candidate_pool_size = candidate_pool_size,
     germline_args = germline_args,
     somatic_args = somatic_args,
     epigenomic_args = epigenomic_args,

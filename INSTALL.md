@@ -151,6 +151,7 @@ result <- run_conseguiR(
   dndscv_refdb = "<dndscv-reference-db>",
   epigenomic_tracks = c("<track1.bw>", "<track2.bw>", "<track3.bw>"),
   target_genes = 50L,
+  candidate_pool_size = 400L,
   verbose = TRUE
 )
 ```

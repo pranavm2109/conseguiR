@@ -242,6 +242,11 @@ def build_candidate_pool(
         .reset_index(drop=True)
         .copy()
     )
+    if candidate_pool_size > ordered.shape[0]:
+        raise ValueError(
+            f"`candidate_pool_size` ({candidate_pool_size}) exceeds the number of "
+            f"available diffusion-ranked genes ({ordered.shape[0]})."
+        )
     candidate_nodes = ordered.head(candidate_pool_size).copy()
     if candidate_nodes.shape[0] < target_genes:
         raise ValueError(

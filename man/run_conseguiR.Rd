@@ -17,6 +17,7 @@ run_conseguiR(
   gg_edges_path = NULL,
   output_dir = NULL,
   target_genes = 50L,
+  candidate_pool_size = 400L,
   germline_args = list(),
   somatic_args = list(),
   epigenomic_args = list(),
@@ -55,6 +56,12 @@ When \code{NULL}, \code{run_conseguiR()} runs in object-first mode and returns t
 stage bundles without treating disk output as the default interface.}
 
 \item{target_genes}{Requested selected-subgraph size.}
+
+\item{candidate_pool_size}{Number of top diffusion-ranked candidate genes
+handed to the selected-subgraph solver. Must be at least as large as
+\code{target_genes}, and must not exceed the number of candidate genes
+available after diffusion. Larger values expand the solver search space and
+can increase runtime.}
 
 \item{germline_args}{Named list of overrides passed to
 \code{prepare_germline_scores()}. This list may contain both gene- and
@@ -105,6 +112,9 @@ through stage-specific named lists:
 \item \code{somatic_args} controls the dndscv and fishHook branches inside
 \code{prepare_somatic_scores()}
 \item \code{epigenomic_args} controls \code{prepare_epigenomic_scores()}
+\item \code{candidate_pool_size} controls how many top diffusion-ranked genes are
+considered by the selected-subgraph optimization stage before the final
+\code{target_genes} solution is chosen
 \item \code{scored_graph_args}, \code{diffusion_args}, \code{subgraph_args}, and \code{plot_args}
 are forwarded to their corresponding downstream stages
 }

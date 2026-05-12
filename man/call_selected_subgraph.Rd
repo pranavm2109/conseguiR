@@ -45,7 +45,10 @@ call_selected_subgraph(
 
 \item{target_genes}{Requested number of genes in the selected subgraph.}
 
-\item{candidate_pool_size}{Candidate pool size for the solver.}
+\item{candidate_pool_size}{Candidate pool size for the solver. Must be at
+least as large as \code{target_genes}, and must not exceed the number of
+available diffusion-ranked genes. Larger values expand the solver search
+space and can increase runtime.}
 
 \item{min_confidence}{Minimum edge confidence allowed into the solver.}
 
@@ -116,6 +119,11 @@ In plain language:
 \item \code{target_genes} is the size of the final selected subgraph you want back
 \item \code{candidate_pool_size} is the number of top candidate genes that are handed
 to the optimization stage before the final smaller subgraph is chosen
+\item \code{candidate_pool_size} must be at least as large as \code{target_genes}
+\item \code{candidate_pool_size} must not exceed the number of available
+diffusion-ranked genes
+\item larger \code{candidate_pool_size} values increase the solver search space
+and can increase runtime
 \item \code{node_prize_weight} rewards high-scoring genes from diffusion
 \item \code{edge_conf_weight} rewards keeping confident gene-gene edges
 \item \code{edge_cost_weight} penalizes expensive edges

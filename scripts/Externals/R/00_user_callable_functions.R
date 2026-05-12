@@ -1446,7 +1446,10 @@ run_gene_reg_diffusion <- function(
 #' @param output_dir Output directory for selected-subgraph artifacts.
 #' @param output_stem Output stem for selected-subgraph artifacts.
 #' @param target_genes Requested number of genes in the selected subgraph.
-#' @param candidate_pool_size Candidate pool size for the solver.
+#' @param candidate_pool_size Candidate pool size for the solver. Must be at
+#'   least as large as `target_genes`, and must not exceed the number of
+#'   available diffusion-ranked genes. Larger values expand the solver search
+#'   space and can increase runtime.
 #' @param min_confidence Minimum edge confidence allowed into the solver.
 #' @param max_edges_in_model Maximum number of edges in the optimization model.
 #' @param node_prize_weight Node prize weight.
@@ -2260,6 +2263,11 @@ plot_epigenomic_reg_scores <- function(
 #' @param gg_edges_path Gene-gene edge table path.
 #' @param output_dir Output directory for pipeline artifacts.
 #' @param target_genes Requested selected-subgraph size.
+#' @param candidate_pool_size Number of top diffusion-ranked candidate genes
+#'   handed to the selected-subgraph solver. Must be at least as large as
+#'   `target_genes`, and must not exceed the number of candidate genes
+#'   available after diffusion. Larger values expand the solver search space
+#'   and can increase runtime.
 #' @param germline_args Named list of overrides passed to
 #'   `prepare_germline_scores()`.
 #' @param somatic_args Named list of overrides passed to
@@ -2270,8 +2278,10 @@ plot_epigenomic_reg_scores <- function(
 #'   `build_scored_gene_reg_graph()`.
 #' @param diffusion_args Named list of overrides passed to
 #'   `run_gene_reg_diffusion()`.
-#' @param subgraph_args Named list of overrides passed to
-#'   `call_selected_subgraph()`.
+#' @param subgraph_args Named list of additional overrides passed to
+#'   `call_selected_subgraph()`. Explicit `run_conseguiR()` arguments such as
+#'   `target_genes` and `candidate_pool_size` take precedence over duplicate
+#'   names supplied here.
 #' @param plot_args Named list of overrides passed to
 #'   `plot_selected_subgraph()`.
 #'
@@ -2289,6 +2299,7 @@ run_conseguiR <- function(
   gg_edges_path = NULL,
   output_dir = NULL,
   target_genes = 50L,
+  candidate_pool_size = 400L,
   germline_args = list(),
   somatic_args = list(),
   epigenomic_args = list(),
@@ -2383,6 +2394,9 @@ run_conseguiR <- function(
     extra_args = as_list_or_empty(diffusion_args)
   )
 
+  subgraph_args <- as_list_or_empty(subgraph_args)
+  subgraph_args[c("target_genes", "candidate_pool_size")] <- NULL
+
   selected_subgraph <- run_with_args(
     call_selected_subgraph,
     base_args = list(
@@ -2392,9 +2406,10 @@ run_conseguiR <- function(
       output_dir = requested_output_dir,
       output_stem = if (!is.null(requested_output_dir)) "gene_gene_selected_subgraph" else NULL,
       target_genes = target_genes,
+      candidate_pool_size = candidate_pool_size,
       verbose = verbose
     ),
-    extra_args = as_list_or_empty(subgraph_args)
+    extra_args = subgraph_args
   )
 
   plot_bundle <- run_with_args(
