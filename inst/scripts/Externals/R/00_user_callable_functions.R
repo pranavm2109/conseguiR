@@ -970,6 +970,14 @@ prepare_epigenomic_scores <- function(
   }
 
   output_path <- write_bundle_table(reg_scores, output_path)
+  verbose_message(
+    verbose,
+    paste0(
+      "Epigenomic scoring complete. Quantified ",
+      nrow(reg_scores),
+      " regulatory elements."
+    )
+  )
 
   new_bundle(
     type = "epigenomic_scores",
@@ -1044,6 +1052,16 @@ build_scored_gene_reg_graph <- function(
     reg_germline_scores = reg_germline_scores,
     reg_epigenomic_scores = reg_epigenomic_scores,
     save_outputs = save_outputs
+  )
+  verbose_message(
+    verbose,
+    paste0(
+      "Scored gene-regulatory graph complete. Nodes: ",
+      nrow(result$nodes),
+      ", edges: ",
+      nrow(result$edges),
+      "."
+    )
   )
 
   new_bundle(
@@ -1204,6 +1222,16 @@ run_gene_reg_diffusion <- function(
     reg_signal_clip = reg_signal_clip,
     top_n_to_save = top_n_to_save,
     python_path = python_path
+  )
+  verbose_message(
+    verbose,
+    paste0(
+      "Gene-regulatory diffusion complete. All-gene results: ",
+      result$output_paths$all_genes_path,
+      "; top-gene results: ",
+      result$output_paths$top_genes_path,
+      "."
+    )
   )
 
   bundle <- new_bundle(
@@ -1382,6 +1410,25 @@ call_selected_subgraph <- function(
     edge_cost_column = edge_cost_column,
     python_path = python_path
   )
+  selected_summary <- read_selected_subgraph_summary(result$output_paths$summary_path)
+  realized_genes <- NA_character_
+  if (is.data.frame(selected_summary) &&
+      all(c("metric", "value") %in% names(selected_summary))) {
+    realized_hit <- selected_summary$value[selected_summary$metric == "selected_gene_count"]
+    if (length(realized_hit) > 0L) {
+      realized_genes <- as.character(realized_hit[[1]])
+    }
+  }
+  verbose_message(
+    verbose,
+    paste0(
+      "Selected-subgraph calling complete. Target genes: ",
+      target_genes,
+      "; realized genes: ",
+      realized_genes,
+      "."
+    )
+  )
 
   bundle <- new_bundle(
     type = "selected_subgraph",
@@ -1503,6 +1550,14 @@ plot_selected_subgraph <- function(
       subtitle = NULL
     )
   }
+
+  verbose_message(
+    verbose,
+    paste0(
+      "Selected-subgraph plot complete.",
+      if (isTRUE(save_plot)) paste0(" Plot saved to: ", plot_file_path, ".") else ""
+    )
+  )
 
   invisible(new_bundle(
     type = "plot",

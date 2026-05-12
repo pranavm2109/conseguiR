@@ -327,6 +327,16 @@ run_epigenomic_reg_scoring <- function(
     summary_fun = summary_fun
   )
   if (!is.null(pb)) utils::setTxtProgressBar(pb, 4)
+  conseguiR_verbose_message(
+    verbose,
+    paste0(
+      "bigWig signal quantification complete for ",
+      nrow(signal_mat),
+      " regulatory elements across ",
+      ncol(signal_mat),
+      " tracks."
+    )
+  )
 
   conseguiR_verbose_message(verbose, "Computing epigenomic z-scores...")
   zscores <- compute_epigenomic_reg_scores(
@@ -335,6 +345,14 @@ run_epigenomic_reg_scoring <- function(
     transform = transform
   )
   if (!is.null(pb)) utils::setTxtProgressBar(pb, 5)
+  conseguiR_verbose_message(
+    verbose,
+    paste0(
+      "Epigenomic z-score computation complete for ",
+      nrow(zscores),
+      " regulatory elements."
+    )
+  )
 
   if (!isTRUE(return_diagnostics)) {
     return(zscores)
