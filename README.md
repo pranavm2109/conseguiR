@@ -62,10 +62,14 @@ result <- run_conseguiR(
   dndscv_refdb = "<dndscv-reference-db>",
   epigenomic_tracks = c("<track1.bw>", "<track2.bw>", "<track3.bw>"),
   target_genes = 50L,
-  candidate_pool_size = 400L,
+  candidate_pool_size = 400L,  # must be >= target_genes
   verbose = TRUE
 )
 ```
+
+`candidate_pool_size` controls how many top diffusion-ranked genes are handed
+to the final subgraph solver. It must be at least as large as
+`target_genes`, and larger values generally increase solver runtime.
 
 This returns a pipeline bundle containing:
 

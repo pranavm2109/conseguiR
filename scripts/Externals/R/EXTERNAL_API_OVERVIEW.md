@@ -521,6 +521,26 @@ Returns:
 Purpose:
 - run the full pipeline from input validation through final plot generation
 
+Typical top-level call:
+```r
+result <- run_conseguiR(
+  gwas_sumstats = "<path-or-table>",
+  somatic_maf = "<path-or-table>",
+  reference_bfile = "<plink-reference-prefix>",
+  dndscv_refdb = "<dndscv-reference-db>",
+  epigenomic_tracks = c("<track1.bw>", "<track2.bw>", "<track3.bw>"),
+  target_genes = 50L,
+  candidate_pool_size = 400L,
+  verbose = TRUE
+)
+```
+
+Notes:
+- `candidate_pool_size` is user-defined
+- `candidate_pool_size` must be at least `target_genes`
+- larger `candidate_pool_size` values expand the solver search space and can
+  noticeably increase runtime
+
 Pipeline:
 1. `validate_inputs()`
 2. `prepare_germline_scores()`

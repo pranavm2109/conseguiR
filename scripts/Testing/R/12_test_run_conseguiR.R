@@ -23,7 +23,7 @@ expected_run_conseguiR_formals <- c(
   "gwas_sumstats", "somatic_maf", "reg_ref_path", "reference_bfile",
   "dndscv_refdb", "epigenomic_track_dir", "epigenomic_tracks",
   "graph_rds_path", "gg_nodes_path", "gg_edges_path", "output_dir",
-  "target_genes", "germline_args", "somatic_args", "epigenomic_args",
+  "target_genes", "candidate_pool_size", "germline_args", "somatic_args", "epigenomic_args",
   "scored_graph_args", "diffusion_args", "subgraph_args", "plot_args",
   "verbose"
 )
@@ -728,6 +728,7 @@ test_run_conseguiR_forwards_subgraph_args_surface <- function() {
         gg_edges_path = inputs$gg_edges_path,
         output_dir = make_pipeline_test_path("run_conseguiR_capture_subgraph"),
         target_genes = 7L,
+        candidate_pool_size = 55L,
         subgraph_args = subgraph_args,
         verbose = FALSE
       ),
@@ -737,8 +738,8 @@ test_run_conseguiR_forwards_subgraph_args_surface <- function() {
   )
 
   args <- get("args", envir = captured, inherits = FALSE)
-  expect_identical(args$target_genes, 12L)
-  expect_identical(args$candidate_pool_size, 60L)
+  expect_identical(args$target_genes, 7L)
+  expect_identical(args$candidate_pool_size, 55L)
   expect_identical(args$output_stem, "subgraph_override")
 }
 
