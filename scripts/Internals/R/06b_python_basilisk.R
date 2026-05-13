@@ -82,6 +82,142 @@
   valid[[1]]
 }
 
+.conseguiR_user_requested_direct_python <- function() {
+  any(nzchar(c(
+    Sys.getenv("CONSEGUIR_PYTHON", unset = ""),
+    Sys.getenv("RETICULATE_PYTHON", unset = "")
+  )))
+}
+
+.conseguiR_write_python_config_tsv <- function(config, path) {
+  stopifnot(is.list(config), is.character(path), length(path) == 1L)
+
+  keys <- names(config)
+  if (is.null(keys) || any(!nzchar(keys))) {
+    stop("Python config must be a named list.")
+  }
+
+  infer_type <- function(x) {
+    if (is.null(x)) {
+      return("none")
+    }
+    if (is.logical(x)) {
+      return("bool")
+    }
+    if (is.integer(x)) {
+      return("int")
+    }
+    if (is.numeric(x)) {
+      if (length(x) == 1L && is.finite(x) && identical(as.numeric(as.integer(x)), as.numeric(x))) {
+        return("int")
+      }
+      return("float")
+    }
+    "str"
+  }
+
+  encode_value <- function(x, type_name) {
+    if (is.null(x)) {
+      return("")
+    }
+    if (type_name == "bool") {
+      return(ifelse(isTRUE(x), "true", "false"))
+    }
+    as.character(x)
+  }
+
+  rows <- lapply(keys, function(key) {
+    value <- config[[key]]
+    type_name <- infer_type(value)
+    data.frame(
+      key = key,
+      value = encode_value(value, type_name),
+      type = type_name,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  utils::write.table(
+    do.call(rbind, rows),
+    file = path,
+    sep = "\t",
+    quote = TRUE,
+    row.names = FALSE,
+    col.names = TRUE
+  )
+
+  path
+}
+
+.conseguiR_read_python_output_tsv <- function(path) {
+  dt <- utils::read.delim(
+    path,
+    sep = "\t",
+    header = TRUE,
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+
+  if (!all(c("key", "value") %in% names(dt))) {
+    stop("Python output mapping file is malformed: ", path)
+  }
+
+  stats::setNames(as.list(dt$value), dt$key)
+}
+
+.conseguiR_run_python_module_subprocess <- function(
+  script_path,
+  config,
+  python_path
+) {
+  if (is.null(python_path) || !nzchar(python_path)) {
+    stop("No configured Python interpreter is available for direct conseguiR execution.")
+  }
+
+  config_path <- tempfile("conseguiR_py_config_", fileext = ".tsv")
+  output_path <- tempfile("conseguiR_py_output_", fileext = ".tsv")
+  on.exit(unlink(c(config_path, output_path), force = TRUE), add = TRUE)
+
+  .conseguiR_write_python_config_tsv(config, config_path)
+
+  out <- tryCatch(
+    system2(
+      python_path,
+      args = c(
+        normalizePath(script_path, winslash = "/", mustWork = TRUE),
+        "--config-tsv", config_path,
+        "--output-paths-tsv", output_path
+      ),
+      stdout = TRUE,
+      stderr = TRUE
+    ),
+    error = function(e) e
+  )
+
+  if (inherits(out, "error")) {
+    stop(conditionMessage(out), call. = FALSE)
+  }
+
+  status <- attr(out, "status")
+  if (!is.null(status) && status != 0L) {
+    stop(
+      "Direct Python subprocess execution failed.\n",
+      paste(out, collapse = "\n"),
+      call. = FALSE
+    )
+  }
+
+  if (!file.exists(output_path)) {
+    stop(
+      "Direct Python subprocess did not produce the expected output mapping file.\n",
+      paste(out, collapse = "\n"),
+      call. = FALSE
+    )
+  }
+
+  .conseguiR_read_python_output_tsv(output_path)
+}
+
 .conseguiR_run_python_module_direct <- function(
   script_path,
   module_name,
@@ -127,13 +263,9 @@
   direct_python <- .conseguiR_direct_python_path()
   if (!is.null(direct_python)) {
     direct_result <- tryCatch(
-      .conseguiR_run_python_module_direct(
+      .conseguiR_run_python_module_subprocess(
         script_path = script_path,
-        module_name = module_name,
-        function_name = function_name,
         config = config,
-        config_class_name = config_class_name,
-        result_field = result_field,
         python_path = direct_python
       ),
       error = function(e) e
@@ -141,6 +273,14 @@
 
     if (!inherits(direct_result, "error")) {
       return(direct_result)
+    }
+
+    if (isTRUE(.conseguiR_user_requested_direct_python())) {
+      stop(
+        "Python-backed conseguiR stage failed while using the explicitly configured direct Python interpreter.\n",
+        conditionMessage(direct_result),
+        call. = FALSE
+      )
     }
   }
 

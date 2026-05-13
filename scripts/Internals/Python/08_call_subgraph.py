@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import argparse
+import csv
 import math
 import os
 from dataclasses import dataclass
@@ -42,6 +44,36 @@ class SubgraphConfig:
     prize_column: str = "post_integrated"
     confidence_column: str = "confidence"
     edge_cost_column: str = "weight"
+
+
+def read_flat_config_tsv(path: str) -> Dict[str, object]:
+    config: Dict[str, object] = {}
+    with open(path, "r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        for row in reader:
+            key = row["key"]
+            value = row["value"]
+            type_name = row["type"]
+            if type_name == "none":
+                parsed = None
+            elif type_name == "bool":
+                parsed = value.strip().lower() == "true"
+            elif type_name == "int":
+                parsed = int(value)
+            elif type_name == "float":
+                parsed = float(value)
+            else:
+                parsed = value
+            config[key] = parsed
+    return config
+
+
+def write_mapping_tsv(mapping: Dict[str, object], path: str) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+        writer.writerow(["key", "value"])
+        for key, value in mapping.items():
+            writer.writerow([key, "" if value is None else str(value)])
 
 
 def require_ortools() -> None:
@@ -653,6 +685,18 @@ def run_cardinality_subgraph_calling(
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(add_help=True)
+    parser.add_argument("--config-tsv", default=None)
+    parser.add_argument("--output-paths-tsv", default=None)
+    args = parser.parse_args()
+
+    if args.config_tsv:
+        config_dict = read_flat_config_tsv(args.config_tsv)
+        result = run_cardinality_subgraph_calling(config=SubgraphConfig(**config_dict))
+        if args.output_paths_tsv:
+            write_mapping_tsv(result["output_paths"], args.output_paths_tsv)
+        return
+
     result = run_cardinality_subgraph_calling()
     selected_nodes = result["selected_nodes"]
     selected_edges = result["selected_edges"]
