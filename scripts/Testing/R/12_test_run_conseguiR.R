@@ -824,6 +824,7 @@ test_run_conseguiR_end_to_end <- function(print_outputs = TRUE) {
       gg_edges_path = inputs$gg_edges_path,
       output_dir = output_dir,
       target_genes = 12L,
+      candidate_pool_size = 50L,
       germline_args = list(
         gene_sample_size = 456348L,
         reg_sample_size = 456348L,
@@ -908,7 +909,6 @@ test_run_conseguiR_end_to_end <- function(print_outputs = TRUE) {
         top_n_to_save = 25L
       ),
       subgraph_args = list(
-        candidate_pool_size = 60L,
         min_confidence = 0,
         max_edges_in_model = 400L,
         node_prize_weight = 1,
