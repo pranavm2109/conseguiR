@@ -1309,6 +1309,11 @@ prepare_locus_plot_bundle <- function(
         !is.na(feature_start) & !is.na(feature_end) &
         feature_end >= locus_start & feature_start <= locus_end
     ]
+    gene_nodes[, feature_mid := (feature_start + feature_end) / 2]
+    gene_nodes <- gene_nodes[
+      feature_mid >= locus_start &
+        feature_mid <= locus_end
+    ]
   }
 
   reg_nodes <- nodes_dt[
@@ -1510,6 +1515,10 @@ prepare_locus_plot_bundle <- function(
   reg_lookup <- unique(reg_nodes[, .(reg_id = feature_id, linked_label, current_norm)])
   edges_locus <- merge(edges_locus, gene_lookup, by = "gene_id", all.x = TRUE)
   edges_locus <- merge(edges_locus, reg_lookup, by = "reg_id", all.x = TRUE)
+  edges_locus <- edges_locus[
+    gene_id %in% gene_lookup$gene_id &
+      reg_id %in% reg_lookup$reg_id
+  ]
   edges_locus[, gene_mid := (gene_start + gene_end) / 2]
   edges_locus[, reg_mid := (reg_start + reg_end) / 2]
   edges_locus[, interaction_strength := fifelse(
