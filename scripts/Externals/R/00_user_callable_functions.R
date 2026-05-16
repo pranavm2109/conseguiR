@@ -673,8 +673,21 @@ prepare_germline_scores <- function(
 ) {
   shared_args <- as_list_or_empty(shared_args)
   verbose_message(verbose, "Preparing germline scores...")
-  gene_loc_path <- if (exists(".conseguiR_default_gene_loc_path", inherits = TRUE)) .conseguiR_default_gene_loc_path() else "data/raw/NCBI38/NCBI38.gene.loc"
-  reg_loc_path <- if (exists(".conseguiR_default_reg_loc_path", inherits = TRUE)) .conseguiR_default_reg_loc_path() else "data/processed/GRCh38-cCREs.loc"
+  gene_loc_path <- tryCatch(
+    conseguiR:::.conseguiR_default_gene_loc_path(),
+    error = function(e) NULL
+  )
+  if (is.null(gene_loc_path)) {
+    gene_loc_path <- "data/raw/NCBI38/NCBI38.gene.loc"
+  }
+
+  reg_loc_path <- tryCatch(
+    conseguiR:::.conseguiR_default_reg_loc_path(),
+    error = function(e) NULL
+  )
+  if (is.null(reg_loc_path)) {
+    reg_loc_path <- "data/processed/GRCh38-cCREs.loc"
+  }
 
   resolved_reg_sample_size <- reg_sample_size
   resolved_reg_sample_size_col <- reg_sample_size_col
@@ -2463,8 +2476,10 @@ run_conseguiR <- function(
 #' @param label_features Optional gene symbols to label.
 #' @param gwas_sumstats Optional GWAS summary statistics path or table used to
 #'   label the top SNP in the locus.
-#' @param label_top_gwas_snp Logical scalar. If `TRUE`, label the top GWAS SNP
-#'   in the window by rsID/variant ID.
+#' @param label_top_gwas_snp Logical scalar or non-negative integer. Use
+#'   `FALSE` or `0` to disable GWAS SNP labels, `TRUE` for one top GWAS SNP,
+#'   or a positive integer to label that many top GWAS SNPs in the window by
+#'   rsID/variant ID.
 #' @param rsid_pmid Optional rsID-to-PMID evidence table or path. Must contain
 #'   at least `rsid` and `pmid` columns. When omitted, `conseguiR` queries
 #'   dbSNP in memory for SNP literature support.

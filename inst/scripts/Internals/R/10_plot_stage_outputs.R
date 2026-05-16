@@ -521,6 +521,26 @@ normalize_locus_chromosome <- function(chromosome) {
   out
 }
 
+normalize_top_gwas_label_count <- function(label_top_gwas_snp) {
+  if (is.null(label_top_gwas_snp) || length(label_top_gwas_snp) == 0L) {
+    return(0L)
+  }
+
+  if (is.logical(label_top_gwas_snp)) {
+    if (is.na(label_top_gwas_snp[[1]]) || !isTRUE(label_top_gwas_snp[[1]])) {
+      return(0L)
+    }
+    return(1L)
+  }
+
+  top_n <- suppressWarnings(as.integer(label_top_gwas_snp[[1]]))
+  if (is.na(top_n) || top_n < 0L) {
+    stop("`label_top_gwas_snp` must be `TRUE`, `FALSE`, or a non-negative integer.")
+  }
+
+  top_n
+}
+
 assign_interval_lanes <- function(dt, start_col, end_col) {
   if (nrow(dt) == 0L) {
     dt[, lane := integer()]
@@ -656,8 +676,12 @@ read_minimal_locus_gwas_table <- function(gwas_sumstats = NULL) {
   data.table::copy(out)
 }
 
-prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, end, reg_nodes = NULL) {
+prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, end, reg_nodes = NULL, top_n = 1L) {
   if (is.null(gwas_sumstats)) {
+    return(NULL)
+  }
+  top_n <- suppressWarnings(as.integer(top_n[[1]]))
+  if (is.na(top_n) || top_n <= 0L) {
     return(NULL)
   }
 
@@ -698,11 +722,11 @@ prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, en
   }
 
   data.table::setorderv(gwas_dt, c("p_value", "position"), c(1L, 1L))
-  top_snp <- gwas_dt[1]
+  top_snps <- gwas_dt[seq_len(min(.N, top_n))]
   data.table::data.table(
-    snp_id = top_snp$rsid[[1]],
-    position = top_snp$position[[1]],
-    p_value = top_snp$p_value[[1]],
+    snp_id = as.character(top_snps$rsid),
+    position = as.integer(top_snps$position),
+    p_value = as.numeric(top_snps$p_value),
     reg_feature_id = target_reg_id,
     reg_start = target_start,
     reg_end = target_end
@@ -1317,13 +1341,15 @@ prepare_locus_plot_bundle <- function(
     gene_score_limits <- c(gene_score_limits[[1]], gene_score_limits[[1]] + 1)
   }
 
-  gwas_label_dt <- if (isTRUE(label_top_gwas_snp)) {
+  top_gwas_n <- normalize_top_gwas_label_count(label_top_gwas_snp)
+  gwas_label_dt <- if (top_gwas_n > 0L) {
     prepare_locus_gwas_label(
       gwas_sumstats = gwas_sumstats,
       chromosome = locus_chr,
       start = locus_start,
       end = locus_end,
-      reg_nodes = reg_nodes
+      reg_nodes = reg_nodes,
+      top_n = top_gwas_n
     )
   } else {
     NULL

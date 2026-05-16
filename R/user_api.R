@@ -2226,8 +2226,10 @@ plot_epigenomic_reg_scores <- function(
 #'   gene label within the locus.
 #' @param gwas_sumstats Optional GWAS summary statistics path or table used for
 #'   locus SNP labeling.
-#' @param label_top_gwas_snp Logical scalar. If `TRUE`, label the top GWAS SNP
-#'   in the plotted locus.
+#' @param label_top_gwas_snp Logical scalar or non-negative integer. Use
+#'   `FALSE` or `0` to disable GWAS SNP labels, `TRUE` for one top GWAS SNP,
+#'   or a positive integer to label that many top GWAS SNPs in the plotted
+#'   locus.
 #' @param rsid_pmid Optional rsID-to-PMID evidence table with at least
 #'   `rsid` and `pmid` columns.
 #' @param label_top_lit_snps Integer count of literature-backed SNPs to label.

@@ -705,6 +705,26 @@ normalize_locus_chromosome <- function(chromosome) {
   out
 }
 
+normalize_top_gwas_label_count <- function(label_top_gwas_snp) {
+  if (is.null(label_top_gwas_snp) || length(label_top_gwas_snp) == 0L) {
+    return(0L)
+  }
+
+  if (is.logical(label_top_gwas_snp)) {
+    if (is.na(label_top_gwas_snp[[1]]) || !isTRUE(label_top_gwas_snp[[1]])) {
+      return(0L)
+    }
+    return(1L)
+  }
+
+  top_n <- suppressWarnings(as.integer(label_top_gwas_snp[[1]]))
+  if (is.na(top_n) || top_n < 0L) {
+    stop("`label_top_gwas_snp` must be `TRUE`, `FALSE`, or a non-negative integer.")
+  }
+
+  top_n
+}
+
 assign_interval_lanes <- function(dt, start_col, end_col) {
   if (nrow(dt) == 0L) {
     dt[, lane := integer()]
@@ -830,8 +850,12 @@ read_minimal_locus_gwas_table <- function(gwas_sumstats = NULL) {
   out
 }
 
-prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, end, reg_nodes = NULL) {
+prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, end, reg_nodes = NULL, top_n = 1L) {
   if (is.null(gwas_sumstats)) {
+    return(NULL)
+  }
+  top_n <- suppressWarnings(as.integer(top_n[[1]]))
+  if (is.na(top_n) || top_n <= 0L) {
     return(NULL)
   }
 
@@ -886,11 +910,11 @@ prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, en
   }
 
   data.table::setorderv(gwas_dt, c("p_value", "position"), c(1L, 1L))
-  top_snp <- gwas_dt[1]
+  top_snps <- gwas_dt[seq_len(min(.N, top_n))]
   data.table::data.table(
-    snp_id = top_snp$rsid[[1]],
-    position = top_snp$position[[1]],
-    p_value = top_snp$p_value[[1]],
+    snp_id = as.character(top_snps$rsid),
+    position = as.integer(top_snps$position),
+    p_value = as.numeric(top_snps$p_value),
     reg_feature_id = target_reg_id,
     reg_start = target_start,
     reg_end = target_end
@@ -1515,13 +1539,14 @@ prepare_locus_plot_bundle <- function(
     }
   }
 
-  gwas_label_dt <- if (isTRUE(label_top_gwas_snp) && !is.null(gwas_hits_dt) && nrow(gwas_hits_dt) > 0L) {
+  top_gwas_n <- normalize_top_gwas_label_count(label_top_gwas_snp)
+  gwas_label_dt <- if (top_gwas_n > 0L && !is.null(gwas_hits_dt) && nrow(gwas_hits_dt) > 0L) {
     data.table::setorderv(gwas_hits_dt, c("p_value", "position"), c(1L, 1L))
-    top_snp <- gwas_hits_dt[1]
+    top_snps <- gwas_hits_dt[seq_len(min(.N, top_gwas_n))]
     data.table::data.table(
-      snp_id = as.character(top_snp$rsid[[1]]),
-      position = as.integer(top_snp$position[[1]]),
-      p_value = as.numeric(top_snp$p_value[[1]])
+      snp_id = as.character(top_snps$rsid),
+      position = as.integer(top_snps$position),
+      p_value = as.numeric(top_snps$p_value)
     )
   } else {
     NULL
