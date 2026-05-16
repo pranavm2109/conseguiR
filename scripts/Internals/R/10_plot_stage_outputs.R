@@ -1831,18 +1831,6 @@ create_locus_context_plot <- function(
 
   features_dt <- bundle$features
   links_dt <- bundle$links
-  gene_label_dt <- unique(features_dt[feature_type == "gene", .(
-    feature_label,
-    feature_mid,
-    y,
-    score,
-    highlighted,
-    gene_lane
-  )])
-  if (nrow(gene_label_dt) > 0L) {
-    gene_label_dt[, y_label := y - 0.22]
-  }
-
   gene_width <- max(ceiling((locus$end - locus$start) * 0.025), 60000L)
   features_dt[feature_type == "gene", `:=`(
     feature_start = as.integer(round(feature_mid - gene_width / 2)),
@@ -1851,6 +1839,32 @@ create_locus_context_plot <- function(
   features_dt[feature_type == "gene", xmid := (feature_start + feature_end) / 2]
   features_dt[feature_type == "reg", xmid := (feature_start + feature_end) / 2]
   features_dt[feature_type == "snp", xmid := feature_start]
+  gene_label_dt <- unique(features_dt[feature_type == "gene", .(
+    feature_id,
+    feature_label,
+    feature_mid,
+    feature_start,
+    feature_end,
+    y,
+    score,
+    highlighted,
+    gene_lane
+  )])
+  if (nrow(gene_label_dt) > 0L) {
+    label_lanes_dt <- assign_interval_lanes(
+      unique(gene_label_dt[, .(feature_id, feature_start, feature_end)]),
+      "feature_start",
+      "feature_end"
+    )
+    gene_label_dt <- merge(
+      gene_label_dt,
+      label_lanes_dt[, .(feature_id, label_lane = lane)],
+      by = "feature_id",
+      all.x = TRUE
+    )
+    gene_label_dt[is.na(label_lane), label_lane := 0L]
+    gene_label_dt[, y_label := y - 0.22 - 0.16 * label_lane]
+  }
   reg_track_id <- bundle$tracks[track_name == "Reg elements", track_id][[1]]
   gene_track_id <- bundle$tracks[track_name == "Genes (post-diffusion integrated)", track_id][[1]]
   links_dt[, reg_y := reg_track_id - 0.02]
@@ -1877,18 +1891,39 @@ create_locus_context_plot <- function(
     )
   }
 
-  if (nrow(links_dt) > 0L) {
+  left_to_right_links <- links_dt[gene_mid >= reg_mid]
+  right_to_left_links <- links_dt[gene_mid < reg_mid]
+
+  if (nrow(left_to_right_links) > 0L) {
     p <- p + ggplot2::geom_curve(
-      data = links_dt,
+      data = left_to_right_links,
       ggplot2::aes(
         x = reg_mid,
         y = reg_y,
         xend = gene_mid,
         yend = gene_y
       ),
-      curvature = -0.18,
+      curvature = -0.12,
       colour = "#111111",
-      alpha = links_dt$link_alpha,
+      alpha = left_to_right_links$link_alpha,
+      linewidth = 0.25,
+      show.legend = FALSE,
+      inherit.aes = FALSE
+    )
+  }
+
+  if (nrow(right_to_left_links) > 0L) {
+    p <- p + ggplot2::geom_curve(
+      data = right_to_left_links,
+      ggplot2::aes(
+        x = reg_mid,
+        y = reg_y,
+        xend = gene_mid,
+        yend = gene_y
+      ),
+      curvature = 0.12,
+      colour = "#111111",
+      alpha = right_to_left_links$link_alpha,
       linewidth = 0.25,
       show.legend = FALSE,
       inherit.aes = FALSE
@@ -2094,6 +2129,10 @@ create_locus_context_plot <- function(
   if (!is.null(snp_label_top_y) && is.finite(snp_label_top_y)) {
     top_ylim <- max(top_ylim, snp_label_top_y + 0.35)
   }
+  bottom_ylim <- min(bundle$tracks$track_id) - 1.4
+  if (nrow(gene_label_dt) > 0L) {
+    bottom_ylim <- min(bottom_ylim, min(gene_label_dt$y_label, na.rm = TRUE) - 0.25)
+  }
   locus_width <- as.numeric(locus$end) - as.numeric(locus$start)
   x_pad_left <- max(locus_width * 0.08, 25000)
   x_pad_right <- max(locus_width * 0.02, 10000)
@@ -2118,7 +2157,7 @@ create_locus_context_plot <- function(
     ) +
     ggplot2::coord_cartesian(
       xlim = c(locus$start - x_pad_left, locus$end + x_pad_right),
-      ylim = c(min(bundle$tracks$track_id) - 1.4, top_ylim),
+      ylim = c(bottom_ylim, top_ylim),
       expand = FALSE,
       clip = "off"
     ) +
