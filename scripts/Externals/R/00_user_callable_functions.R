@@ -2679,3 +2679,139 @@ plot_locus_context <- function(
     )
   ))
 }
+
+#' Plot a validated locus-centered multimodal context panel
+#'
+#' @inheritParams plot_locus_context
+#' @param strict_gene_filter Logical scalar controlling whether the gene row is
+#'   restricted to genes linked to citation-supported regulatory elements.
+#'
+#' @return A plot bundle containing the ggplot object and validated locus
+#'   plotting data.
+plot_validated_locus_context <- function(
+  chromosome,
+  start,
+  end,
+  postdiff_gene_reg_graph = NULL,
+  scored_graph = NULL,
+  diffusion = NULL,
+  selected_subgraph = NULL,
+  nodes_path = NULL,
+  edges_path = NULL,
+  diffusion_path = NULL,
+  selected_nodes_path = NULL,
+  label_features = NULL,
+  gwas_sumstats = NULL,
+  label_top_gwas_snp = FALSE,
+  rsid_pmid = NULL,
+  label_top_lit_snps = 0L,
+  pmid_query = NULL,
+  pmid_page_size = 1000L,
+  strict_gene_filter = TRUE,
+  plot_file_path = NULL,
+  title = NULL,
+  width = 14,
+  height = 9,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = TRUE
+) {
+  verbose_message(verbose, "Preparing validated locus context plot...")
+
+  if (!is.null(pmid_query) && nzchar(trimws(as.character(pmid_query[[1]])))) {
+    warning(
+      "`pmid_query` is deprecated and currently ignored in `plot_validated_locus_context()`; ",
+      "locus SNP labeling now uses dbSNP citation support directly.",
+      call. = FALSE
+    )
+  }
+
+  graph_dt <- resolve_postdiff_gene_reg_graph(
+    postdiff_gene_reg_graph = postdiff_gene_reg_graph,
+    scored_graph = scored_graph,
+    diffusion = diffusion,
+    nodes_path = nodes_path,
+    edges_path = edges_path,
+    diffusion_path = diffusion_path
+  )
+  nodes_dt <- graph_dt$nodes
+  edges_dt <- graph_dt$edges
+  selected_genes <- resolve_locus_selected_genes(
+    selected_subgraph = selected_subgraph,
+    nodes_path = selected_nodes_path
+  )
+
+  plot_obj <- create_validated_locus_context_plot(
+    nodes = nodes_dt,
+    edges = edges_dt,
+    selected_genes = selected_genes,
+    chromosome = chromosome,
+    start = start,
+    end = end,
+    label_features = label_features,
+    title = title,
+    gwas_sumstats = gwas_sumstats,
+    label_top_gwas_snp = label_top_gwas_snp,
+    rsid_pmid = rsid_pmid,
+    label_top_lit_snps = label_top_lit_snps,
+    pmid_query = pmid_query,
+    pmid_page_size = pmid_page_size,
+    strict_gene_filter = strict_gene_filter,
+    verbose = verbose
+  )
+
+  if (isTRUE(verbose) && identical(plot_obj$plot_data$snp_label_mode, "fallback")) {
+    message(
+      "No citation-backed SNPs were found among regulatory-element-overlapping SNPs in this locus; ",
+      "labeling up to ", plot_obj$plot_data$snp_label_labeled_n %||% 0L,
+      " top GWAS SNP(s) from the highest-germline-scoring regulatory elements instead."
+    )
+  }
+
+  if (isTRUE(save_plot)) {
+    if (is.null(plot_file_path) || !nzchar(plot_file_path)) {
+      stop("`plot_file_path` must be provided when `save_plot = TRUE`.")
+    }
+
+    save_validated_locus_context_plot(
+      nodes = nodes_dt,
+      edges = edges_dt,
+      selected_genes = selected_genes,
+      chromosome = chromosome,
+      start = start,
+      end = end,
+      file_path = plot_file_path,
+      label_features = label_features,
+      title = title,
+      gwas_sumstats = gwas_sumstats,
+      label_top_gwas_snp = label_top_gwas_snp,
+      rsid_pmid = rsid_pmid,
+      label_top_lit_snps = label_top_lit_snps,
+      pmid_query = pmid_query,
+      pmid_page_size = pmid_page_size,
+      strict_gene_filter = strict_gene_filter,
+      width = width,
+      height = height,
+      dpi = dpi
+    )
+  }
+
+  invisible(new_bundle(
+    type = "validated_locus_plot",
+    objects = list(
+      plot = plot_obj$plot,
+      plot_data = plot_obj$plot_data
+    ),
+    output_paths = list(
+      plot_file_path = if (isTRUE(save_plot)) plot_file_path else NULL
+    ),
+    config = list(
+      chromosome = chromosome,
+      start = start,
+      end = end,
+      title = title,
+      label_top_lit_snps = label_top_lit_snps,
+      strict_gene_filter = strict_gene_filter
+    )
+  ))
+}

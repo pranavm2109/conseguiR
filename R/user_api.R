@@ -2375,6 +2375,69 @@ plot_locus_context <- function(
   .conseguiR_call_external("plot_locus_context", as.list(environment()))
 }
 
+#' Plot a validated locus-centered multimodal context panel
+#'
+#' Creates a paper-oriented locus panel that keeps only regulatory elements in
+#' the requested window that have dbSNP/PMID citation support. This is a
+#' citation-filtered sibling of [plot_locus_context()] intended to reduce
+#' clutter and focus attention on biologically validated regulatory elements and
+#' their linked genes.
+#'
+#' @inheritParams plot_locus_context
+#' @param strict_gene_filter Logical scalar. In ordinary use, keep this as
+#'   `TRUE` so the gene row is restricted to genes linked to citation-supported
+#'   regulatory elements. Set to `FALSE` to keep all in-window genes while still
+#'   filtering the regulatory-element rows to citation-supported elements.
+#'
+#' @details
+#' Track semantics:
+#' - the top three rows show somatic, epigenomic, and germline regulatory input
+#'   scores, but only for citation-supported regulatory elements in the locus
+#' - the `Reg elements` row shows the same citation-supported regulatory
+#'   elements colored by their combined score
+#' - the bottom gene row shows linked post-diffusion gene scores
+#' - locus SNP labels can still use top GWAS SNPs or citation-backed SNPs
+#'
+#' This function errors when no citation-supported regulatory elements are found
+#' in the requested interval.
+#'
+#' @examples
+#' names(formals(plot_validated_locus_context))
+#'
+#' @return A plot bundle containing the ggplot object and validated locus
+#'   plotting data.
+#' @export
+plot_validated_locus_context <- function(
+  chromosome,
+  start,
+  end,
+  postdiff_gene_reg_graph = NULL,
+  scored_graph = NULL,
+  diffusion = NULL,
+  selected_subgraph = NULL,
+  nodes_path = NULL,
+  edges_path = NULL,
+  diffusion_path = NULL,
+  selected_nodes_path = NULL,
+  label_features = NULL,
+  gwas_sumstats = NULL,
+  label_top_gwas_snp = FALSE,
+  rsid_pmid = NULL,
+  label_top_lit_snps = 0L,
+  pmid_query = NULL,
+  pmid_page_size = 1000L,
+  strict_gene_filter = TRUE,
+  plot_file_path = NULL,
+  title = NULL,
+  width = 14,
+  height = 9,
+  dpi = 300,
+  save_plot = !is.null(plot_file_path),
+  verbose = TRUE
+) {
+  .conseguiR_call_external("plot_validated_locus_context", as.list(environment()))
+}
+
 #' Plot a selected subgraph and build a visualization bundle
 #'
 #' This wrapper exposes the main input-resolution, saving, layout, labelling,

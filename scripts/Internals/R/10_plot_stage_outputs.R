@@ -1243,7 +1243,7 @@ prepare_locus_lit_snp_labels <- function(
 ) {
   top_n <- normalize_requested_label_count(top_n)
   if (top_n <= 0L || is.null(gwas_sumstats) || is.null(reg_nodes)) {
-    return(list(labels = NULL, mapping = NULL, mode = "none", requested_n = top_n, available_n = 0L))
+    return(list(labels = NULL, mapping = NULL, pmid_dt = NULL, mode = "none", requested_n = top_n, available_n = 0L))
   }
 
   gwas_dt <- read_locus_gwas_hits(
@@ -1253,7 +1253,7 @@ prepare_locus_lit_snp_labels <- function(
     end = end
   )
   if (is.null(gwas_dt) || nrow(gwas_dt) == 0L) {
-    return(list(labels = NULL, mapping = NULL, mode = "none", requested_n = top_n, available_n = 0L))
+    return(list(labels = NULL, mapping = NULL, pmid_dt = NULL, mode = "none", requested_n = top_n, available_n = 0L))
   }
 
   reg_dt <- data.table::as.data.table(data.table::copy(reg_nodes))[
@@ -1266,7 +1266,7 @@ prepare_locus_lit_snp_labels <- function(
     )
   ]
   if (nrow(reg_dt) == 0L) {
-    return(list(labels = NULL, mapping = NULL, mode = "none", requested_n = top_n, available_n = 0L))
+    return(list(labels = NULL, mapping = NULL, pmid_dt = NULL, mode = "none", requested_n = top_n, available_n = 0L))
   }
 
   gwas_dt[, snp_start := position]
@@ -1285,6 +1285,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
+      pmid_dt = NULL,
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1320,6 +1321,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
+      pmid_dt = NULL,
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1333,6 +1335,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
+      pmid_dt = data.table::copy(pmid_dt),
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1349,6 +1352,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
+      pmid_dt = data.table::copy(pmid_dt),
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1361,6 +1365,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
+      pmid_dt = data.table::copy(pmid_dt),
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1392,6 +1397,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
+      pmid_dt = data.table::copy(pmid_dt),
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1401,6 +1407,7 @@ prepare_locus_lit_snp_labels <- function(
   list(
     labels = data.table::copy(label_dt),
     mapping = data.table::copy(label_dt[, .(rsid, pmids, n_pmids, p_value, position, reg_feature_id, reg_start, reg_end, reg_germline_score)]),
+    pmid_dt = data.table::copy(pmid_dt),
     mode = "literature",
     requested_n = top_n,
     available_n = available_lit_n
@@ -1884,7 +1891,50 @@ prepare_locus_plot_bundle <- function(
   )
 }
 
-create_locus_context_plot <- function(
+filter_locus_plot_bundle_to_validated_regulatory_elements <- function(
+  bundle,
+  validated_reg_feature_ids,
+  strict_gene_filter = TRUE
+) {
+  validated_reg_feature_ids <- unique(as.character(validated_reg_feature_ids %||% character()))
+  validated_reg_feature_ids <- validated_reg_feature_ids[nzchar(validated_reg_feature_ids)]
+  if (length(validated_reg_feature_ids) == 0L) {
+    stop("No citation-supported regulatory elements were available to plot.")
+  }
+
+  out <- bundle
+  out$reg_nodes <- out$reg_nodes[feature_id %in% validated_reg_feature_ids]
+  out$features <- out$features[
+    feature_type != "reg" | feature_id %in% validated_reg_feature_ids
+  ]
+  out$links <- out$links[reg_id %in% validated_reg_feature_ids]
+  out$reg_labels <- out$reg_labels[feature_id %in% validated_reg_feature_ids]
+
+  if (!is.null(out$lit_snp_labels) && "reg_feature_id" %in% names(out$lit_snp_labels)) {
+    out$lit_snp_labels <- out$lit_snp_labels[reg_feature_id %in% validated_reg_feature_ids]
+  }
+  if (!is.null(out$lit_snp_mapping) && "reg_feature_id" %in% names(out$lit_snp_mapping)) {
+    out$lit_snp_mapping <- out$lit_snp_mapping[reg_feature_id %in% validated_reg_feature_ids]
+  }
+
+  validated_gene_ids <- unique(out$links$gene_id)
+  validated_gene_ids <- validated_gene_ids[!is.na(validated_gene_ids) & nzchar(validated_gene_ids)]
+  if (isTRUE(strict_gene_filter)) {
+    out$gene_nodes <- out$gene_nodes[feature_id %in% validated_gene_ids]
+    out$features <- out$features[
+      feature_type != "gene" | feature_id %in% validated_gene_ids
+    ]
+    out$selected_gene_set <- intersect(out$selected_gene_set %||% character(), out$gene_nodes$feature_label)
+  }
+
+  out$validated_reg_feature_ids <- validated_reg_feature_ids
+  out$validated_gene_ids <- validated_gene_ids
+  out$validation_mode <- "citation_supported_regulatory_elements"
+  out$reg_render_mode <- "stacked_segments"
+  out
+}
+
+prepare_validated_locus_plot_bundle <- function(
   nodes,
   edges,
   selected_genes = character(),
@@ -1892,23 +1942,55 @@ create_locus_context_plot <- function(
   start,
   end,
   label_features = NULL,
-  title = NULL,
   gwas_sumstats = NULL,
   label_top_gwas_snp = FALSE,
   rsid_pmid = NULL,
   label_top_lit_snps = 0L,
   pmid_query = NULL,
   pmid_page_size = 1000L,
+  strict_gene_filter = TRUE,
   verbose = FALSE
 ) {
-  required_packages <- c("ggplot2", "ggnewscale", "ggrepel")
-  missing_packages <- required_packages[!vapply(required_packages, requireNamespace, quietly = TRUE, logical(1))]
-  if (length(missing_packages) > 0L) {
-    stop("The following packages are required to create locus plots: ",
-         paste(missing_packages, collapse = ", "))
+  locus_chr <- normalize_locus_chromosome(chromosome)
+  locus_start <- as.integer(start)
+  locus_end <- as.integer(end)
+
+  nodes_dt <- data.table::as.data.table(data.table::copy(nodes))
+  reg_nodes_for_query <- nodes_dt[
+    node_type == "reg" &
+      normalize_locus_chromosome(reg_chr) == locus_chr &
+      !is.na(reg_start) & !is.na(reg_end) &
+      reg_end >= locus_start & reg_start <= locus_end
+  ][, .(
+    feature_id = as.character(node_id),
+    feature_start = as.integer(reg_start),
+    feature_end = as.integer(reg_end),
+    germline_score = safe_numeric(germline_score)
+  )]
+
+  full_lit_info <- prepare_locus_lit_snp_labels(
+    gwas_sumstats = gwas_sumstats,
+    rsid_pmid = rsid_pmid,
+    reg_nodes = reg_nodes_for_query,
+    chromosome = locus_chr,
+    start = locus_start,
+    end = locus_end,
+    top_n = Inf,
+    pmid_query = pmid_query,
+    pmid_page_size = pmid_page_size,
+    verbose = verbose
+  )
+
+  if (!identical(full_lit_info$mode, "literature") ||
+      is.null(full_lit_info$mapping) ||
+      nrow(full_lit_info$mapping) == 0L) {
+    stop(
+      "No citation-supported regulatory elements were found in this locus. ",
+      "This validated plot only renders regulatory elements with dbSNP/PMID support."
+    )
   }
 
-  bundle <- prepare_locus_plot_bundle(
+  base_bundle <- prepare_locus_plot_bundle(
     nodes = nodes,
     edges = edges,
     selected_genes = selected_genes,
@@ -1918,12 +2000,30 @@ create_locus_context_plot <- function(
     label_features = label_features,
     gwas_sumstats = gwas_sumstats,
     label_top_gwas_snp = label_top_gwas_snp,
-    rsid_pmid = rsid_pmid,
+    rsid_pmid = full_lit_info$pmid_dt %||% rsid_pmid,
     label_top_lit_snps = label_top_lit_snps,
     pmid_query = pmid_query,
     pmid_page_size = pmid_page_size,
     verbose = verbose
   )
+
+  out <- filter_locus_plot_bundle_to_validated_regulatory_elements(
+    bundle = base_bundle,
+    validated_reg_feature_ids = full_lit_info$mapping$reg_feature_id,
+    strict_gene_filter = strict_gene_filter
+  )
+  out$validated_lit_snp_mapping <- data.table::copy(full_lit_info$mapping)
+  out$validated_lit_pmid_dt <- data.table::copy(full_lit_info$pmid_dt)
+  out
+}
+
+render_locus_plot_bundle <- function(bundle, title = NULL) {
+  required_packages <- c("ggplot2", "ggnewscale", "ggrepel")
+  missing_packages <- required_packages[!vapply(required_packages, requireNamespace, quietly = TRUE, logical(1))]
+  if (length(missing_packages) > 0L) {
+    stop("The following packages are required to create locus plots: ",
+         paste(missing_packages, collapse = ", "))
+  }
 
   locus <- bundle$locus
   title <- title %||% paste0("Locus context: ", locus$chromosome, ":", format(locus$start, big.mark = ","), "-", format(locus$end, big.mark = ","))
@@ -2029,7 +2129,37 @@ create_locus_context_plot <- function(
     )
   }
 
+  validated_segment_mode <- identical(bundle$reg_render_mode %||% NULL, "stacked_segments")
+  reg_input_dt <- features_dt[feature_type == "reg" & track_name != "Reg elements"]
+  reg_combined_dt <- features_dt[feature_type == "reg" & track_name == "Reg elements"]
   reg_input_scale <- switch(
+    bundle$reg_score_palette_mode,
+    positive = ggplot2::scale_colour_gradientn(
+      colours = c("#e2e8f0", "#fca5a5", "#ef4444", "#991b1b"),
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    ),
+    negative = ggplot2::scale_colour_gradientn(
+      colours = c("#1e3a8a", "#3b82f6", "#93c5fd", "#e2e8f0"),
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    ),
+    ggplot2::scale_colour_gradient2(
+      low = "#1d4ed8",
+      mid = "#d1d5db",
+      high = "#b91c1c",
+      midpoint = 0,
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    )
+  )
+  reg_input_fill_scale <- switch(
     bundle$reg_score_palette_mode,
     positive = ggplot2::scale_fill_gradientn(
       colours = c("#e2e8f0", "#fca5a5", "#ef4444", "#991b1b"),
@@ -2057,69 +2187,154 @@ create_locus_context_plot <- function(
     )
   )
 
-  p <- p +
-    ggplot2::geom_point(
-      data = features_dt[feature_type == "reg" & track_name != "Reg elements"],
-      ggplot2::aes(
-        x = xmid,
-        y = y,
-        fill = score
-      ),
-      shape = 21,
-      colour = "#4b5563",
-      size = 4.1,
-      stroke = 0.3,
-      show.legend = TRUE
-    ) +
-    ggplot2::geom_point(
-      data = features_dt[feature_type == "reg" & track_name == "Reg elements"],
-      ggplot2::aes(
-        x = xmid,
-        y = y
-      ),
-      shape = 21,
-      fill = "white",
-      colour = "#4b5563",
-      size = 4.1,
-      stroke = 0.4,
-      show.legend = FALSE
-    ) +
-    reg_input_scale +
-    ggnewscale::new_scale_fill() +
-    ggplot2::geom_point(
-      data = features_dt[feature_type == "reg" & track_name == "Reg elements"],
-      ggplot2::aes(
-        x = xmid,
-        y = y,
-        fill = score
-      ),
-      shape = 21,
-      colour = "#4b5563",
-      size = 4.1,
-      stroke = 0.4,
-      show.legend = TRUE
-    ) +
-    ggplot2::scale_fill_gradientn(
-      colours = c("#fee2e2", "#ef4444", "#b91c1c", "#7f1d1d"),
-      limits = bundle$reg_norm_limits,
-      name = "Reg element\ncombined score",
-      oob = scales::squish,
-      guide = ggplot2::guide_colorbar(order = 2)
-    ) +
-    ggnewscale::new_scale_fill() +
-    ggplot2::geom_rect(
-      data = features_dt[feature_type == "gene"],
-      ggplot2::aes(
-        xmin = feature_start,
-        xmax = feature_end,
-        ymin = y - 0.15,
-        ymax = y + 0.15,
-        fill = score
-      ),
-      colour = "#7f1d1d",
-      linewidth = 0.55,
-      show.legend = TRUE
-    )
+  if (isTRUE(validated_segment_mode)) {
+    p <- p +
+      ggplot2::geom_segment(
+        data = reg_input_dt,
+        ggplot2::aes(
+          x = feature_start,
+          xend = feature_end,
+          y = y,
+          yend = y
+        ),
+        colour = "#111827",
+        linewidth = 2.6,
+        alpha = 0.55,
+        lineend = "round",
+        inherit.aes = FALSE,
+        show.legend = FALSE
+      ) +
+      ggplot2::geom_segment(
+        data = reg_input_dt,
+        ggplot2::aes(
+          x = feature_start,
+          xend = feature_end,
+          y = y,
+          yend = y,
+          colour = score
+        ),
+        linewidth = 1.8,
+        lineend = "round",
+        inherit.aes = FALSE,
+        show.legend = TRUE
+      ) +
+      reg_input_scale +
+      ggnewscale::new_scale_colour() +
+      ggplot2::geom_segment(
+        data = reg_combined_dt,
+        ggplot2::aes(
+          x = feature_start,
+          xend = feature_end,
+          y = y,
+          yend = y
+        ),
+        colour = "#111827",
+        linewidth = 2.6,
+        alpha = 0.55,
+        lineend = "round",
+        inherit.aes = FALSE,
+        show.legend = FALSE
+      ) +
+      ggplot2::geom_segment(
+        data = reg_combined_dt,
+        ggplot2::aes(
+          x = feature_start,
+          xend = feature_end,
+          y = y,
+          yend = y,
+          colour = score
+        ),
+        linewidth = 1.8,
+        lineend = "round",
+        inherit.aes = FALSE,
+        show.legend = TRUE
+      ) +
+      ggplot2::scale_colour_gradientn(
+        colours = c("#fee2e2", "#ef4444", "#b91c1c", "#7f1d1d"),
+        limits = bundle$reg_norm_limits,
+        name = "Reg element\ncombined score",
+        oob = scales::squish,
+        guide = ggplot2::guide_colorbar(order = 2)
+      ) +
+      ggnewscale::new_scale_fill() +
+      ggplot2::geom_rect(
+        data = features_dt[feature_type == "gene"],
+        ggplot2::aes(
+          xmin = feature_start,
+          xmax = feature_end,
+          ymin = y - 0.15,
+          ymax = y + 0.15,
+          fill = score
+        ),
+        colour = "#7f1d1d",
+        linewidth = 0.55,
+        show.legend = TRUE
+      )
+  } else {
+    p <- p +
+      ggplot2::geom_point(
+        data = reg_input_dt,
+        ggplot2::aes(
+          x = xmid,
+          y = y,
+          fill = score
+        ),
+        shape = 21,
+        colour = "#4b5563",
+        size = 4.1,
+        stroke = 0.3,
+        show.legend = TRUE
+      ) +
+      ggplot2::geom_point(
+        data = reg_combined_dt,
+        ggplot2::aes(
+          x = xmid,
+          y = y
+        ),
+        shape = 21,
+        fill = "white",
+        colour = "#4b5563",
+        size = 4.1,
+        stroke = 0.4,
+        show.legend = FALSE
+      ) +
+      reg_input_fill_scale +
+      ggnewscale::new_scale_fill() +
+      ggplot2::geom_point(
+        data = reg_combined_dt,
+        ggplot2::aes(
+          x = xmid,
+          y = y,
+          fill = score
+        ),
+        shape = 21,
+        colour = "#4b5563",
+        size = 4.1,
+        stroke = 0.4,
+        show.legend = TRUE
+      ) +
+      ggplot2::scale_fill_gradientn(
+        colours = c("#fee2e2", "#ef4444", "#b91c1c", "#7f1d1d"),
+        limits = bundle$reg_norm_limits,
+        name = "Reg element\ncombined score",
+        oob = scales::squish,
+        guide = ggplot2::guide_colorbar(order = 2)
+      ) +
+      ggnewscale::new_scale_fill() +
+      ggplot2::geom_rect(
+        data = features_dt[feature_type == "gene"],
+        ggplot2::aes(
+          xmin = feature_start,
+          xmax = feature_end,
+          ymin = y - 0.15,
+          ymax = y + 0.15,
+          fill = score
+        ),
+        colour = "#7f1d1d",
+        linewidth = 0.55,
+        show.legend = TRUE
+      )
+  }
 
   if (nrow(gene_label_dt) > 0L) {
     p <- p + ggplot2::geom_text(
@@ -2284,6 +2499,81 @@ create_locus_context_plot <- function(
   )
 }
 
+create_locus_context_plot <- function(
+  nodes,
+  edges,
+  selected_genes = character(),
+  chromosome,
+  start,
+  end,
+  label_features = NULL,
+  title = NULL,
+  gwas_sumstats = NULL,
+  label_top_gwas_snp = FALSE,
+  rsid_pmid = NULL,
+  label_top_lit_snps = 0L,
+  pmid_query = NULL,
+  pmid_page_size = 1000L,
+  verbose = FALSE
+) {
+  bundle <- prepare_locus_plot_bundle(
+    nodes = nodes,
+    edges = edges,
+    selected_genes = selected_genes,
+    chromosome = chromosome,
+    start = start,
+    end = end,
+    label_features = label_features,
+    gwas_sumstats = gwas_sumstats,
+    label_top_gwas_snp = label_top_gwas_snp,
+    rsid_pmid = rsid_pmid,
+    label_top_lit_snps = label_top_lit_snps,
+    pmid_query = pmid_query,
+    pmid_page_size = pmid_page_size,
+    verbose = verbose
+  )
+  render_locus_plot_bundle(bundle = bundle, title = title)
+}
+
+create_validated_locus_context_plot <- function(
+  nodes,
+  edges,
+  selected_genes = character(),
+  chromosome,
+  start,
+  end,
+  label_features = NULL,
+  title = NULL,
+  gwas_sumstats = NULL,
+  label_top_gwas_snp = FALSE,
+  rsid_pmid = NULL,
+  label_top_lit_snps = 0L,
+  pmid_query = NULL,
+  pmid_page_size = 1000L,
+  strict_gene_filter = TRUE,
+  verbose = FALSE
+) {
+  bundle <- prepare_validated_locus_plot_bundle(
+    nodes = nodes,
+    edges = edges,
+    selected_genes = selected_genes,
+    chromosome = chromosome,
+    start = start,
+    end = end,
+    label_features = label_features,
+    gwas_sumstats = gwas_sumstats,
+    label_top_gwas_snp = label_top_gwas_snp,
+    rsid_pmid = rsid_pmid,
+    label_top_lit_snps = label_top_lit_snps,
+    pmid_query = pmid_query,
+    pmid_page_size = pmid_page_size,
+    strict_gene_filter = strict_gene_filter,
+    verbose = verbose
+  )
+
+  render_locus_plot_bundle(bundle = bundle, title = title %||% paste0("Validated locus context: ", bundle$locus$chromosome, ":", format(bundle$locus$start, big.mark = ","), "-", format(bundle$locus$end, big.mark = ",")))
+}
+
 save_locus_context_plot <- function(
   nodes,
   edges,
@@ -2324,6 +2614,64 @@ save_locus_context_plot <- function(
     label_top_lit_snps = label_top_lit_snps,
     pmid_query = pmid_query,
     pmid_page_size = pmid_page_size
+  )
+
+  ggplot2::ggsave(
+    filename = file_path,
+    plot = out$plot,
+    width = width,
+    height = height,
+    dpi = dpi,
+    limitsize = FALSE,
+    bg = "white"
+  )
+
+  invisible(file_path)
+}
+
+save_validated_locus_context_plot <- function(
+  nodes,
+  edges,
+  selected_genes = character(),
+  chromosome,
+  start,
+  end,
+  file_path,
+  label_features = NULL,
+  title = NULL,
+  gwas_sumstats = NULL,
+  label_top_gwas_snp = FALSE,
+  rsid_pmid = NULL,
+  label_top_lit_snps = 0L,
+  pmid_query = NULL,
+  pmid_page_size = 1000L,
+  strict_gene_filter = TRUE,
+  width = 14,
+  height = 9,
+  dpi = 300
+) {
+  if (missing(file_path) || is.null(file_path) || !nzchar(file_path)) {
+    stop("`file_path` must be provided to save the validated locus plot.")
+  }
+
+  dir.create(dirname(file_path), recursive = TRUE, showWarnings = FALSE)
+  out <- create_validated_locus_context_plot(
+    nodes = nodes,
+    edges = edges,
+    selected_genes = selected_genes,
+    chromosome = chromosome,
+    start = start,
+    end = end,
+    label_features = label_features,
+    title = title,
+    gwas_sumstats = gwas_sumstats,
+    label_top_gwas_snp = label_top_gwas_snp,
+    rsid_pmid = rsid_pmid,
+    label_top_lit_snps = label_top_lit_snps,
+    pmid_query = pmid_query,
+    pmid_page_size = pmid_page_size,
+    strict_gene_filter = strict_gene_filter,
+    verbose = FALSE
   )
 
   ggplot2::ggsave(

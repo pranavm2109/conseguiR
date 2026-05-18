@@ -419,6 +419,17 @@ test_plot_selected_subgraph_external_negative_missing_plot_path <- function() {
   )
 }
 
+test_plot_validated_locus_context_external_surface <- function() {
+  expect_true(exists("plot_validated_locus_context", mode = "function"))
+
+  plot_formals <- formals(plot_validated_locus_context)
+  expect_true("strict_gene_filter" %in% names(plot_formals))
+  expect_identical(plot_formals$strict_gene_filter, TRUE)
+  expect_true("label_top_gwas_snp" %in% names(plot_formals))
+  expect_true("label_top_lit_snps" %in% names(plot_formals))
+  expect_true("rsid_pmid" %in% names(plot_formals))
+}
+
 main <- function() {
   test_that("external validate_inputs works on the live in-repo inputs", {
     test_validate_inputs_external_live()
@@ -446,6 +457,10 @@ main <- function() {
 
   test_that("external plotting fails clearly when a plot save path is missing", {
     test_plot_selected_subgraph_external_negative_missing_plot_path()
+  })
+
+  test_that("external validated locus plotting wrapper is exposed with the expected arguments", {
+    test_plot_validated_locus_context_external_surface()
   })
 
   test_that("backend seed resolution is graph specific", {

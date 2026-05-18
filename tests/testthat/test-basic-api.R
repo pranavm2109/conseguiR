@@ -43,6 +43,16 @@ test_that("run_conseguiR exposes candidate_pool_size on the public API", {
   expect_equal(as.integer(run_formals$candidate_pool_size), 400L)
 })
 
+test_that("validated locus plotting is exposed on the public API", {
+  plot_formals <- formals(conseguiR::plot_validated_locus_context)
+
+  expect_true(is.function(conseguiR::plot_validated_locus_context))
+  expect_true("strict_gene_filter" %in% names(plot_formals))
+  expect_identical(plot_formals$strict_gene_filter, TRUE)
+  expect_true("label_top_gwas_snp" %in% names(plot_formals))
+  expect_true("label_top_lit_snps" %in% names(plot_formals))
+})
+
 test_that("internal pipeline arg assembly forwards candidate_pool_size", {
   args <- conseguiR:::.conseguiR_pipeline_args(
     gwas_sumstats = "gwas.tsv",
