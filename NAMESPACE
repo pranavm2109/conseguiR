@@ -3,6 +3,8 @@
 export(build_scored_gene_reg_graph)
 export(call_selected_subgraph)
 export(check_conseguiR_runtime)
+export(get_backend_gene_loc_path)
+export(get_backend_reg_loc_path)
 export(initialize_backend_graphs)
 export(plot_epigenomic_gene_scores)
 export(plot_epigenomic_reg_scores)

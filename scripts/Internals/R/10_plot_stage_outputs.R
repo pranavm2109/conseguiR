@@ -60,6 +60,8 @@ default_stage_plot_config <- list(
   if (is.null(x)) y else x
 }
 
+.conseguiR_plot_cache <- new.env(parent = emptyenv())
+
 read_delimited_table <- function(path, ...) {
   if (grepl("\\.gz$", path, ignore.case = TRUE)) {
     extra_args <- list(...)
@@ -961,14 +963,73 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     max_pmids_per_rsid <- 200L
   }
 
-  query_rsids <- rsids
+  if (!exists("dbsnp_pmid_cache", envir = .conseguiR_plot_cache, inherits = FALSE)) {
+    .conseguiR_plot_cache$dbsnp_pmid_cache <- new.env(parent = emptyenv())
+  }
+  cache_env <- .conseguiR_plot_cache$dbsnp_pmid_cache
+
+  cached_mask <- vapply(
+    rsids,
+    FUN.VALUE = logical(1),
+    FUN = function(rsid) exists(rsid, envir = cache_env, inherits = FALSE)
+  )
+  cached_rsids <- rsids[cached_mask]
+  query_rsids <- rsids[!cached_mask]
+
+  batch_size <- getOption("conseguiR.ncbi_batch_size", 200L)
+  batch_size <- suppressWarnings(as.integer(batch_size[[1]]))
+  if (is.na(batch_size) || batch_size <= 0L) {
+    batch_size <- 200L
+  }
+
+  api_key <- getOption("conseguiR.ncbi_api_key", Sys.getenv("NCBI_API_KEY", unset = ""))
+  tool_name <- getOption("conseguiR.ncbi_tool", "conseguiR")
+  email <- getOption("conseguiR.ncbi_email", Sys.getenv("NCBI_EMAIL", unset = ""))
+
+  delay_seconds_default <- if (nzchar(api_key)) 0.11 else 0.34
+  delay_seconds <- getOption("conseguiR.ncbi_delay_seconds", delay_seconds_default)
+  delay_seconds <- suppressWarnings(as.numeric(delay_seconds[[1]]))
+  if (is.na(delay_seconds) || delay_seconds < 0) {
+    delay_seconds <- delay_seconds_default
+  }
 
   if (isTRUE(verbose)) {
     message(
       "Querying dbSNP publication pages for PMID-backed SNP evidence across ",
       length(query_rsids),
-      " rsID(s).",
+      " uncached rsID(s)",
+      if (length(cached_rsids) > 0L) paste0(" (", length(cached_rsids), " served from cache)") else "",
+      " using batched ELink requests.",
     )
+  }
+
+  parse_linkset_pmids <- function(linkset) {
+    linkdbs <- linkset$linksetdbs %||% NULL
+    pmid_hits <- character()
+    if (is.null(linkdbs) || length(linkdbs) == 0L) {
+      return(pmid_hits)
+    }
+    for (k in seq_along(linkdbs)) {
+      links <- linkdbs[[k]]$links %||% NULL
+      if (!is.null(links)) {
+        pmid_hits <- c(pmid_hits, as.character(links))
+      }
+    }
+    pmid_hits <- unique(gsub("\\D", "", pmid_hits))
+    pmid_hits[!is.na(pmid_hits) & nzchar(pmid_hits)]
+  }
+
+  cached_list <- vector("list", length(cached_rsids))
+  for (i in seq_along(cached_rsids)) {
+    rsid <- cached_rsids[[i]]
+    pmid_hits <- get(rsid, envir = cache_env, inherits = FALSE)
+    if (length(pmid_hits) == 0L) {
+      next
+    }
+    if (length(pmid_hits) > max_pmids_per_rsid) {
+      pmid_hits <- pmid_hits[seq_len(max_pmids_per_rsid)]
+    }
+    cached_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
   }
 
   out_list <- vector("list", length(query_rsids))
@@ -981,52 +1042,81 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
       }
     }, add = TRUE)
   }
-  for (i in seq_along(query_rsids)) {
-    rsid <- query_rsids[[i]]
-    snp_id <- sub("^rs", "", rsid)
-    endpoint <- paste0(
-      "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=snp&db=pubmed&id=",
-      snp_id,
-      "&retmode=json"
-    )
-    payload <- tryCatch(jsonlite::fromJSON(endpoint, simplifyVector = FALSE), error = function(e) NULL)
-    linksets <- payload$linksets %||% NULL
-    pmid_hits <- character()
-    if (!is.null(linksets) && length(linksets) > 0L) {
-      for (j in seq_along(linksets)) {
-        linkdbs <- linksets[[j]]$linksetdbs %||% NULL
-        if (is.null(linkdbs) || length(linkdbs) == 0L) {
-          next
-        }
-        for (k in seq_along(linkdbs)) {
-          links <- linkdbs[[k]]$links %||% NULL
-          if (!is.null(links)) {
-            pmid_hits <- c(pmid_hits, as.character(links))
+  if (length(query_rsids) > 0L) {
+    batch_starts <- seq.int(1L, length(query_rsids), by = batch_size)
+    for (batch_idx in seq_along(batch_starts)) {
+      batch_start <- batch_starts[[batch_idx]]
+      batch_end <- min(batch_start + batch_size - 1L, length(query_rsids))
+      batch_rsids <- query_rsids[batch_start:batch_end]
+      batch_snp_ids <- sub("^rs", "", batch_rsids)
+
+      endpoint <- paste0(
+        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=snp&db=pubmed&retmode=json",
+        paste0("&id=", utils::URLencode(batch_snp_ids, reserved = TRUE), collapse = ""),
+        if (nzchar(api_key)) paste0("&api_key=", utils::URLencode(api_key, reserved = TRUE)) else "",
+        if (nzchar(tool_name)) paste0("&tool=", utils::URLencode(tool_name, reserved = TRUE)) else "",
+        if (nzchar(email)) paste0("&email=", utils::URLencode(email, reserved = TRUE)) else ""
+      )
+
+      payload <- tryCatch(jsonlite::fromJSON(endpoint, simplifyVector = FALSE), error = function(e) NULL)
+      batch_hit_map <- stats::setNames(vector("list", length(batch_rsids)), batch_rsids)
+      for (rsid in batch_rsids) {
+        batch_hit_map[[rsid]] <- character()
+      }
+
+      linksets <- payload$linksets %||% NULL
+      if (!is.null(linksets) && length(linksets) > 0L) {
+        for (j in seq_along(linksets)) {
+          linkset <- linksets[[j]]
+          link_ids <- linkset$ids %||% linkset$idlist %||% NULL
+          link_rsids <- tolower(paste0("rs", gsub("\\D", "", as.character(unlist(link_ids %||% character())))))
+          link_rsids <- unique(link_rsids[nzchar(link_rsids)])
+          if (length(link_rsids) == 0L && length(batch_rsids) == 1L) {
+            link_rsids <- batch_rsids
+          }
+
+          pmid_hits <- parse_linkset_pmids(linkset)
+          if (length(link_rsids) == 0L) {
+            next
+          }
+
+          matched_rsids <- intersect(link_rsids, batch_rsids)
+          if (length(matched_rsids) == 0L) {
+            next
+          }
+          for (rsid in matched_rsids) {
+            batch_hit_map[[rsid]] <- unique(c(batch_hit_map[[rsid]], pmid_hits))
           }
         }
       }
-    }
-    pmid_hits <- unique(gsub("\\D", "", pmid_hits))
-    pmid_hits <- pmid_hits[!is.na(pmid_hits) & nzchar(pmid_hits)]
-    if (!is.null(pb)) {
-      utils::setTxtProgressBar(pb, i)
-    }
-    if (length(pmid_hits) == 0L) {
-      next
-    }
 
-    if (length(pmid_hits) > max_pmids_per_rsid) {
-      pmid_hits <- pmid_hits[seq_len(max_pmids_per_rsid)]
-    }
+      for (i in seq_along(batch_rsids)) {
+        rsid <- batch_rsids[[i]]
+        pmid_hits <- batch_hit_map[[rsid]]
+        assign(rsid, pmid_hits, envir = cache_env)
+        if (length(pmid_hits) == 0L) {
+          next
+        }
+        if (length(pmid_hits) > max_pmids_per_rsid) {
+          pmid_hits <- pmid_hits[seq_len(max_pmids_per_rsid)]
+        }
+        out_list[[batch_start + i - 1L]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
+      }
 
-    out_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
+      if (!is.null(pb)) {
+        utils::setTxtProgressBar(pb, batch_end)
+      }
+      if (batch_idx < length(batch_starts) && delay_seconds > 0) {
+        Sys.sleep(delay_seconds)
+      }
+    }
   }
 
   if (!is.null(pb) && length(query_rsids) > 0L) {
     utils::setTxtProgressBar(pb, length(query_rsids))
   }
 
-  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
+  out <- data.table::rbindlist(c(cached_list, out_list), use.names = TRUE, fill = TRUE)
   if (nrow(out) == 0L) {
     if (isTRUE(verbose)) {
       message("Found citation-backed evidence for 0 of ", length(rsids), " queried rsID(s).")

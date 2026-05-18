@@ -200,6 +200,69 @@ resolve_output_path <- function(bundle, preferred_name) {
   NULL
 }
 
+#' Resolve the backend gene-location resource path
+#'
+#' Returns the MAGMA-compatible gene location file that `conseguiR` resolves
+#' from its packaged/backend resources.
+#'
+#' In normal installed-package use this resource should always be available.
+#' `strict = FALSE` is mainly useful for advanced fallback workflows,
+#' development checkouts, or partial environments where you want to handle a
+#' missing resource yourself.
+#'
+#' @param strict Logical scalar. If `TRUE` (recommended default), error when
+#'   the gene location resource cannot be resolved. If `FALSE`, return `NULL`
+#'   instead.
+#'
+#' @return A normalized absolute path to the backend gene location file, or
+#'   `NULL` when `strict = FALSE` and the resource cannot be resolved.
+get_backend_gene_loc_path <- function(strict = TRUE) {
+  path <- tryCatch(
+    conseguiR:::.conseguiR_default_gene_loc_path(),
+    error = function(e) NULL
+  )
+  if (is.null(path) && isTRUE(strict)) {
+    stop(
+      "Could not resolve the backend gene location resource. ",
+      "Try checking that the packaged backend resources are installed."
+    )
+  }
+
+  path
+}
+
+#' Resolve the backend regulatory-location resource path
+#'
+#' Returns the MAGMA-compatible regulatory-element location file that
+#' `conseguiR` resolves from its packaged/backend resources.
+#'
+#' In normal installed-package use this resource should always be available.
+#' `strict = FALSE` is mainly useful for advanced fallback workflows,
+#' development checkouts, or partial environments where you want to handle a
+#' missing resource yourself.
+#'
+#' @param strict Logical scalar. If `TRUE` (recommended default), error when
+#'   the regulatory-element location resource cannot be resolved. If `FALSE`,
+#'   return `NULL` instead.
+#'
+#' @return A normalized absolute path to the backend regulatory-element
+#'   location file, or `NULL` when `strict = FALSE` and the resource cannot be
+#'   resolved.
+get_backend_reg_loc_path <- function(strict = TRUE) {
+  path <- tryCatch(
+    conseguiR:::.conseguiR_default_reg_loc_path(),
+    error = function(e) NULL
+  )
+  if (is.null(path) && isTRUE(strict)) {
+    stop(
+      "Could not resolve the backend regulatory-element location resource. ",
+      "Try checking that the packaged backend resources are installed."
+    )
+  }
+
+  path
+}
+
 #' Run a conseguiR external function with merged argument lists
 #'
 #' @param fun Function to call.
@@ -673,18 +736,12 @@ prepare_germline_scores <- function(
 ) {
   shared_args <- as_list_or_empty(shared_args)
   verbose_message(verbose, "Preparing germline scores...")
-  gene_loc_path <- tryCatch(
-    conseguiR:::.conseguiR_default_gene_loc_path(),
-    error = function(e) NULL
-  )
+  gene_loc_path <- get_backend_gene_loc_path(strict = FALSE)
   if (is.null(gene_loc_path)) {
     gene_loc_path <- "data/raw/NCBI38/NCBI38.gene.loc"
   }
 
-  reg_loc_path <- tryCatch(
-    conseguiR:::.conseguiR_default_reg_loc_path(),
-    error = function(e) NULL
-  )
+  reg_loc_path <- get_backend_reg_loc_path(strict = FALSE)
   if (is.null(reg_loc_path)) {
     reg_loc_path <- "data/processed/GRCh38-cCREs.loc"
   }

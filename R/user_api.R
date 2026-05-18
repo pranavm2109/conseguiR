@@ -325,6 +325,71 @@ initialize_backend_graphs <- function(
   )
 }
 
+#' Resolve the backend gene-location resource path
+#'
+#' Returns the MAGMA-compatible gene location file that `conseguiR` resolves
+#' from its packaged/backend resources.
+#'
+#' In normal installed-package use this resource should always be available.
+#' `strict = FALSE` is mainly useful for advanced fallback workflows,
+#' development checkouts, or partial environments where you want to handle a
+#' missing resource yourself.
+#'
+#' @param strict Logical scalar. If `TRUE` (recommended default), error when
+#'   the gene location resource cannot be resolved. If `FALSE`, return `NULL`
+#'   instead.
+#'
+#' @examples
+#' get_backend_gene_loc_path()
+#'
+#' @return A normalized absolute path to the backend gene location file, or
+#'   `NULL` when `strict = FALSE` and the resource cannot be resolved.
+#' @export
+get_backend_gene_loc_path <- function(strict = TRUE) {
+  path <- .conseguiR_default_gene_loc_path()
+  if (is.null(path) && isTRUE(strict)) {
+    stop(
+      "Could not resolve the backend gene location resource. ",
+      "Try checking that the packaged backend resources are installed."
+    )
+  }
+
+  path
+}
+
+#' Resolve the backend regulatory-location resource path
+#'
+#' Returns the MAGMA-compatible regulatory-element location file that
+#' `conseguiR` resolves from its packaged/backend resources.
+#'
+#' In normal installed-package use this resource should always be available.
+#' `strict = FALSE` is mainly useful for advanced fallback workflows,
+#' development checkouts, or partial environments where you want to handle a
+#' missing resource yourself.
+#'
+#' @param strict Logical scalar. If `TRUE` (recommended default), error when
+#'   the regulatory-element location resource cannot be resolved. If `FALSE`,
+#'   return `NULL` instead.
+#'
+#' @examples
+#' get_backend_reg_loc_path()
+#'
+#' @return A normalized absolute path to the backend regulatory-element
+#'   location file, or `NULL` when `strict = FALSE` and the resource cannot be
+#'   resolved.
+#' @export
+get_backend_reg_loc_path <- function(strict = TRUE) {
+  path <- .conseguiR_default_reg_loc_path()
+  if (is.null(path) && isTRUE(strict)) {
+    stop(
+      "Could not resolve the backend regulatory-element location resource. ",
+      "Try checking that the packaged backend resources are installed."
+    )
+  }
+
+  path
+}
+
 #' Manually set the MAGMA executable path
 #'
 #' Stores a validated absolute path to the MAGMA executable for the current R
