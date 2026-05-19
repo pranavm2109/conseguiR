@@ -999,7 +999,7 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
       length(query_rsids),
       " uncached rsID(s)",
       if (length(cached_rsids) > 0L) paste0(" (", length(cached_rsids), " served from cache)") else "",
-      " using batched ELink requests.",
+      " using batched ELink requests."
     )
   }
 
