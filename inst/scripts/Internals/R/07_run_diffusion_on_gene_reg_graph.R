@@ -4,6 +4,54 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
+read_diffusion_delimited_table <- function(path, sep = "\t") {
+  if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    con <- tryCatch(
+      gzfile(path, open = "rt"),
+      error = function(e) {
+        stop("File does not exist: ", path, call. = FALSE)
+      }
+    )
+    on.exit(close(con), add = TRUE)
+    return(as.data.table(utils::read.table(
+      file = con,
+      sep = sep,
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )))
+  }
+
+  if (grepl("\\.xz$", path, ignore.case = TRUE)) {
+    con <- tryCatch(
+      xzfile(path, open = "rt"),
+      error = function(e) {
+        stop("File does not exist: ", path, call. = FALSE)
+      }
+    )
+    on.exit(close(con), add = TRUE)
+    return(as.data.table(utils::read.table(
+      file = con,
+      sep = sep,
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )))
+  }
+
+  if (!file.exists(path)) {
+    stop("File does not exist: ", path)
+  }
+
+  data.table::as.data.table(utils::read.table(
+    file = path,
+    sep = sep,
+    header = TRUE,
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  ))
+}
+
 conseguiR_runtime_file <- function(relpath) {
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
@@ -43,16 +91,14 @@ read_scored_gene_reg_nodes <- function(path = default_diffusion_config$nodes_pat
   if (!file.exists(path)) {
     stop("Scored gene-reg node file does not exist: ", path)
   }
-
-  as.data.table(fread(path, sep = "\t", showProgress = FALSE))
+  read_diffusion_delimited_table(path, sep = "\t")
 }
 
 read_scored_gene_reg_edges <- function(path = default_diffusion_config$edges_path) {
   if (!file.exists(path)) {
     stop("Scored gene-reg edge file does not exist: ", path)
   }
-
-  as.data.table(fread(path, sep = "\t", showProgress = FALSE))
+  read_diffusion_delimited_table(path, sep = "\t")
 }
 
 validate_scored_gene_reg_nodes <- function(nodes) {

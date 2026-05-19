@@ -4,6 +4,54 @@ suppressPackageStartupMessages({
   library(data.table)
 })
 
+read_subgraph_delimited_table <- function(path, sep = "\t") {
+  if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    con <- tryCatch(
+      gzfile(path, open = "rt"),
+      error = function(e) {
+        stop("File does not exist: ", path, call. = FALSE)
+      }
+    )
+    on.exit(close(con), add = TRUE)
+    return(as.data.table(utils::read.table(
+      file = con,
+      sep = sep,
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )))
+  }
+
+  if (grepl("\\.xz$", path, ignore.case = TRUE)) {
+    con <- tryCatch(
+      xzfile(path, open = "rt"),
+      error = function(e) {
+        stop("File does not exist: ", path, call. = FALSE)
+      }
+    )
+    on.exit(close(con), add = TRUE)
+    return(as.data.table(utils::read.table(
+      file = con,
+      sep = sep,
+      header = TRUE,
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )))
+  }
+
+  if (!file.exists(path)) {
+    stop("File does not exist: ", path)
+  }
+
+  data.table::as.data.table(utils::read.table(
+    file = path,
+    sep = sep,
+    header = TRUE,
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  ))
+}
+
 conseguiR_runtime_file <- function(relpath) {
   candidate <- file.path(getwd(), relpath)
   if (file.exists(candidate)) {
@@ -49,23 +97,21 @@ read_diffusion_results <- function(path = default_subgraph_config$diffusion_path
     stop("Diffusion results file does not exist: ", path)
   }
 
-  data.table::as.data.table(data.table::fread(path, sep = "\t", showProgress = FALSE))
+  read_subgraph_delimited_table(path, sep = "\t")
 }
 
 read_gene_gene_nodes <- function(path = default_subgraph_config$gg_nodes_path) {
   if (!file.exists(path)) {
     stop("Gene-gene node file does not exist: ", path)
   }
-
-  as.data.table(fread(path, sep = "\t", showProgress = FALSE))
+  read_subgraph_delimited_table(path, sep = "\t")
 }
 
 read_gene_gene_edges <- function(path = default_subgraph_config$gg_edges_path) {
   if (!file.exists(path)) {
     stop("Gene-gene edge file does not exist: ", path)
   }
-
-  as.data.table(fread(path, sep = "\t", showProgress = FALSE))
+  read_subgraph_delimited_table(path, sep = "\t")
 }
 
 validate_diffusion_results <- function(diffusion, prize_column = default_subgraph_config$prize_column) {
