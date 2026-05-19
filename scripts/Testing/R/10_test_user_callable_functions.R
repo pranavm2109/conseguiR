@@ -428,6 +428,8 @@ test_plot_validated_locus_context_external_surface <- function() {
   expect_true("label_top_gwas_snp" %in% names(plot_formals))
   expect_true("label_top_lit_snps" %in% names(plot_formals))
   expect_true("rsid_pmid" %in% names(plot_formals))
+  expect_true("pmid_page_size" %in% names(plot_formals))
+  expect_true("pmid_query" %in% names(plot_formals))
 }
 
 main <- function() {

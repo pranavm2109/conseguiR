@@ -1166,6 +1166,246 @@ fetch_variant_literature_pmids <- function(rsids, max_pmids_per_rsid = 200L, ver
   unique(dbsnp_dt)
 }
 
+build_regulatory_element_literature_queries <- function(
+  feature_id,
+  chromosome,
+  start,
+  end,
+  linked_label = NULL,
+  max_gene_terms = 3L
+) {
+  feature_id <- trimws(as.character(feature_id %||% ""))
+  chromosome <- normalize_locus_chromosome(chromosome)
+  start <- suppressWarnings(as.integer(start[[1]]))
+  end <- suppressWarnings(as.integer(end[[1]]))
+  max_gene_terms <- suppressWarnings(as.integer(max_gene_terms[[1]]))
+  if (is.na(max_gene_terms) || max_gene_terms <= 0L) {
+    max_gene_terms <- 3L
+  }
+
+  gene_terms <- unique(trimws(unlist(strsplit(as.character(linked_label %||% ""), "|", fixed = TRUE), use.names = FALSE)))
+  gene_terms <- gene_terms[!is.na(gene_terms) & nzchar(gene_terms) & gene_terms != feature_id]
+  if (length(gene_terms) > max_gene_terms) {
+    gene_terms <- gene_terms[seq_len(max_gene_terms)]
+  }
+
+  queries <- character()
+  if (nzchar(feature_id)) {
+    queries <- c(queries, sprintf("\"%s\"[All Fields]", feature_id))
+  }
+  if (!is.na(start) && !is.na(end) && nzchar(chromosome)) {
+    coord_string_chr <- sprintf("\"chr%s:%s-%s\"[All Fields]", chromosome, start, end)
+    coord_string_plain <- sprintf("\"%s:%s-%s\"[All Fields]", chromosome, start, end)
+    coord_triplet <- sprintf("(\"chr%s\"[All Fields] AND \"%s\"[All Fields] AND \"%s\"[All Fields])", chromosome, start, end)
+    queries <- c(queries, coord_string_chr, coord_string_plain, coord_triplet)
+    if (length(gene_terms) > 0L) {
+      gene_clause <- paste(sprintf("\"%s\"[Title/Abstract]", gene_terms), collapse = " OR ")
+      coord_core <- paste(c(coord_string_chr, coord_triplet), collapse = " OR ")
+      queries <- c(
+        queries,
+        sprintf("((%s)) AND ((%s))", coord_core, gene_clause)
+      )
+      if (nzchar(feature_id)) {
+        queries <- c(
+          queries,
+          sprintf("((\"%s\"[All Fields])) OR (((%s)) AND ((%s)))", feature_id, coord_core, gene_clause)
+        )
+      }
+    }
+  }
+
+  unique(queries[nzchar(queries)])
+}
+
+fetch_regulatory_element_literature_pmids <- function(
+  reg_query_dt,
+  max_pmids_per_element = 50L,
+  verbose = FALSE
+) {
+  reg_query_dt <- data.table::as.data.table(data.table::copy(reg_query_dt))
+  if (nrow(reg_query_dt) == 0L) {
+    return(NULL)
+  }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Package `jsonlite` is required to query NCBI E-utilities.")
+  }
+
+  max_pmids_per_element <- suppressWarnings(as.integer(max_pmids_per_element[[1]]))
+  if (is.na(max_pmids_per_element) || max_pmids_per_element <= 0L) {
+    max_pmids_per_element <- 50L
+  }
+  max_pmids_per_element <- min(max_pmids_per_element, 200L)
+
+  if (!exists("regulatory_element_pmid_cache", envir = .conseguiR_plot_cache, inherits = FALSE)) {
+    .conseguiR_plot_cache$regulatory_element_pmid_cache <- new.env(parent = emptyenv())
+  }
+  cache_env <- .conseguiR_plot_cache$regulatory_element_pmid_cache
+
+  api_key <- getOption("conseguiR.ncbi_api_key", Sys.getenv("NCBI_API_KEY", unset = ""))
+  tool_name <- getOption("conseguiR.ncbi_tool", "conseguiR")
+  email <- getOption("conseguiR.ncbi_email", Sys.getenv("NCBI_EMAIL", unset = ""))
+
+  delay_seconds_default <- if (nzchar(api_key)) 0.11 else 0.34
+  delay_seconds <- getOption("conseguiR.ncbi_delay_seconds", delay_seconds_default)
+  delay_seconds <- suppressWarnings(as.numeric(delay_seconds[[1]]))
+  if (is.na(delay_seconds) || delay_seconds < 0) {
+    delay_seconds <- delay_seconds_default
+  }
+
+  out_list <- vector("list", nrow(reg_query_dt))
+  query_counter <- 0L
+  for (i in seq_len(nrow(reg_query_dt))) {
+    feature_id <- as.character(reg_query_dt$feature_id[[i]])
+    cache_key <- paste(
+      feature_id,
+      normalize_locus_chromosome(reg_query_dt$chromosome[[i]]),
+      as.integer(reg_query_dt$feature_start[[i]]),
+      as.integer(reg_query_dt$feature_end[[i]]),
+      trimws(as.character(reg_query_dt$linked_label[[i]] %||% "")),
+      sep = "|"
+    )
+
+    cached_value <- if (exists(cache_key, envir = cache_env, inherits = FALSE)) {
+      get(cache_key, envir = cache_env, inherits = FALSE)
+    } else {
+      NULL
+    }
+
+    if (is.null(cached_value)) {
+      queries <- build_regulatory_element_literature_queries(
+        feature_id = feature_id,
+        chromosome = reg_query_dt$chromosome[[i]],
+        start = reg_query_dt$feature_start[[i]],
+        end = reg_query_dt$feature_end[[i]],
+        linked_label = reg_query_dt$linked_label[[i]]
+      )
+
+      pmid_dt <- NULL
+      if (length(queries) > 0L) {
+        for (query in queries) {
+          endpoint <- paste0(
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+            "?db=pubmed&retmode=json&retmax=", max_pmids_per_element,
+            "&term=", utils::URLencode(query, reserved = TRUE),
+            if (nzchar(api_key)) paste0("&api_key=", utils::URLencode(api_key, reserved = TRUE)) else "",
+            if (nzchar(tool_name)) paste0("&tool=", utils::URLencode(tool_name, reserved = TRUE)) else "",
+            if (nzchar(email)) paste0("&email=", utils::URLencode(email, reserved = TRUE)) else ""
+          )
+
+          payload <- tryCatch(jsonlite::fromJSON(endpoint, simplifyVector = FALSE), error = function(e) NULL)
+          pmids <- unique(as.character(payload$esearchresult$idlist %||% character()))
+          pmids <- pmids[!is.na(pmids) & nzchar(pmids)]
+          query_counter <- query_counter + 1L
+          if (length(pmids) == 0L) {
+            if (delay_seconds > 0) {
+              Sys.sleep(delay_seconds)
+            }
+            next
+          }
+
+          query_dt <- data.table::data.table(
+            feature_id = feature_id,
+            pmid = pmids[seq_len(min(length(pmids), max_pmids_per_element))],
+            query = query,
+            source = "pubmed_esearch"
+          )
+          pmid_dt <- data.table::rbindlist(list(pmid_dt, query_dt), use.names = TRUE, fill = TRUE)
+          if (data.table::uniqueN(pmid_dt$pmid) >= max_pmids_per_element) {
+            break
+          }
+          if (delay_seconds > 0) {
+            Sys.sleep(delay_seconds)
+          }
+        }
+      }
+
+      cached_value <- if (!is.null(pmid_dt) && nrow(pmid_dt) > 0L) {
+        unique(pmid_dt)
+      } else {
+        data.table::data.table(
+          feature_id = character(),
+          pmid = character(),
+          query = character(),
+          source = character()
+        )
+      }
+      assign(cache_key, cached_value, envir = cache_env)
+    }
+
+    if (!is.null(cached_value) && nrow(cached_value) > 0L) {
+      out_list[[i]] <- data.table::copy(cached_value)
+    }
+  }
+
+  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
+  if (nrow(out) == 0L) {
+    if (isTRUE(verbose)) {
+      message("Found literature-backed evidence for 0 of ", nrow(reg_query_dt), " queried regulatory element(s).")
+    }
+    return(NULL)
+  }
+
+  if (isTRUE(verbose)) {
+    message(
+      "Found literature-backed evidence for ",
+      data.table::uniqueN(out$feature_id),
+      " of ",
+      nrow(reg_query_dt),
+      " queried regulatory element(s)",
+      if (query_counter > 0L) paste0(" via ", query_counter, " PubMed query/queries") else "",
+      "."
+    )
+  }
+
+  unique(out)
+}
+
+prepare_regulatory_element_literature_support <- function(
+  reg_nodes,
+  max_pmids_per_element = 50L,
+  verbose = FALSE
+) {
+  reg_nodes <- data.table::as.data.table(data.table::copy(reg_nodes))
+  if (nrow(reg_nodes) == 0L) {
+    return(list(validated_reg_feature_ids = character(), mapping = NULL, pmid_dt = NULL, mode = "none"))
+  }
+
+  pmid_dt <- fetch_regulatory_element_literature_pmids(
+    reg_query_dt = reg_nodes[, .(
+      feature_id,
+      chromosome,
+      feature_start,
+      feature_end,
+      linked_label
+    )],
+    max_pmids_per_element = max_pmids_per_element,
+    verbose = verbose
+  )
+
+  if (is.null(pmid_dt) || nrow(pmid_dt) == 0L) {
+    return(list(validated_reg_feature_ids = character(), mapping = NULL, pmid_dt = NULL, mode = "none"))
+  }
+
+  mapping <- merge(
+    unique(reg_nodes[, .(feature_id, chromosome, feature_start, feature_end, linked_label, germline_score)]),
+    pmid_dt[, .(
+      n_pmids = data.table::uniqueN(pmid),
+      pmids = paste(sort(unique(pmid)), collapse = "|"),
+      queries = paste(sort(unique(query)), collapse = " || ")
+    ), by = feature_id],
+    by = "feature_id",
+    all = FALSE
+  )
+  data.table::setorderv(mapping, c("n_pmids", "germline_score", "feature_start"), c(-1L, -1L, 1L))
+
+  list(
+    validated_reg_feature_ids = unique(mapping$feature_id),
+    mapping = mapping,
+    pmid_dt = unique(pmid_dt),
+    mode = "literature"
+  )
+}
+
 normalize_requested_label_count <- function(top_n) {
   if (is.null(top_n) || length(top_n) == 0L) {
     return(0L)
@@ -1956,6 +2196,7 @@ prepare_validated_locus_plot_bundle <- function(
   locus_end <- as.integer(end)
 
   nodes_dt <- data.table::as.data.table(data.table::copy(nodes))
+  reg_label_map <- read_backend_reg_label_map()
   reg_nodes_for_query <- nodes_dt[
     node_type == "reg" &
       normalize_locus_chromosome(reg_chr) == locus_chr &
@@ -1963,21 +2204,28 @@ prepare_validated_locus_plot_bundle <- function(
       reg_end >= locus_start & reg_start <= locus_end
   ][, .(
     feature_id = as.character(node_id),
+    chromosome = as.character(normalize_locus_chromosome(reg_chr)),
     feature_start = as.integer(reg_start),
     feature_end = as.integer(reg_end),
     germline_score = safe_numeric(germline_score)
   )]
+  if (nrow(reg_label_map) > 0L && nrow(reg_nodes_for_query) > 0L) {
+    reg_nodes_for_query <- merge(
+      reg_nodes_for_query,
+      reg_label_map,
+      by.x = "feature_id",
+      by.y = "reg_elem_id",
+      all.x = TRUE
+    )
+    reg_nodes_for_query[, linked_label := fifelse(!is.na(label) & label != "", label, feature_id)]
+    reg_nodes_for_query[, label := NULL]
+  } else {
+    reg_nodes_for_query[, linked_label := feature_id]
+  }
 
-  full_lit_info <- prepare_locus_lit_snp_labels(
-    gwas_sumstats = gwas_sumstats,
-    rsid_pmid = rsid_pmid,
+  full_lit_info <- prepare_regulatory_element_literature_support(
     reg_nodes = reg_nodes_for_query,
-    chromosome = locus_chr,
-    start = locus_start,
-    end = locus_end,
-    top_n = Inf,
-    pmid_query = pmid_query,
-    pmid_page_size = pmid_page_size,
+    max_pmids_per_element = pmid_page_size,
     verbose = verbose
   )
 
@@ -1986,7 +2234,7 @@ prepare_validated_locus_plot_bundle <- function(
       nrow(full_lit_info$mapping) == 0L) {
     stop(
       "No citation-supported regulatory elements were found in this locus. ",
-      "This validated plot only renders regulatory elements with dbSNP/PMID support."
+      "This validated plot only renders regulatory elements with literature support."
     )
   }
 
@@ -2000,7 +2248,7 @@ prepare_validated_locus_plot_bundle <- function(
     label_features = label_features,
     gwas_sumstats = gwas_sumstats,
     label_top_gwas_snp = label_top_gwas_snp,
-    rsid_pmid = full_lit_info$pmid_dt %||% rsid_pmid,
+    rsid_pmid = rsid_pmid,
     label_top_lit_snps = label_top_lit_snps,
     pmid_query = pmid_query,
     pmid_page_size = pmid_page_size,
@@ -2009,11 +2257,11 @@ prepare_validated_locus_plot_bundle <- function(
 
   out <- filter_locus_plot_bundle_to_validated_regulatory_elements(
     bundle = base_bundle,
-    validated_reg_feature_ids = full_lit_info$mapping$reg_feature_id,
+    validated_reg_feature_ids = full_lit_info$mapping$feature_id,
     strict_gene_filter = strict_gene_filter
   )
-  out$validated_lit_snp_mapping <- data.table::copy(full_lit_info$mapping)
-  out$validated_lit_pmid_dt <- data.table::copy(full_lit_info$pmid_dt)
+  out$validated_reg_literature_mapping <- data.table::copy(full_lit_info$mapping)
+  out$validated_reg_pmid_dt <- data.table::copy(full_lit_info$pmid_dt)
   out
 }
 

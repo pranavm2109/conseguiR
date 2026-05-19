@@ -51,6 +51,8 @@ test_that("validated locus plotting is exposed on the public API", {
   expect_identical(plot_formals$strict_gene_filter, TRUE)
   expect_true("label_top_gwas_snp" %in% names(plot_formals))
   expect_true("label_top_lit_snps" %in% names(plot_formals))
+  expect_true("rsid_pmid" %in% names(plot_formals))
+  expect_true("pmid_page_size" %in% names(plot_formals))
 })
 
 test_that("internal pipeline arg assembly forwards candidate_pool_size", {

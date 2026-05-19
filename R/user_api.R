@@ -2303,8 +2303,10 @@ plot_epigenomic_reg_scores <- function(
 #'   falls back to top GWAS SNPs from the top germline regulatory elements.
 #' @param pmid_query Deprecated. This argument is currently ignored; locus SNP
 #'   labeling now uses dbSNP citation support directly.
-#' @param pmid_page_size Maximum number of PMIDs per rsID retained from the
-#'   dbSNP citation lookup.
+#' @param pmid_page_size Maximum number of PMIDs retained per queried entity
+#'   during built-in literature lookups. For locus SNP labels this applies to
+#'   the dbSNP rsID citation lookup; for validated locus plots it also bounds
+#'   the regulatory-element literature screening queries.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param title Plot title.
 #' @param width Plot width in inches.
@@ -2378,28 +2380,33 @@ plot_locus_context <- function(
 #' Plot a validated locus-centered multimodal context panel
 #'
 #' Creates a paper-oriented locus panel that keeps only regulatory elements in
-#' the requested window that have dbSNP/PMID citation support. This is a
-#' citation-filtered sibling of [plot_locus_context()] intended to reduce
-#' clutter and focus attention on biologically validated regulatory elements and
-#' their linked genes.
+#' the requested window that have literature support for the regulatory
+#' elements themselves. This is a citation-filtered sibling of
+#' [plot_locus_context()] intended to reduce clutter and focus attention on
+#' biologically validated regulatory elements and their linked genes.
 #'
 #' @inheritParams plot_locus_context
 #' @param strict_gene_filter Logical scalar. In ordinary use, keep this as
-#'   `TRUE` so the gene row is restricted to genes linked to citation-supported
-#'   regulatory elements. Set to `FALSE` to keep all in-window genes while still
-#'   filtering the regulatory-element rows to citation-supported elements.
+#'   `TRUE` so the gene row is restricted to genes linked to
+#'   literature-supported regulatory elements. Set to `FALSE` to keep all
+#'   in-window genes while still filtering the regulatory-element rows to
+#'   literature-supported elements.
 #'
 #' @details
 #' Track semantics:
 #' - the top three rows show somatic, epigenomic, and germline regulatory input
-#'   scores, but only for citation-supported regulatory elements in the locus
-#' - the `Reg elements` row shows the same citation-supported regulatory
+#'   scores, but only for literature-supported regulatory elements in the locus
+#' - the `Reg elements` row shows the same literature-supported regulatory
 #'   elements colored by their combined score
 #' - the bottom gene row shows linked post-diffusion gene scores
-#' - locus SNP labels can still use top GWAS SNPs or citation-backed SNPs
+#' - locus SNP labels can still use top GWAS SNPs or dbSNP-backed
+#'   literature-supported SNPs
 #'
-#' This function errors when no citation-supported regulatory elements are found
-#' in the requested interval.
+#' Regulatory-element support is assessed by querying NCBI literature search for
+#' the regulatory elements themselves using their interval coordinates,
+#' identifiers, and linked-gene labels when available. This function errors
+#' when no literature-supported regulatory elements are found in the requested
+#' interval.
 #'
 #' @examples
 #' names(formals(plot_validated_locus_context))

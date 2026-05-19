@@ -38,7 +38,6 @@ conseguiR_plot_backend_resource_path <- function(filename) {
 
   candidate_dirs <- c(
     getOption("conseguiR.backend_resource_dir", NULL),
-    file.path(tools::R_user_dir("conseguiR", which = "cache"), "backend_resources"),
     "inst/extdata/backend",
     "extdata/backend"
   )
@@ -57,17 +56,34 @@ default_stage_plot_config <- list(
   score_output_prefix = "data/processed/conseguiR_score_plot"
 )
 
-.conseguiR_plot_cache <- new.env(parent = emptyenv())
-
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
 }
 
-read_backend_gene_label_map <- function() {
-  if (exists("gene_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)) {
-    return(data.table::copy(get("gene_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
+.conseguiR_plot_cache <- new.env(parent = emptyenv())
+
+read_delimited_table <- function(path, ...) {
+  if (grepl("\\.gz$", path, ignore.case = TRUE)) {
+    extra_args <- list(...)
+    extra_args$showProgress <- NULL
+    con <- gzfile(path, open = "rt")
+    on.exit(close(con), add = TRUE)
+    return(data.table::as.data.table(do.call(
+      utils::read.delim,
+      c(list(
+        file = con,
+        sep = "\t",
+        header = TRUE,
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      ), extra_args)
+    )))
   }
 
+  data.table::as.data.table(data.table::fread(path, ...))
+}
+
+read_backend_gene_label_map <- function() {
   loc_path <- conseguiR_plot_backend_resource_path("NCBI38.gene.loc")
   dt <- data.table::fread(loc_path, header = FALSE, showProgress = FALSE)
   if (ncol(dt) < 6L) {
@@ -79,15 +95,10 @@ read_backend_gene_label_map <- function() {
     label = as.character(V6)
   )], by = "feature_id")
   out <- out[!is.na(feature_id) & feature_id != "" & !is.na(label) & label != ""]
-  assign("gene_label_map", out, envir = .conseguiR_plot_cache)
-  data.table::copy(out)
+  out
 }
 
 read_backend_gene_position_map <- function() {
-  if (exists("gene_position_map", envir = .conseguiR_plot_cache, inherits = FALSE)) {
-    return(data.table::copy(get("gene_position_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
-  }
-
   loc_path <- conseguiR_plot_backend_resource_path("NCBI38.gene.loc")
   dt <- data.table::fread(loc_path, header = FALSE, showProgress = FALSE)
   if (ncol(dt) < 6L) {
@@ -100,16 +111,10 @@ read_backend_gene_position_map <- function() {
     feature_start = as.integer(V3),
     feature_end = as.integer(V4)
   )], by = "gene_label")
-  out <- out[!is.na(gene_label) & gene_label != ""]
-  assign("gene_position_map", out, envir = .conseguiR_plot_cache)
-  data.table::copy(out)
+  out[!is.na(gene_label) & gene_label != ""]
 }
 
 read_backend_reg_label_map <- function() {
-  if (exists("reg_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)) {
-    return(data.table::copy(get("reg_label_map", envir = .conseguiR_plot_cache, inherits = FALSE)))
-  }
-
   mapping_path <- tryCatch(
     conseguiR_plot_backend_resource_path("reg_target_labels.tsv.gz"),
     error = function(e) NULL
@@ -119,10 +124,29 @@ read_backend_reg_label_map <- function() {
     return(data.table::data.table(reg_elem_id = character(), label = character()))
   }
 
-  dt <- data.table::as.data.table(data.table::fread(mapping_path, showProgress = FALSE))
+  dt <- read_delimited_table(mapping_path, showProgress = FALSE)
   out <- unique(dt[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(label) & label != ""], by = "reg_elem_id")
-  assign("reg_label_map", out, envir = .conseguiR_plot_cache)
-  data.table::copy(out)
+  out
+}
+
+read_backend_reg_label_map_full <- function() {
+  mapping_path <- tryCatch(
+    conseguiR_plot_backend_resource_path("reg_target_labels.tsv.gz"),
+    error = function(e) NULL
+  )
+
+  if (is.null(mapping_path) || !file.exists(mapping_path)) {
+    return(data.table::data.table(reg_elem_id = character(), label = character()))
+  }
+
+  dt <- read_delimited_table(mapping_path, showProgress = FALSE)
+  unique(
+    dt[, .(
+      reg_elem_id = as.character(reg_elem_id),
+      label = as.character(label)
+    )],
+    by = c("reg_elem_id", "label")
+  )[!is.na(reg_elem_id) & reg_elem_id != "" & !is.na(label) & label != ""]
 }
 
 resolve_score_feature_column <- function(dt) {
@@ -178,7 +202,8 @@ prepare_score_plot_table <- function(
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
-  label_features = NULL
+  label_features = NULL,
+  label_max_per_feature = 1L
 ) {
   dt <- data.table::as.data.table(data.table::copy(table))
   feature_column <- feature_column %||% resolve_score_feature_column(dt)
@@ -200,24 +225,33 @@ prepare_score_plot_table <- function(
   dt[is.infinite(z_plot) & z_plot > 0, z_plot := z_cap]
   dt[is.infinite(z_plot) & z_plot < 0, z_plot := -z_cap]
 
-  label_map <- resolve_score_label_map(
-    feature_column = feature_column,
-    which = which,
-    dt = dt
-  )
-  if (!is.null(label_map) && nrow(label_map) > 0L) {
-    merge_cols <- names(label_map)[1]
-    dt <- merge(
-      dt,
-      label_map,
-      by.x = "feature_id_plot",
-      by.y = merge_cols,
-      all.x = TRUE
-    )
-    dt[, feature_label := data.table::fifelse(!is.na(label) & label != "", label, feature_id_plot)]
+  if ("feature_label" %in% names(dt)) {
+    dt[, feature_label := as.character(feature_label)]
+    dt[is.na(feature_label) | feature_label == "", feature_label := feature_id_plot]
+  } else if ("label" %in% names(dt)) {
+    dt[, feature_label := as.character(label)]
+    dt[is.na(feature_label) | feature_label == "", feature_label := feature_id_plot]
     dt[, label := NULL]
   } else {
-    dt[, feature_label := feature_id_plot]
+    label_map <- resolve_score_label_map(
+      feature_column = feature_column,
+      which = which,
+      dt = dt
+    )
+    if (!is.null(label_map) && nrow(label_map) > 0L) {
+      merge_cols <- names(label_map)[1]
+      dt <- merge(
+        dt,
+        label_map,
+        by.x = "feature_id_plot",
+        by.y = merge_cols,
+        all.x = TRUE
+      )
+      dt[, feature_label := data.table::fifelse(!is.na(label) & label != "", label, feature_id_plot)]
+      dt[, label := NULL]
+    } else {
+      dt[, feature_label := feature_id_plot]
+    }
   }
 
   if (!is.null(p_value_column) && p_value_column %in% names(dt)) {
@@ -244,31 +278,67 @@ prepare_score_plot_table <- function(
   dt[, rank_plot := seq_len(.N)]
   requested_labels <- unique(as.character(label_features %||% character()))
   requested_labels <- requested_labels[nzchar(requested_labels)]
+  label_max_per_feature <- as.integer(label_max_per_feature[[1]] %||% 1L)
+  if (!is.finite(label_max_per_feature) || is.na(label_max_per_feature) || label_max_per_feature < 1L) {
+    stop("`label_max_per_feature` must be a positive integer.")
+  }
 
   dt[, feature_label_tokens := strsplit(feature_label, "|", fixed = TRUE)]
-  dt[, matched_label := vapply(
-    feature_label_tokens,
-    function(labels) {
-      matched <- intersect(labels, requested_labels)
-      if (length(matched) == 0L) "" else matched[[1]]
-    },
-    character(1)
-  )]
-  dt[, highlighted := feature_id_plot %in% requested_labels |
-       feature_label %in% requested_labels |
-       matched_label != ""]
-  dt[, should_label := highlighted]
-  dt[matched_label != "",
-     label_rank := data.table::frank(-z_plot, ties.method = "first"),
-     by = matched_label]
-  dt[matched_label != "" & label_rank > 1L, should_label := FALSE]
+  dt[, row_index := .I]
+  dt[, matched_labels := lapply(feature_label_tokens, function(labels) {
+    unique(intersect(labels, requested_labels))
+  })]
+  dt[, direct_matches := lapply(seq_len(.N), function(i) {
+    unique(intersect(c(feature_id_plot[[i]], feature_label[[i]]), requested_labels))
+  })]
+  dt[, matched_labels := Map(function(token_hits, direct_hits) {
+    unique(c(token_hits, direct_hits))
+  }, matched_labels, direct_matches)]
+  dt[, direct_matches := NULL]
+
+  dt[, matched_label := ""]
+  dt[, highlighted := FALSE]
+  dt[, should_label := FALSE]
+
+  if (length(requested_labels) > 0L) {
+    match_rows <- dt[lengths(matched_labels) > 0L, .(
+      row_index,
+      z_plot,
+      requested_label = unlist(matched_labels, use.names = FALSE)
+    )]
+
+    if (nrow(match_rows) > 0L) {
+      data.table::setorderv(match_rows, c("requested_label", "z_plot"), order = c(1L, -1L))
+      match_rows[, label_rank := seq_len(.N), by = requested_label]
+      match_rows <- match_rows[label_rank <= label_max_per_feature]
+
+      selected_rows <- match_rows[, .(
+        matched_label = paste(unique(requested_label), collapse = ", ")
+      ), by = row_index]
+
+      dt[selected_rows, matched_label := i.matched_label, on = "row_index"]
+      dt[matched_label != "", `:=`(highlighted = TRUE, should_label = TRUE)]
+    }
+  }
+
   dt[, feature_label_tokens := NULL]
-  dt[, label_rank := NULL]
+  dt[, matched_labels := NULL]
+  dt[, row_index := NULL]
   dt
 }
 
-infer_plot_mode <- function(dt, test_tail = c("auto", "one_tailed", "two_tailed")) {
+infer_plot_mode <- function(
+  dt,
+  test_tail = c("auto", "one_tailed", "two_tailed"),
+  plot_mode = c("auto", "rank", "volcano")
+) {
   test_tail <- match.arg(test_tail)
+  plot_mode <- match.arg(plot_mode)
+
+  if (!identical(plot_mode, "auto")) {
+    return(plot_mode)
+  }
+
   if (identical(test_tail, "one_tailed")) {
     return("rank")
   }
@@ -281,6 +351,40 @@ infer_plot_mode <- function(dt, test_tail = c("auto", "one_tailed", "two_tailed"
   } else {
     "rank"
   }
+}
+
+infer_bundle_plot_semantics <- function(bundle = NULL, which = NULL) {
+  out <- list(
+    test_tail = "auto",
+    plot_mode = "auto"
+  )
+
+  if (is.null(bundle) || !is.list(bundle)) {
+    return(out)
+  }
+
+  bundle_config <- bundle$config %||% list()
+  semantics <- NULL
+
+  if (!is.null(which) &&
+      "table_semantics" %in% names(bundle_config) &&
+      is.list(bundle_config$table_semantics) &&
+      which %in% names(bundle_config$table_semantics)) {
+    semantics <- bundle_config$table_semantics[[which]]
+  } else if ("test_tail" %in% names(bundle_config) || "default_plot_mode" %in% names(bundle_config)) {
+    semantics <- bundle_config
+  }
+
+  if (is.list(semantics)) {
+    if ("test_tail" %in% names(semantics) && nzchar(as.character(semantics$test_tail[[1]]))) {
+      out$test_tail <- as.character(semantics$test_tail[[1]])
+    }
+    if ("default_plot_mode" %in% names(semantics) && nzchar(as.character(semantics$default_plot_mode[[1]]))) {
+      out$plot_mode <- as.character(semantics$default_plot_mode[[1]])
+    }
+  }
+
+  out
 }
 
 prepare_volcano_display_axes <- function(dt) {
@@ -328,15 +432,64 @@ prepare_volcano_display_axes <- function(dt) {
   )
 }
 
+prepare_unclipped_volcano_display_axes <- function(dt) {
+  dt <- data.table::copy(dt)
+  dt[, z_display := z_plot]
+  dt[, neglog10_p_display := neglog10_p]
+
+  finite_abs_z <- abs(dt$z_display[is.finite(dt$z_display)])
+  finite_logp <- dt$neglog10_p_display[is.finite(dt$neglog10_p_display)]
+
+  z_cap <- if (length(finite_abs_z) > 0L) max(finite_abs_z, na.rm = TRUE) else 8
+  logp_cap <- if (length(finite_logp) > 0L) max(finite_logp, na.rm = TRUE) else 10
+
+  if (!is.finite(z_cap) || z_cap <= 0) {
+    z_cap <- 8
+  }
+  if (!is.finite(logp_cap) || logp_cap <= 0) {
+    logp_cap <- 10
+  }
+
+  list(
+    table = dt,
+    z_cap = z_cap,
+    logp_cap = logp_cap
+  )
+}
+
+apply_tukey_volcano_filter <- function(dt, tukey_k = 1.5) {
+  dt <- data.table::copy(dt)
+
+  finite_logp <- dt$neglog10_p[is.finite(dt$neglog10_p)]
+  if (length(finite_logp) < 4L) {
+    return(dt)
+  }
+
+  q1 <- stats::quantile(finite_logp, probs = 0.25, names = FALSE, na.rm = TRUE)
+  q3 <- stats::quantile(finite_logp, probs = 0.75, names = FALSE, na.rm = TRUE)
+  iqr <- q3 - q1
+
+  if (!is.finite(iqr) || iqr <= 0) {
+    return(dt)
+  }
+
+  upper_fence <- q3 + tukey_k * iqr
+  dt[!is.finite(neglog10_p) | neglog10_p <= upper_fence]
+}
+
 create_score_plot <- function(
   bundle = NULL,
   table = NULL,
   which = NULL,
   test_tail = c("auto", "one_tailed", "two_tailed"),
+  plot_mode = c("auto", "rank", "volcano"),
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
+  drop_tukey_outliers = FALSE,
+  clip_extreme_display = FALSE,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = "conseguiR Scores"
 ) {
   required_packages <- c("ggplot2", "ggrepel", "ggnewscale")
@@ -366,16 +519,33 @@ create_score_plot <- function(
     }
   }
 
+  bundle_semantics <- infer_bundle_plot_semantics(bundle = bundle, which = which)
+  effective_test_tail <- if (identical(test_tail, "auto")) {
+    bundle_semantics$test_tail
+  } else {
+    test_tail
+  }
+  effective_plot_mode <- if (identical(plot_mode, "auto")) {
+    bundle_semantics$plot_mode
+  } else {
+    plot_mode
+  }
+
   dt <- prepare_score_plot_table(
     table = table,
     which = which,
     feature_column = feature_column,
     z_column = z_column,
     p_value_column = p_value_column,
-    label_features = label_features
+    label_features = label_features,
+    label_max_per_feature = label_max_per_feature
   )
 
-  plot_mode <- infer_plot_mode(dt, test_tail = test_tail)
+  plot_mode <- infer_plot_mode(
+    dt,
+    test_tail = effective_test_tail,
+    plot_mode = effective_plot_mode
+  )
 
   base <- ggplot2::theme_minimal(base_family = "Helvetica") +
     ggplot2::theme(
@@ -385,7 +555,14 @@ create_score_plot <- function(
     )
 
   if (identical(plot_mode, "volcano")) {
-    volcano_display <- prepare_volcano_display_axes(dt)
+    if (isTRUE(drop_tukey_outliers)) {
+      dt <- apply_tukey_volcano_filter(dt)
+    }
+    volcano_display <- if (isTRUE(clip_extreme_display)) {
+      prepare_volcano_display_axes(dt)
+    } else {
+      prepare_unclipped_volcano_display_axes(dt)
+    }
     dt <- volcano_display$table
     p <- ggplot2::ggplot(dt, ggplot2::aes(x = z_display, y = neglog10_p_display)) +
       ggplot2::geom_point(
@@ -455,7 +632,8 @@ create_score_plot <- function(
   list(
     plot = p + base,
     plot_data = dt,
-    plot_mode = plot_mode
+    plot_mode = plot_mode,
+    test_tail = effective_test_tail
   )
 }
 
@@ -465,10 +643,14 @@ save_score_plot <- function(
   file_path,
   which = NULL,
   test_tail = "auto",
+  plot_mode = "auto",
   feature_column = NULL,
   z_column = "zstat",
   p_value_column = NULL,
+  drop_tukey_outliers = FALSE,
+  clip_extreme_display = FALSE,
   label_features = NULL,
+  label_max_per_feature = 1L,
   title = "conseguiR Scores",
   width = 10,
   height = 7,
@@ -485,10 +667,14 @@ save_score_plot <- function(
     table = table,
     which = which,
     test_tail = test_tail,
+    plot_mode = plot_mode,
     feature_column = feature_column,
     z_column = z_column,
     p_value_column = p_value_column,
+    drop_tukey_outliers = drop_tukey_outliers,
+    clip_extreme_display = clip_extreme_display,
     label_features = label_features,
+    label_max_per_feature = label_max_per_feature,
     title = title
   )
 
@@ -628,11 +814,6 @@ read_minimal_locus_gwas_table <- function(gwas_sumstats = NULL) {
   }
 
   if (is.character(gwas_sumstats) && length(gwas_sumstats) == 1L) {
-    cache_key <- paste0("gwas_minimal::", normalizePath(gwas_sumstats, winslash = "/", mustWork = FALSE))
-    if (exists(cache_key, envir = .conseguiR_plot_cache, inherits = FALSE)) {
-      return(data.table::copy(get(cache_key, envir = .conseguiR_plot_cache, inherits = FALSE)))
-    }
-
     header_cols <- names(data.table::fread(gwas_sumstats, nrows = 0L, showProgress = FALSE))
     snp_id_col <- intersect(c("hm_rsid", "rsid", "rs_id", "hm_variant_id", "variant_id"), header_cols)
     chr_col <- intersect(c("hm_chrom", "chromosome", "chr", "chrom"), header_cols)
@@ -652,7 +833,6 @@ read_minimal_locus_gwas_table <- function(gwas_sumstats = NULL) {
     if (length(snp_id_col) == 0L || length(chr_col) == 0L || length(pos_col) == 0L || length(p_col) == 0L) {
       return(NULL)
     }
-    cache_key <- NULL
   }
 
   out <- data.table::copy(gwas_dt)
@@ -669,11 +849,7 @@ read_minimal_locus_gwas_table <- function(gwas_sumstats = NULL) {
   ]
   out <- unique(out, by = c("rsid", "chromosome", "position", "p_value"))
 
-  if (!is.null(cache_key)) {
-    assign(cache_key, out, envir = .conseguiR_plot_cache)
-  }
-
-  data.table::copy(out)
+  out
 }
 
 prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, end, reg_nodes = NULL, top_n = 1L) {
@@ -718,7 +894,21 @@ prepare_locus_gwas_label <- function(gwas_sumstats = NULL, chromosome, start, en
   ]
 
   if (nrow(gwas_dt) == 0L) {
-    return(NULL)
+    gwas_dt <- read_minimal_locus_gwas_table(gwas_sumstats)
+    if (is.null(gwas_dt) || nrow(gwas_dt) == 0L) {
+      return(NULL)
+    }
+    gwas_dt <- gwas_dt[
+      chromosome == target_chr &
+        position >= as.integer(start) &
+        position <= as.integer(end)
+    ]
+    if (nrow(gwas_dt) == 0L) {
+      return(NULL)
+    }
+    target_start <- as.integer(start)
+    target_end <- as.integer(end)
+    target_reg_id <- NA_character_
   }
 
   data.table::setorderv(gwas_dt, c("p_value", "position"), c(1L, 1L))
@@ -810,7 +1000,6 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
       " uncached rsID(s)",
       if (length(cached_rsids) > 0L) paste0(" (", length(cached_rsids), " served from cache)") else "",
       " using batched ELink requests.",
-      "."
     )
   }
 
@@ -830,6 +1019,20 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     pmid_hits[!is.na(pmid_hits) & nzchar(pmid_hits)]
   }
 
+  cached_list <- vector("list", length(cached_rsids))
+  for (i in seq_along(cached_rsids)) {
+    rsid <- cached_rsids[[i]]
+    pmid_hits <- get(rsid, envir = cache_env, inherits = FALSE)
+    if (length(pmid_hits) == 0L) {
+      next
+    }
+    if (length(pmid_hits) > max_pmids_per_rsid) {
+      pmid_hits <- pmid_hits[seq_len(max_pmids_per_rsid)]
+    }
+    cached_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
+  }
+
+  out_list <- vector("list", length(query_rsids))
   pb <- NULL
   if (isTRUE(verbose) && length(query_rsids) > 0L) {
     pb <- utils::txtProgressBar(min = 0, max = length(query_rsids), style = 3)
@@ -839,7 +1042,6 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
       }
     }, add = TRUE)
   }
-  out_list <- vector("list", length(query_rsids))
   if (length(query_rsids) > 0L) {
     batch_starts <- seq.int(1L, length(query_rsids), by = batch_size)
     for (batch_idx in seq_along(batch_starts)) {
@@ -914,19 +1116,6 @@ fetch_dbsnp_rsid_pmids <- function(rsids, max_pmids_per_rsid = 200L, verbose = F
     utils::setTxtProgressBar(pb, length(query_rsids))
   }
 
-  cached_list <- vector("list", length(cached_rsids))
-  for (i in seq_along(cached_rsids)) {
-    rsid <- cached_rsids[[i]]
-    pmid_hits <- get(rsid, envir = cache_env, inherits = FALSE)
-    if (length(pmid_hits) == 0L) {
-      next
-    }
-    if (length(pmid_hits) > max_pmids_per_rsid) {
-      pmid_hits <- pmid_hits[seq_len(max_pmids_per_rsid)]
-    }
-    cached_list[[i]] <- data.table::data.table(rsid = rsid, pmid = pmid_hits, source = "dbsnp")
-  }
-
   out <- data.table::rbindlist(c(cached_list, out_list), use.names = TRUE, fill = TRUE)
   if (nrow(out) == 0L) {
     if (isTRUE(verbose)) {
@@ -975,6 +1164,246 @@ fetch_variant_literature_pmids <- function(rsids, max_pmids_per_rsid = 200L, ver
   }
 
   unique(dbsnp_dt)
+}
+
+build_regulatory_element_literature_queries <- function(
+  feature_id,
+  chromosome,
+  start,
+  end,
+  linked_label = NULL,
+  max_gene_terms = 3L
+) {
+  feature_id <- trimws(as.character(feature_id %||% ""))
+  chromosome <- normalize_locus_chromosome(chromosome)
+  start <- suppressWarnings(as.integer(start[[1]]))
+  end <- suppressWarnings(as.integer(end[[1]]))
+  max_gene_terms <- suppressWarnings(as.integer(max_gene_terms[[1]]))
+  if (is.na(max_gene_terms) || max_gene_terms <= 0L) {
+    max_gene_terms <- 3L
+  }
+
+  gene_terms <- unique(trimws(unlist(strsplit(as.character(linked_label %||% ""), "|", fixed = TRUE), use.names = FALSE)))
+  gene_terms <- gene_terms[!is.na(gene_terms) & nzchar(gene_terms) & gene_terms != feature_id]
+  if (length(gene_terms) > max_gene_terms) {
+    gene_terms <- gene_terms[seq_len(max_gene_terms)]
+  }
+
+  queries <- character()
+  if (nzchar(feature_id)) {
+    queries <- c(queries, sprintf("\"%s\"[All Fields]", feature_id))
+  }
+  if (!is.na(start) && !is.na(end) && nzchar(chromosome)) {
+    coord_string_chr <- sprintf("\"chr%s:%s-%s\"[All Fields]", chromosome, start, end)
+    coord_string_plain <- sprintf("\"%s:%s-%s\"[All Fields]", chromosome, start, end)
+    coord_triplet <- sprintf("(\"chr%s\"[All Fields] AND \"%s\"[All Fields] AND \"%s\"[All Fields])", chromosome, start, end)
+    queries <- c(queries, coord_string_chr, coord_string_plain, coord_triplet)
+    if (length(gene_terms) > 0L) {
+      gene_clause <- paste(sprintf("\"%s\"[Title/Abstract]", gene_terms), collapse = " OR ")
+      coord_core <- paste(c(coord_string_chr, coord_triplet), collapse = " OR ")
+      queries <- c(
+        queries,
+        sprintf("((%s)) AND ((%s))", coord_core, gene_clause)
+      )
+      if (nzchar(feature_id)) {
+        queries <- c(
+          queries,
+          sprintf("((\"%s\"[All Fields])) OR (((%s)) AND ((%s)))", feature_id, coord_core, gene_clause)
+        )
+      }
+    }
+  }
+
+  unique(queries[nzchar(queries)])
+}
+
+fetch_regulatory_element_literature_pmids <- function(
+  reg_query_dt,
+  max_pmids_per_element = 50L,
+  verbose = FALSE
+) {
+  reg_query_dt <- data.table::as.data.table(data.table::copy(reg_query_dt))
+  if (nrow(reg_query_dt) == 0L) {
+    return(NULL)
+  }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Package `jsonlite` is required to query NCBI E-utilities.")
+  }
+
+  max_pmids_per_element <- suppressWarnings(as.integer(max_pmids_per_element[[1]]))
+  if (is.na(max_pmids_per_element) || max_pmids_per_element <= 0L) {
+    max_pmids_per_element <- 50L
+  }
+  max_pmids_per_element <- min(max_pmids_per_element, 200L)
+
+  if (!exists("regulatory_element_pmid_cache", envir = .conseguiR_plot_cache, inherits = FALSE)) {
+    .conseguiR_plot_cache$regulatory_element_pmid_cache <- new.env(parent = emptyenv())
+  }
+  cache_env <- .conseguiR_plot_cache$regulatory_element_pmid_cache
+
+  api_key <- getOption("conseguiR.ncbi_api_key", Sys.getenv("NCBI_API_KEY", unset = ""))
+  tool_name <- getOption("conseguiR.ncbi_tool", "conseguiR")
+  email <- getOption("conseguiR.ncbi_email", Sys.getenv("NCBI_EMAIL", unset = ""))
+
+  delay_seconds_default <- if (nzchar(api_key)) 0.11 else 0.34
+  delay_seconds <- getOption("conseguiR.ncbi_delay_seconds", delay_seconds_default)
+  delay_seconds <- suppressWarnings(as.numeric(delay_seconds[[1]]))
+  if (is.na(delay_seconds) || delay_seconds < 0) {
+    delay_seconds <- delay_seconds_default
+  }
+
+  out_list <- vector("list", nrow(reg_query_dt))
+  query_counter <- 0L
+  for (i in seq_len(nrow(reg_query_dt))) {
+    feature_id <- as.character(reg_query_dt$feature_id[[i]])
+    cache_key <- paste(
+      feature_id,
+      normalize_locus_chromosome(reg_query_dt$chromosome[[i]]),
+      as.integer(reg_query_dt$feature_start[[i]]),
+      as.integer(reg_query_dt$feature_end[[i]]),
+      trimws(as.character(reg_query_dt$linked_label[[i]] %||% "")),
+      sep = "|"
+    )
+
+    cached_value <- if (exists(cache_key, envir = cache_env, inherits = FALSE)) {
+      get(cache_key, envir = cache_env, inherits = FALSE)
+    } else {
+      NULL
+    }
+
+    if (is.null(cached_value)) {
+      queries <- build_regulatory_element_literature_queries(
+        feature_id = feature_id,
+        chromosome = reg_query_dt$chromosome[[i]],
+        start = reg_query_dt$feature_start[[i]],
+        end = reg_query_dt$feature_end[[i]],
+        linked_label = reg_query_dt$linked_label[[i]]
+      )
+
+      pmid_dt <- NULL
+      if (length(queries) > 0L) {
+        for (query in queries) {
+          endpoint <- paste0(
+            "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+            "?db=pubmed&retmode=json&retmax=", max_pmids_per_element,
+            "&term=", utils::URLencode(query, reserved = TRUE),
+            if (nzchar(api_key)) paste0("&api_key=", utils::URLencode(api_key, reserved = TRUE)) else "",
+            if (nzchar(tool_name)) paste0("&tool=", utils::URLencode(tool_name, reserved = TRUE)) else "",
+            if (nzchar(email)) paste0("&email=", utils::URLencode(email, reserved = TRUE)) else ""
+          )
+
+          payload <- tryCatch(jsonlite::fromJSON(endpoint, simplifyVector = FALSE), error = function(e) NULL)
+          pmids <- unique(as.character(payload$esearchresult$idlist %||% character()))
+          pmids <- pmids[!is.na(pmids) & nzchar(pmids)]
+          query_counter <- query_counter + 1L
+          if (length(pmids) == 0L) {
+            if (delay_seconds > 0) {
+              Sys.sleep(delay_seconds)
+            }
+            next
+          }
+
+          query_dt <- data.table::data.table(
+            feature_id = feature_id,
+            pmid = pmids[seq_len(min(length(pmids), max_pmids_per_element))],
+            query = query,
+            source = "pubmed_esearch"
+          )
+          pmid_dt <- data.table::rbindlist(list(pmid_dt, query_dt), use.names = TRUE, fill = TRUE)
+          if (data.table::uniqueN(pmid_dt$pmid) >= max_pmids_per_element) {
+            break
+          }
+          if (delay_seconds > 0) {
+            Sys.sleep(delay_seconds)
+          }
+        }
+      }
+
+      cached_value <- if (!is.null(pmid_dt) && nrow(pmid_dt) > 0L) {
+        unique(pmid_dt)
+      } else {
+        data.table::data.table(
+          feature_id = character(),
+          pmid = character(),
+          query = character(),
+          source = character()
+        )
+      }
+      assign(cache_key, cached_value, envir = cache_env)
+    }
+
+    if (!is.null(cached_value) && nrow(cached_value) > 0L) {
+      out_list[[i]] <- data.table::copy(cached_value)
+    }
+  }
+
+  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
+  if (nrow(out) == 0L) {
+    if (isTRUE(verbose)) {
+      message("Found literature-backed evidence for 0 of ", nrow(reg_query_dt), " queried regulatory element(s).")
+    }
+    return(NULL)
+  }
+
+  if (isTRUE(verbose)) {
+    message(
+      "Found literature-backed evidence for ",
+      data.table::uniqueN(out$feature_id),
+      " of ",
+      nrow(reg_query_dt),
+      " queried regulatory element(s)",
+      if (query_counter > 0L) paste0(" via ", query_counter, " PubMed query/queries") else "",
+      "."
+    )
+  }
+
+  unique(out)
+}
+
+prepare_regulatory_element_literature_support <- function(
+  reg_nodes,
+  max_pmids_per_element = 50L,
+  verbose = FALSE
+) {
+  reg_nodes <- data.table::as.data.table(data.table::copy(reg_nodes))
+  if (nrow(reg_nodes) == 0L) {
+    return(list(validated_reg_feature_ids = character(), mapping = NULL, pmid_dt = NULL, mode = "none"))
+  }
+
+  pmid_dt <- fetch_regulatory_element_literature_pmids(
+    reg_query_dt = reg_nodes[, .(
+      feature_id,
+      chromosome,
+      feature_start,
+      feature_end,
+      linked_label
+    )],
+    max_pmids_per_element = max_pmids_per_element,
+    verbose = verbose
+  )
+
+  if (is.null(pmid_dt) || nrow(pmid_dt) == 0L) {
+    return(list(validated_reg_feature_ids = character(), mapping = NULL, pmid_dt = NULL, mode = "none"))
+  }
+
+  mapping <- merge(
+    unique(reg_nodes[, .(feature_id, chromosome, feature_start, feature_end, linked_label, germline_score)]),
+    pmid_dt[, .(
+      n_pmids = data.table::uniqueN(pmid),
+      pmids = paste(sort(unique(pmid)), collapse = "|"),
+      queries = paste(sort(unique(query)), collapse = " || ")
+    ), by = feature_id],
+    by = "feature_id",
+    all = FALSE
+  )
+  data.table::setorderv(mapping, c("n_pmids", "germline_score", "feature_start"), c(-1L, -1L, 1L))
+
+  list(
+    validated_reg_feature_ids = unique(mapping$feature_id),
+    mapping = mapping,
+    pmid_dt = unique(pmid_dt),
+    mode = "literature"
+  )
 }
 
 normalize_requested_label_count <- function(top_n) {
@@ -1132,7 +1561,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
-      pmid_dt = data.table::copy(pmid_dt),
+      pmid_dt = NULL,
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1176,6 +1605,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
+      pmid_dt = data.table::copy(pmid_dt),
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1207,6 +1637,7 @@ prepare_locus_lit_snp_labels <- function(
     return(list(
       labels = fallback,
       mapping = NULL,
+      pmid_dt = data.table::copy(pmid_dt),
       mode = if (is.null(fallback) || nrow(fallback) == 0L) "none" else "fallback",
       requested_n = top_n,
       available_n = if (is.null(fallback)) 0L else nrow(fallback)
@@ -1396,7 +1827,13 @@ prepare_locus_plot_bundle <- function(
     feature_end = as.integer(reg_end),
     germline_score = safe_numeric(germline_score),
     somatic_score = safe_numeric(somatic_score),
-    epigenomic_score = safe_numeric(epigenomic_score)
+    epigenomic_score = safe_numeric(epigenomic_score),
+    post_germline = if ("post_germline" %in% names(.SD)) safe_numeric(post_germline) else NA_real_,
+    post_somatic = if ("post_somatic" %in% names(.SD)) safe_numeric(post_somatic) else NA_real_,
+    post_epigenomic = if ("post_epigenomic" %in% names(.SD)) safe_numeric(post_epigenomic) else NA_real_,
+    post_integrated = if ("post_integrated" %in% names(.SD)) safe_numeric(post_integrated) else NA_real_,
+    post_vulnerability = if ("post_vulnerability" %in% names(.SD)) safe_numeric(post_vulnerability) else NA_real_,
+    post_norm = if ("post_norm" %in% names(.SD)) safe_numeric(post_norm) else NA_real_
   )]
 
   graph_gene_scores <- safe_numeric(
@@ -1411,20 +1848,6 @@ prepare_locus_plot_bundle <- function(
     gene_score_limits <- c(0, 1)
   } else if (diff(gene_score_limits) <= 0) {
     gene_score_limits <- c(gene_score_limits[[1]], gene_score_limits[[1]] + 1)
-  }
-
-  top_gwas_n <- normalize_top_gwas_label_count(label_top_gwas_snp)
-  gwas_label_dt <- if (top_gwas_n > 0L) {
-    prepare_locus_gwas_label(
-      gwas_sumstats = gwas_sumstats,
-      chromosome = locus_chr,
-      start = locus_start,
-      end = locus_end,
-      reg_nodes = reg_nodes,
-      top_n = top_gwas_n
-    )
-  } else {
-    NULL
   }
 
   lit_snp_info <- prepare_locus_lit_snp_labels(
@@ -1458,10 +1881,30 @@ prepare_locus_plot_bundle <- function(
     }
   }
 
-  reg_nodes[, current_norm := sqrt(
-    fifelse(is.na(germline_score), 0, germline_score)^2 +
-      fifelse(is.na(somatic_score), 0, somatic_score)^2 +
-      fifelse(is.na(epigenomic_score), 0, epigenomic_score)^2
+  top_gwas_n <- normalize_top_gwas_label_count(label_top_gwas_snp)
+  gwas_label_dt <- if (top_gwas_n > 0L && !is.null(gwas_hits_dt) && nrow(gwas_hits_dt) > 0L) {
+    data.table::setorderv(gwas_hits_dt, c("p_value", "position"), c(1L, 1L))
+    top_snps <- gwas_hits_dt[seq_len(min(.N, top_gwas_n))]
+    data.table::data.table(
+      snp_id = as.character(top_snps$rsid),
+      position = as.integer(top_snps$position),
+      p_value = as.numeric(top_snps$p_value)
+    )
+  } else {
+    NULL
+  }
+
+  reg_nodes[, plot_somatic_score := fifelse(is.finite(post_somatic), post_somatic, somatic_score)]
+  reg_nodes[, plot_epigenomic_score := fifelse(is.finite(post_epigenomic), post_epigenomic, epigenomic_score)]
+  reg_nodes[, plot_germline_score := fifelse(is.finite(post_germline), post_germline, germline_score)]
+  reg_nodes[, current_norm := fifelse(
+    is.finite(post_norm),
+    post_norm,
+    sqrt(
+      fifelse(is.na(plot_germline_score), 0, plot_germline_score)^2 +
+        fifelse(is.na(plot_somatic_score), 0, plot_somatic_score)^2 +
+        fifelse(is.na(plot_epigenomic_score), 0, plot_epigenomic_score)^2
+    )
   )]
 
   selected_gene_set <- unique(as.character(c(selected_genes, label_features %||% character())))
@@ -1479,9 +1922,9 @@ prepare_locus_plot_bundle <- function(
 
   track_defs <- data.table::data.table(
     track_name = c(
-      "Reg element somatic z",
-      "Reg element epigenomic z",
-      "Reg element germline z",
+      "Reg element somatic input",
+      "Reg element epigenomic input",
+      "Reg element germline input",
       "GWAS locus SNPs",
       "Reg elements",
       "Genes (post-diffusion integrated)"
@@ -1504,9 +1947,9 @@ prepare_locus_plot_bundle <- function(
   ), use.names = TRUE)
 
   reg_long <- data.table::rbindlist(list(
-    reg_nodes[, .(feature_type = "reg", feature_id, feature_label, feature_start, feature_end, track_name = "Reg element somatic z", score = somatic_score, linked_label, highlighted = FALSE)],
-    reg_nodes[, .(feature_type = "reg", feature_id, feature_label, feature_start, feature_end, track_name = "Reg element epigenomic z", score = epigenomic_score, linked_label, highlighted = FALSE)],
-    reg_nodes[, .(feature_type = "reg", feature_id, feature_label, feature_start, feature_end, track_name = "Reg element germline z", score = germline_score, linked_label, highlighted = FALSE)],
+    reg_nodes[, .(feature_type = "reg", feature_id, feature_label, feature_start, feature_end, track_name = "Reg element somatic input", score = plot_somatic_score, linked_label, highlighted = FALSE)],
+    reg_nodes[, .(feature_type = "reg", feature_id, feature_label, feature_start, feature_end, track_name = "Reg element epigenomic input", score = plot_epigenomic_score, linked_label, highlighted = FALSE)],
+    reg_nodes[, .(feature_type = "reg", feature_id, feature_label, feature_start, feature_end, track_name = "Reg element germline input", score = plot_germline_score, linked_label, highlighted = FALSE)],
     reg_nodes[, .(feature_type = "reg", feature_id, feature_label, feature_start, feature_end, track_name = "Reg elements", score = current_norm, linked_label, highlighted = FALSE)]
   ), use.names = TRUE)
 
@@ -1547,12 +1990,33 @@ prepare_locus_plot_bundle <- function(
     )
   )]
 
-  reg_score_limits <- range(plot_dt[feature_type == "reg" & track_name != "Reg elements", score], na.rm = TRUE)
-  if (!all(is.finite(reg_score_limits))) {
-    reg_score_limits <- c(-1, 1)
-  } else {
-    reg_abs_max <- max(abs(reg_score_limits))
-    reg_score_limits <- c(-reg_abs_max, reg_abs_max)
+  finite_reg_scores <- plot_dt[feature_type == "reg" & track_name != "Reg elements" & is.finite(score), score]
+  reg_score_palette_mode <- "diverging"
+  reg_score_limits <- c(-1, 1)
+  if (length(finite_reg_scores) > 0L) {
+    if (all(finite_reg_scores >= 0, na.rm = TRUE)) {
+      reg_score_palette_mode <- "positive"
+      upper <- as.numeric(stats::quantile(finite_reg_scores, probs = 0.95, na.rm = TRUE, names = FALSE, type = 7))
+      if (!is.finite(upper) || upper <= 0) {
+        upper <- max(finite_reg_scores, na.rm = TRUE)
+      }
+      reg_score_limits <- c(0, max(upper, 1e-6))
+    } else if (all(finite_reg_scores <= 0, na.rm = TRUE)) {
+      reg_score_palette_mode <- "negative"
+      lower <- as.numeric(stats::quantile(finite_reg_scores, probs = 0.05, na.rm = TRUE, names = FALSE, type = 7))
+      if (!is.finite(lower) || lower >= 0) {
+        lower <- min(finite_reg_scores, na.rm = TRUE)
+      }
+      reg_score_limits <- c(min(lower, -1e-6), 0)
+    } else {
+      reg_abs_cap <- as.numeric(stats::quantile(abs(finite_reg_scores), probs = 0.95, na.rm = TRUE, names = FALSE, type = 7))
+      if (!is.finite(reg_abs_cap) || reg_abs_cap <= 0) {
+        reg_abs_cap <- max(abs(finite_reg_scores), na.rm = TRUE)
+      }
+      if (is.finite(reg_abs_cap) && reg_abs_cap > 0) {
+        reg_score_limits <- c(-reg_abs_cap, reg_abs_cap)
+      }
+    }
   }
 
   reg_norm_limits <- range(reg_nodes$current_norm[is.finite(reg_nodes$current_norm)], na.rm = TRUE)
@@ -1660,6 +2124,7 @@ prepare_locus_plot_bundle <- function(
     selected_gene_set = selected_gene_set,
     locus = list(chromosome = locus_chr, start = locus_start, end = locus_end),
     gene_score_limits = gene_score_limits,
+    reg_score_palette_mode = reg_score_palette_mode,
     reg_score_limits = reg_score_limits,
     reg_norm_limits = reg_norm_limits,
     gwas_logp_limits = gwas_logp_limits
@@ -1731,6 +2196,7 @@ prepare_validated_locus_plot_bundle <- function(
   locus_end <- as.integer(end)
 
   nodes_dt <- data.table::as.data.table(data.table::copy(nodes))
+  reg_label_map <- read_backend_reg_label_map()
   reg_nodes_for_query <- nodes_dt[
     node_type == "reg" &
       normalize_locus_chromosome(reg_chr) == locus_chr &
@@ -1738,21 +2204,28 @@ prepare_validated_locus_plot_bundle <- function(
       reg_end >= locus_start & reg_start <= locus_end
   ][, .(
     feature_id = as.character(node_id),
+    chromosome = as.character(normalize_locus_chromosome(reg_chr)),
     feature_start = as.integer(reg_start),
     feature_end = as.integer(reg_end),
     germline_score = safe_numeric(germline_score)
   )]
+  if (nrow(reg_label_map) > 0L && nrow(reg_nodes_for_query) > 0L) {
+    reg_nodes_for_query <- merge(
+      reg_nodes_for_query,
+      reg_label_map,
+      by.x = "feature_id",
+      by.y = "reg_elem_id",
+      all.x = TRUE
+    )
+    reg_nodes_for_query[, linked_label := fifelse(!is.na(label) & label != "", label, feature_id)]
+    reg_nodes_for_query[, label := NULL]
+  } else {
+    reg_nodes_for_query[, linked_label := feature_id]
+  }
 
-  full_lit_info <- prepare_locus_lit_snp_labels(
-    gwas_sumstats = gwas_sumstats,
-    rsid_pmid = rsid_pmid,
+  full_lit_info <- prepare_regulatory_element_literature_support(
     reg_nodes = reg_nodes_for_query,
-    chromosome = locus_chr,
-    start = locus_start,
-    end = locus_end,
-    top_n = Inf,
-    pmid_query = pmid_query,
-    pmid_page_size = pmid_page_size,
+    max_pmids_per_element = pmid_page_size,
     verbose = verbose
   )
 
@@ -1761,7 +2234,7 @@ prepare_validated_locus_plot_bundle <- function(
       nrow(full_lit_info$mapping) == 0L) {
     stop(
       "No citation-supported regulatory elements were found in this locus. ",
-      "This validated plot only renders regulatory elements with dbSNP/PMID support."
+      "This validated plot only renders regulatory elements with literature support."
     )
   }
 
@@ -1775,7 +2248,7 @@ prepare_validated_locus_plot_bundle <- function(
     label_features = label_features,
     gwas_sumstats = gwas_sumstats,
     label_top_gwas_snp = label_top_gwas_snp,
-    rsid_pmid = full_lit_info$pmid_dt %||% rsid_pmid,
+    rsid_pmid = rsid_pmid,
     label_top_lit_snps = label_top_lit_snps,
     pmid_query = pmid_query,
     pmid_page_size = pmid_page_size,
@@ -1784,11 +2257,11 @@ prepare_validated_locus_plot_bundle <- function(
 
   out <- filter_locus_plot_bundle_to_validated_regulatory_elements(
     bundle = base_bundle,
-    validated_reg_feature_ids = full_lit_info$mapping$reg_feature_id,
+    validated_reg_feature_ids = full_lit_info$mapping$feature_id,
     strict_gene_filter = strict_gene_filter
   )
-  out$validated_lit_snp_mapping <- data.table::copy(full_lit_info$mapping)
-  out$validated_lit_pmid_dt <- data.table::copy(full_lit_info$pmid_dt)
+  out$validated_reg_literature_mapping <- data.table::copy(full_lit_info$mapping)
+  out$validated_reg_pmid_dt <- data.table::copy(full_lit_info$pmid_dt)
   out
 }
 
@@ -1907,6 +2380,60 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
   validated_segment_mode <- identical(bundle$reg_render_mode %||% NULL, "stacked_segments")
   reg_input_dt <- features_dt[feature_type == "reg" & track_name != "Reg elements"]
   reg_combined_dt <- features_dt[feature_type == "reg" & track_name == "Reg elements"]
+  reg_input_scale <- switch(
+    bundle$reg_score_palette_mode,
+    positive = ggplot2::scale_colour_gradientn(
+      colours = c("#e2e8f0", "#fca5a5", "#ef4444", "#991b1b"),
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    ),
+    negative = ggplot2::scale_colour_gradientn(
+      colours = c("#1e3a8a", "#3b82f6", "#93c5fd", "#e2e8f0"),
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    ),
+    ggplot2::scale_colour_gradient2(
+      low = "#1d4ed8",
+      mid = "#d1d5db",
+      high = "#b91c1c",
+      midpoint = 0,
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    )
+  )
+  reg_input_fill_scale <- switch(
+    bundle$reg_score_palette_mode,
+    positive = ggplot2::scale_fill_gradientn(
+      colours = c("#e2e8f0", "#fca5a5", "#ef4444", "#991b1b"),
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    ),
+    negative = ggplot2::scale_fill_gradientn(
+      colours = c("#1e3a8a", "#3b82f6", "#93c5fd", "#e2e8f0"),
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    ),
+    ggplot2::scale_fill_gradient2(
+      low = "#1d4ed8",
+      mid = "#d1d5db",
+      high = "#b91c1c",
+      midpoint = 0,
+      limits = bundle$reg_score_limits,
+      name = "Reg element\ninput score",
+      oob = scales::squish,
+      guide = ggplot2::guide_colorbar(order = 1)
+    )
+  )
 
   if (isTRUE(validated_segment_mode)) {
     p <- p +
@@ -1919,7 +2446,7 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
           yend = y
         ),
         colour = "#111827",
-        linewidth = 2.4,
+        linewidth = 2.6,
         alpha = 0.55,
         lineend = "round",
         inherit.aes = FALSE,
@@ -1934,21 +2461,12 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
           yend = y,
           colour = score
         ),
-        linewidth = 1.7,
+        linewidth = 1.8,
         lineend = "round",
         inherit.aes = FALSE,
         show.legend = TRUE
       ) +
-      ggplot2::scale_colour_gradient2(
-        low = "#2563eb",
-        mid = "#f8fafc",
-        high = "#b91c1c",
-        midpoint = 0,
-        limits = bundle$reg_score_limits,
-        name = "Reg element\nz-score",
-        oob = scales::squish,
-        guide = ggplot2::guide_colorbar(order = 1)
-      ) +
+      reg_input_scale +
       ggnewscale::new_scale_colour() +
       ggplot2::geom_segment(
         data = reg_combined_dt,
@@ -1959,7 +2477,7 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
           yend = y
         ),
         colour = "#111827",
-        linewidth = 2.4,
+        linewidth = 2.6,
         alpha = 0.55,
         lineend = "round",
         inherit.aes = FALSE,
@@ -1974,7 +2492,7 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
           yend = y,
           colour = score
         ),
-        linewidth = 1.7,
+        linewidth = 1.8,
         lineend = "round",
         inherit.aes = FALSE,
         show.legend = TRUE
@@ -2011,8 +2529,8 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
         ),
         shape = 21,
         colour = "#4b5563",
-        size = 3.6,
-        stroke = 0.25,
+        size = 4.1,
+        stroke = 0.3,
         show.legend = TRUE
       ) +
       ggplot2::geom_point(
@@ -2024,20 +2542,11 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
         shape = 21,
         fill = "white",
         colour = "#4b5563",
-        size = 3.6,
+        size = 4.1,
         stroke = 0.4,
         show.legend = FALSE
       ) +
-      ggplot2::scale_fill_gradient2(
-        low = "#2563eb",
-        mid = "#f8fafc",
-        high = "#b91c1c",
-        midpoint = 0,
-        limits = bundle$reg_score_limits,
-        name = "Reg element\nz-score",
-        oob = scales::squish,
-        guide = ggplot2::guide_colorbar(order = 1)
-      ) +
+      reg_input_fill_scale +
       ggnewscale::new_scale_fill() +
       ggplot2::geom_point(
         data = reg_combined_dt,
@@ -2048,7 +2557,7 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
         ),
         shape = 21,
         colour = "#4b5563",
-        size = 3.6,
+        size = 4.1,
         stroke = 0.4,
         show.legend = TRUE
       ) +
@@ -2198,6 +2707,11 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
       oob = scales::squish,
       guide = ggplot2::guide_colorbar(order = 3)
     ) +
+    ggplot2::scale_x_continuous(
+      n.breaks = 5,
+      labels = function(x) format(round(x), big.mark = ",", scientific = FALSE, trim = TRUE),
+      expand = ggplot2::expansion(mult = c(0.04, 0.02))
+    ) +
     ggplot2::scale_y_continuous(
       breaks = bundle$tracks$track_id,
       labels = bundle$tracks$track_name,
@@ -2266,7 +2780,6 @@ create_locus_context_plot <- function(
     pmid_page_size = pmid_page_size,
     verbose = verbose
   )
-
   render_locus_plot_bundle(bundle = bundle, title = title)
 }
 
@@ -2306,16 +2819,7 @@ create_validated_locus_context_plot <- function(
     verbose = verbose
   )
 
-  render_locus_plot_bundle(
-    bundle = bundle,
-    title = title %||% paste0(
-      "Validated locus context: ",
-      bundle$locus$chromosome, ":",
-      format(bundle$locus$start, big.mark = ","),
-      "-",
-      format(bundle$locus$end, big.mark = ",")
-    )
-  )
+  render_locus_plot_bundle(bundle = bundle, title = title %||% paste0("Validated locus context: ", bundle$locus$chromosome, ":", format(bundle$locus$start, big.mark = ","), "-", format(bundle$locus$end, big.mark = ",")))
 }
 
 save_locus_context_plot <- function(

@@ -2545,8 +2545,10 @@ run_conseguiR <- function(
 #'   significance, with PMID support used as an additional prioritization field.
 #' @param pmid_query Deprecated. This argument is currently ignored; locus SNP
 #'   labeling now uses dbSNP citation support directly.
-#' @param pmid_page_size Maximum number of PMIDs per rsID retained from the
-#'   dbSNP citation lookup.
+#' @param pmid_page_size Maximum number of PMIDs retained per queried entity
+#'   during built-in literature lookups. For locus SNP labels this applies to
+#'   the dbSNP rsID citation lookup; for validated locus plots it also bounds
+#'   the regulatory-element literature screening queries.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param title Plot title.
 #' @param width Plot width in inches.
@@ -2684,7 +2686,7 @@ plot_locus_context <- function(
 #'
 #' @inheritParams plot_locus_context
 #' @param strict_gene_filter Logical scalar controlling whether the gene row is
-#'   restricted to genes linked to citation-supported regulatory elements.
+#'   restricted to genes linked to literature-supported regulatory elements.
 #'
 #' @return A plot bundle containing the ggplot object and validated locus
 #'   plotting data.
@@ -2721,7 +2723,7 @@ plot_validated_locus_context <- function(
   if (!is.null(pmid_query) && nzchar(trimws(as.character(pmid_query[[1]])))) {
     warning(
       "`pmid_query` is deprecated and currently ignored in `plot_validated_locus_context()`; ",
-      "locus SNP labeling now uses dbSNP citation support directly.",
+      "validated regulatory-element screening and locus SNP labeling now use built-in literature workflows directly.",
       call. = FALSE
     )
   }
