@@ -43,6 +43,8 @@
     setwd(pkg_root)
   }
 
+  assign(".conseguiR_state", .conseguiR_state, envir = .conseguiR_runtime_env)
+  assign("%||%", `%||%`, envir = .conseguiR_runtime_env)
   sys.source(api_path, envir = .conseguiR_runtime_env)
   assign(".loaded", TRUE, envir = .conseguiR_runtime_env)
   invisible()
