@@ -60,7 +60,18 @@ default_stage_plot_config <- list(
   if (is.null(x)) y else x
 }
 
-.conseguiR_plot_cache <- new.env(parent = emptyenv())
+get_conseguiR_plot_cache <- function() {
+  cache_env <- getOption("conseguiR.plot_cache_env", NULL)
+  if (is.environment(cache_env)) {
+    return(cache_env)
+  }
+
+  cache_env <- new.env(parent = emptyenv())
+  options(conseguiR.plot_cache_env = cache_env)
+  cache_env
+}
+
+.conseguiR_plot_cache <- get_conseguiR_plot_cache()
 
 read_delimited_table <- function(path, ...) {
   if (grepl("\\.gz$", path, ignore.case = TRUE)) {
