@@ -1185,47 +1185,14 @@ build_regulatory_element_literature_queries <- function(
   linked_label = NULL,
   max_gene_terms = 3L
 ) {
-  feature_id <- trimws(as.character(feature_id %||% ""))
   chromosome <- normalize_locus_chromosome(chromosome)
   start <- suppressWarnings(as.integer(start[[1]]))
   end <- suppressWarnings(as.integer(end[[1]]))
-  max_gene_terms <- suppressWarnings(as.integer(max_gene_terms[[1]]))
-  if (is.na(max_gene_terms) || max_gene_terms <= 0L) {
-    max_gene_terms <- 3L
+  if (is.na(start) || is.na(end) || !nzchar(chromosome)) {
+    return(character())
   }
 
-  gene_terms <- unique(trimws(unlist(strsplit(as.character(linked_label %||% ""), "|", fixed = TRUE), use.names = FALSE)))
-  gene_terms <- gene_terms[!is.na(gene_terms) & nzchar(gene_terms) & gene_terms != feature_id]
-  if (length(gene_terms) > max_gene_terms) {
-    gene_terms <- gene_terms[seq_len(max_gene_terms)]
-  }
-
-  queries <- character()
-  if (nzchar(feature_id)) {
-    queries <- c(queries, sprintf("\"%s\"[All Fields]", feature_id))
-  }
-  if (!is.na(start) && !is.na(end) && nzchar(chromosome)) {
-    coord_string_chr <- sprintf("\"chr%s:%s-%s\"[All Fields]", chromosome, start, end)
-    coord_string_plain <- sprintf("\"%s:%s-%s\"[All Fields]", chromosome, start, end)
-    coord_triplet <- sprintf("(\"chr%s\"[All Fields] AND \"%s\"[All Fields] AND \"%s\"[All Fields])", chromosome, start, end)
-    queries <- c(queries, coord_string_chr, coord_string_plain, coord_triplet)
-    if (length(gene_terms) > 0L) {
-      gene_clause <- paste(sprintf("\"%s\"[Title/Abstract]", gene_terms), collapse = " OR ")
-      coord_core <- paste(c(coord_string_chr, coord_triplet), collapse = " OR ")
-      queries <- c(
-        queries,
-        sprintf("((%s)) AND ((%s))", coord_core, gene_clause)
-      )
-      if (nzchar(feature_id)) {
-        queries <- c(
-          queries,
-          sprintf("((\"%s\"[All Fields])) OR (((%s)) AND ((%s)))", feature_id, coord_core, gene_clause)
-        )
-      }
-    }
-  }
-
-  unique(queries[nzchar(queries)])
+  sprintf("\"%s:%s-%s\"[All Fields]", chromosome, start, end)
 }
 
 fetch_regulatory_element_literature_pmids <- function(
@@ -1265,6 +1232,8 @@ fetch_regulatory_element_literature_pmids <- function(
 
   out_list <- vector("list", nrow(reg_query_dt))
   query_counter <- 0L
+  hit_counter <- 0L
+  progress_every <- 25L
   for (i in seq_len(nrow(reg_query_dt))) {
     feature_id <- as.character(reg_query_dt$feature_id[[i]])
     cache_key <- paste(
@@ -1345,6 +1314,18 @@ fetch_regulatory_element_literature_pmids <- function(
 
     if (!is.null(cached_value) && nrow(cached_value) > 0L) {
       out_list[[i]] <- data.table::copy(cached_value)
+      hit_counter <- hit_counter + 1L
+    }
+
+    if (isTRUE(verbose) &&
+        (i == 1L || i %% progress_every == 0L || i == nrow(reg_query_dt))) {
+      message(
+        "Validated regulatory-element literature lookup progress: ",
+        i, "/", nrow(reg_query_dt),
+        " element(s) processed; ",
+        hit_counter, " with PMID support so far; ",
+        query_counter, " PubMed query/queries issued."
+      )
     }
   }
 
