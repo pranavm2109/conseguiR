@@ -2377,9 +2377,15 @@ prepare_regulatory_element_ensembl_support <- function(
     c(-1L, -1L, -1L, -1L, 1L)
   )
 
-  pmid_dt <- mapping[!is.na(pmids) & pmids != "", .(
-    pmid = unlist(strsplit(pmids, "|", fixed = TRUE))
-  ), by = .(feature_id)]
+  pmid_rows <- mapping[!is.na(pmids) & pmids != ""]
+  pmid_dt <- if (nrow(pmid_rows) > 0L) {
+    pmid_rows[, .(
+      pmid = as.character(unlist(strsplit(pmids, "|", fixed = TRUE), use.names = FALSE))
+    ), by = .(feature_id)]
+  } else {
+    data.table::data.table(feature_id = character(), pmid = character())
+  }
+  pmid_dt <- pmid_dt[!is.na(pmid) & pmid != ""]
   if (nrow(pmid_dt) == 0L) {
     pmid_dt <- NULL
   }
