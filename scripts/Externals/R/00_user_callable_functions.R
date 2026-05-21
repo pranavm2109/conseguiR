@@ -2793,6 +2793,7 @@ plot_validated_locus_context <- function(
       label_top_lit_snps = label_top_lit_snps,
       pmid_query = pmid_query,
       pmid_page_size = pmid_page_size,
+      top_k_reg_elements_for_validation = top_k_reg_elements_for_validation,
       strict_gene_filter = strict_gene_filter,
       width = width,
       height = height,
@@ -2815,6 +2816,7 @@ plot_validated_locus_context <- function(
       end = end,
       title = title,
       label_top_lit_snps = label_top_lit_snps,
+      top_k_reg_elements_for_validation = top_k_reg_elements_for_validation,
       strict_gene_filter = strict_gene_filter
     )
   ))
