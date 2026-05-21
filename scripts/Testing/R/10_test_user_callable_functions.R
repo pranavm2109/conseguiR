@@ -430,6 +430,8 @@ test_plot_validated_locus_context_external_surface <- function() {
   expect_true("rsid_pmid" %in% names(plot_formals))
   expect_true("pmid_page_size" %in% names(plot_formals))
   expect_true("pmid_query" %in% names(plot_formals))
+  expect_true("top_k_reg_elements_for_validation" %in% names(plot_formals))
+  expect_identical(plot_formals$top_k_reg_elements_for_validation, NULL)
 }
 
 main <- function() {

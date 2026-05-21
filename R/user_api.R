@@ -2308,7 +2308,12 @@ plot_epigenomic_reg_scores <- function(
 #' @param pmid_page_size Maximum number of PMIDs retained per queried entity
 #'   during built-in literature lookups. For locus SNP labels this applies to
 #'   the dbSNP rsID citation lookup; for validated locus plots it also bounds
-#'   the regulatory-element literature screening queries.
+#'   any SNP-level literature lookups. Regulatory-element validation now uses
+#'   Ensembl phenotype overlap support rather than PubMed coordinate querying.
+#' @param top_k_reg_elements_for_validation Optional positive integer. If set,
+#'   only the top `k` regulatory elements in the requested locus, ranked by the
+#'   combined absolute tri-modality score (`|germline| + |somatic| +
+#'   |epigenomic|`), are screened for validated-locus support.
 #' @param plot_file_path Optional output path for the saved figure.
 #' @param title Plot title.
 #' @param width Plot width in inches.
@@ -2382,8 +2387,8 @@ plot_locus_context <- function(
 #' Plot a validated locus-centered multimodal context panel
 #'
 #' Creates a paper-oriented locus panel that keeps only regulatory elements in
-#' the requested window that have literature support for the regulatory
-#' elements themselves. This is a citation-filtered sibling of
+#' the requested window that have external phenotype support for the regulatory
+#' intervals themselves. This is a validation-filtered sibling of
 #' [plot_locus_context()] intended to reduce clutter and focus attention on
 #' biologically validated regulatory elements and their linked genes.
 #'
@@ -2397,18 +2402,17 @@ plot_locus_context <- function(
 #' @details
 #' Track semantics:
 #' - the top three rows show somatic, epigenomic, and germline regulatory input
-#'   scores, but only for literature-supported regulatory elements in the locus
-#' - the `Reg elements` row shows the same literature-supported regulatory
+#'   scores, but only for externally supported regulatory elements in the locus
+#' - the `Reg elements` row shows the same externally supported regulatory
 #'   elements colored by their combined score
 #' - the bottom gene row shows linked post-diffusion gene scores
 #' - locus SNP labels can still use top GWAS SNPs or dbSNP-backed
 #'   literature-supported SNPs
 #'
-#' Regulatory-element support is assessed by querying NCBI literature search for
-#' the regulatory elements themselves using their interval coordinates,
-#' identifiers, and linked-gene labels when available. This function errors
-#' when no literature-supported regulatory elements are found in the requested
-#' interval.
+#' Regulatory-element support is assessed by querying Ensembl's
+#' `phenotype/region` endpoint for phenotype-associated variants that overlap
+#' each regulatory interval. This function errors when no externally supported
+#' regulatory elements are found in the requested interval.
 #'
 #' @examples
 #' names(formals(plot_validated_locus_context))
@@ -2435,6 +2439,7 @@ plot_validated_locus_context <- function(
   label_top_lit_snps = 0L,
   pmid_query = NULL,
   pmid_page_size = 1000L,
+  top_k_reg_elements_for_validation = NULL,
   strict_gene_filter = TRUE,
   plot_file_path = NULL,
   title = NULL,

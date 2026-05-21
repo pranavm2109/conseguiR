@@ -2709,6 +2709,7 @@ plot_validated_locus_context <- function(
   label_top_lit_snps = 0L,
   pmid_query = NULL,
   pmid_page_size = 1000L,
+  top_k_reg_elements_for_validation = NULL,
   strict_gene_filter = TRUE,
   plot_file_path = NULL,
   title = NULL,
@@ -2758,6 +2759,7 @@ plot_validated_locus_context <- function(
     label_top_lit_snps = label_top_lit_snps,
     pmid_query = pmid_query,
     pmid_page_size = pmid_page_size,
+    top_k_reg_elements_for_validation = top_k_reg_elements_for_validation,
     strict_gene_filter = strict_gene_filter,
     verbose = verbose
   )

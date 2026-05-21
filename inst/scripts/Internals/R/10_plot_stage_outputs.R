@@ -2131,7 +2131,7 @@ filter_locus_plot_bundle_to_validated_regulatory_elements <- function(
   validated_reg_feature_ids <- unique(as.character(validated_reg_feature_ids %||% character()))
   validated_reg_feature_ids <- validated_reg_feature_ids[nzchar(validated_reg_feature_ids)]
   if (length(validated_reg_feature_ids) == 0L) {
-    stop("No citation-supported regulatory elements were available to plot.")
+    stop("No validated regulatory elements were available to plot.")
   }
 
   out <- bundle
@@ -2161,9 +2161,235 @@ filter_locus_plot_bundle_to_validated_regulatory_elements <- function(
 
   out$validated_reg_feature_ids <- validated_reg_feature_ids
   out$validated_gene_ids <- validated_gene_ids
-  out$validation_mode <- "citation_supported_regulatory_elements"
+  out$validation_mode <- "externally_supported_regulatory_elements"
   out$reg_render_mode <- "stacked_segments"
   out
+}
+
+extract_ensembl_pubmed_ids <- function(x, current_name = "") {
+  if (is.null(x)) {
+    return(character())
+  }
+
+  if (is.list(x)) {
+    out <- character()
+    child_names <- names(x)
+    if (is.null(child_names)) {
+      child_names <- rep("", length(x))
+    }
+    for (i in seq_along(x)) {
+      next_name <- child_names[[i]]
+      full_name <- paste(current_name, next_name, sep = ".")
+      out <- c(out, extract_ensembl_pubmed_ids(x[[i]], full_name))
+    }
+    return(unique(out[nzchar(out)]))
+  }
+
+  if (!grepl("pubmed", current_name, ignore.case = TRUE)) {
+    return(character())
+  }
+
+  vals <- gsub("\\D", "", as.character(x))
+  unique(vals[nzchar(vals)])
+}
+
+extract_ensembl_rsids <- function(x) {
+  if (is.null(x)) {
+    return(character())
+  }
+
+  if (is.list(x)) {
+    out <- unlist(lapply(x, extract_ensembl_rsids), use.names = FALSE)
+    return(unique(out[nzchar(out)]))
+  }
+
+  vals <- as.character(x)
+  unique(grep("^rs[0-9]+$", vals, value = TRUE, ignore.case = TRUE))
+}
+
+fetch_regulatory_element_ensembl_support <- function(
+  reg_query_dt,
+  verbose = FALSE
+) {
+  reg_query_dt <- data.table::as.data.table(data.table::copy(reg_query_dt))
+  if (nrow(reg_query_dt) == 0L) {
+    return(NULL)
+  }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    stop("Package `jsonlite` is required to query Ensembl REST.")
+  }
+
+  if (!exists("regulatory_element_ensembl_support_cache", envir = .conseguiR_plot_cache, inherits = FALSE)) {
+    .conseguiR_plot_cache$regulatory_element_ensembl_support_cache <- new.env(parent = emptyenv())
+  }
+  cache_env <- .conseguiR_plot_cache$regulatory_element_ensembl_support_cache
+
+  delay_seconds_default <- 0.05
+  delay_seconds <- getOption("conseguiR.ensembl_delay_seconds", delay_seconds_default)
+  delay_seconds <- suppressWarnings(as.numeric(delay_seconds[[1]]))
+  if (is.na(delay_seconds) || delay_seconds < 0) {
+    delay_seconds <- delay_seconds_default
+  }
+
+  out_list <- vector("list", nrow(reg_query_dt))
+  query_counter <- 0L
+  hit_counter <- 0L
+  progress_every <- 25L
+
+  for (i in seq_len(nrow(reg_query_dt))) {
+    feature_id <- as.character(reg_query_dt$feature_id[[i]])
+    chromosome <- normalize_locus_chromosome(reg_query_dt$chromosome[[i]])
+    feature_start <- as.integer(reg_query_dt$feature_start[[i]])
+    feature_end <- as.integer(reg_query_dt$feature_end[[i]])
+    region <- sprintf("%s:%s-%s", chromosome, feature_start, feature_end)
+    cache_key <- paste(region, sep = "|")
+
+    cached_value <- if (exists(cache_key, envir = cache_env, inherits = FALSE)) {
+      get(cache_key, envir = cache_env, inherits = FALSE)
+    } else {
+      NULL
+    }
+
+    if (is.null(cached_value)) {
+      endpoint <- paste0(
+        "https://rest.ensembl.org/phenotype/region/homo_sapiens/",
+        region,
+        "?feature_type=Variation;include_pubmed_id=1;trait=1;tumour=0;content-type=application/json"
+      )
+
+      payload <- tryCatch(
+        jsonlite::fromJSON(endpoint, simplifyVector = FALSE),
+        error = function(e) NULL
+      )
+      query_counter <- query_counter + 1L
+
+      records <- if (is.list(payload)) payload else list()
+      if (length(records) > 0L) {
+        rsids <- unique(unlist(lapply(records, extract_ensembl_rsids), use.names = FALSE))
+        pmids <- unique(unlist(lapply(records, extract_ensembl_pubmed_ids), use.names = FALSE))
+        cached_value <- data.table::data.table(
+          region = region,
+          n_phenotype_records = length(records),
+          n_rsids = length(rsids),
+          rsids = if (length(rsids) > 0L) paste(sort(rsids), collapse = "|") else NA_character_,
+          n_pmids = length(pmids),
+          pmids = if (length(pmids) > 0L) paste(sort(pmids), collapse = "|") else NA_character_,
+          source = "ensembl_phenotype_region"
+        )
+      } else {
+        cached_value <- data.table::data.table(
+          region = character(),
+          n_phenotype_records = integer(),
+          n_rsids = integer(),
+          rsids = character(),
+          n_pmids = integer(),
+          pmids = character(),
+          source = character()
+        )
+      }
+
+      assign(cache_key, cached_value, envir = cache_env)
+      if (delay_seconds > 0) {
+        Sys.sleep(delay_seconds)
+      }
+    }
+
+    if (!is.null(cached_value) && nrow(cached_value) > 0L) {
+      out_list[[i]] <- data.table::copy(cached_value)[, feature_id := feature_id][]
+      hit_counter <- hit_counter + 1L
+    }
+
+    if (isTRUE(verbose) &&
+        (i == 1L || i %% progress_every == 0L || i == nrow(reg_query_dt))) {
+      message(
+        "Validated regulatory-element phenotype lookup progress: ",
+        i, "/", nrow(reg_query_dt),
+        " element(s) processed; ",
+        hit_counter, " with Ensembl phenotype support so far; ",
+        query_counter, " Ensembl query/queries issued."
+      )
+    }
+  }
+
+  out <- data.table::rbindlist(out_list, use.names = TRUE, fill = TRUE)
+  if (nrow(out) == 0L) {
+    if (isTRUE(verbose)) {
+      message("Found phenotype support for 0 of ", nrow(reg_query_dt), " queried regulatory element(s).")
+    }
+    return(NULL)
+  }
+
+  if (isTRUE(verbose)) {
+    message(
+      "Found phenotype support for ",
+      data.table::uniqueN(out$feature_id),
+      " of ",
+      nrow(reg_query_dt),
+      " queried regulatory element(s) via Ensembl phenotype/region."
+    )
+  }
+
+  unique(out, by = "feature_id")
+}
+
+prepare_regulatory_element_ensembl_support <- function(
+  reg_nodes,
+  verbose = FALSE
+) {
+  reg_nodes <- data.table::as.data.table(data.table::copy(reg_nodes))
+  if (nrow(reg_nodes) == 0L) {
+    return(list(validated_reg_feature_ids = character(), mapping = NULL, pmid_dt = NULL, mode = "none"))
+  }
+
+  support_dt <- fetch_regulatory_element_ensembl_support(
+    reg_query_dt = reg_nodes[, .(
+      feature_id,
+      chromosome,
+      feature_start,
+      feature_end
+    )],
+    verbose = verbose
+  )
+
+  if (is.null(support_dt) || nrow(support_dt) == 0L) {
+    return(list(validated_reg_feature_ids = character(), mapping = NULL, pmid_dt = NULL, mode = "none"))
+  }
+
+  mapping <- merge(
+    unique(reg_nodes[, .(
+      feature_id,
+      chromosome,
+      feature_start,
+      feature_end,
+      linked_label,
+      germline_score,
+      somatic_score,
+      epigenomic_score,
+      combined_score
+    )]),
+    support_dt,
+    by = "feature_id",
+    all = FALSE
+  )
+  data.table::setorderv(
+    mapping,
+    c("combined_score", "n_phenotype_records", "n_rsids", "n_pmids", "feature_start"),
+    c(-1L, -1L, -1L, -1L, 1L)
+  )
+
+  pmid_dt <- mapping[!is.na(pmids) & pmids != "", .(
+    pmid = unlist(strsplit(pmids, "|", fixed = TRUE))
+  ), by = .(feature_id)]
+  if (nrow(pmid_dt) == 0L) {
+    pmid_dt <- NULL
+  }
+
+  list(
+    validated_reg_feature_ids = unique(mapping$feature_id),
+    mapping = mapping,
+    pmid_dt = pmid_dt,
+    mode = "ensembl_phenotype"
+  )
 }
 
 prepare_validated_locus_plot_bundle <- function(
@@ -2180,6 +2406,7 @@ prepare_validated_locus_plot_bundle <- function(
   label_top_lit_snps = 0L,
   pmid_query = NULL,
   pmid_page_size = 1000L,
+  top_k_reg_elements_for_validation = NULL,
   strict_gene_filter = TRUE,
   verbose = FALSE
 ) {
@@ -2199,8 +2426,12 @@ prepare_validated_locus_plot_bundle <- function(
     chromosome = as.character(normalize_locus_chromosome(reg_chr)),
     feature_start = as.integer(reg_start),
     feature_end = as.integer(reg_end),
-    germline_score = safe_numeric(germline_score)
+    germline_score = safe_numeric(germline_score),
+    somatic_score = if ("somatic_score" %in% names(.SD)) safe_numeric(somatic_score) else NA_real_,
+    epigenomic_score = if ("epigenomic_score" %in% names(.SD)) safe_numeric(epigenomic_score) else NA_real_
   )]
+  reg_nodes_for_query[, combined_score := rowSums(abs(.SD), na.rm = TRUE), .SDcols = c("germline_score", "somatic_score", "epigenomic_score")]
+  reg_nodes_for_query[!is.finite(combined_score), combined_score := 0]
   if (nrow(reg_label_map) > 0L && nrow(reg_nodes_for_query) > 0L) {
     reg_nodes_for_query <- merge(
       reg_nodes_for_query,
@@ -2215,18 +2446,37 @@ prepare_validated_locus_plot_bundle <- function(
     reg_nodes_for_query[, linked_label := feature_id]
   }
 
-  full_lit_info <- prepare_regulatory_element_literature_support(
+  if (!is.null(top_k_reg_elements_for_validation)) {
+    top_k_reg_elements_for_validation <- suppressWarnings(as.integer(top_k_reg_elements_for_validation[[1]]))
+    if (is.na(top_k_reg_elements_for_validation) || top_k_reg_elements_for_validation <= 0L) {
+      stop("`top_k_reg_elements_for_validation` must be NULL or a positive integer.")
+    }
+    data.table::setorderv(
+      reg_nodes_for_query,
+      c("combined_score", "germline_score", "somatic_score", "epigenomic_score", "feature_start"),
+      c(-1L, -1L, -1L, -1L, 1L)
+    )
+    reg_nodes_for_query <- reg_nodes_for_query[seq_len(min(.N, top_k_reg_elements_for_validation))]
+    if (isTRUE(verbose)) {
+      message(
+        "Restricting validated regulatory-element screening to top ",
+        nrow(reg_nodes_for_query),
+        " element(s) in the locus by combined tri-modality score."
+      )
+    }
+  }
+
+  full_lit_info <- prepare_regulatory_element_ensembl_support(
     reg_nodes = reg_nodes_for_query,
-    max_pmids_per_element = pmid_page_size,
     verbose = verbose
   )
 
-  if (!identical(full_lit_info$mode, "literature") ||
+  if (!identical(full_lit_info$mode, "ensembl_phenotype") ||
       is.null(full_lit_info$mapping) ||
       nrow(full_lit_info$mapping) == 0L) {
     stop(
-      "No citation-supported regulatory elements were found in this locus. ",
-      "This validated plot only renders regulatory elements with literature support."
+      "No phenotype-supported regulatory elements were found in this locus. ",
+      "This validated plot only renders regulatory elements with external phenotype support."
     )
   }
 
@@ -2252,8 +2502,10 @@ prepare_validated_locus_plot_bundle <- function(
     validated_reg_feature_ids = full_lit_info$mapping$feature_id,
     strict_gene_filter = strict_gene_filter
   )
+  out$validation_mode <- "ensembl_phenotype_supported_regulatory_elements"
   out$validated_reg_literature_mapping <- data.table::copy(full_lit_info$mapping)
   out$validated_reg_pmid_dt <- data.table::copy(full_lit_info$pmid_dt)
+  out$validated_reg_support_mapping <- data.table::copy(full_lit_info$mapping)
   out
 }
 
@@ -2790,6 +3042,7 @@ create_validated_locus_context_plot <- function(
   label_top_lit_snps = 0L,
   pmid_query = NULL,
   pmid_page_size = 1000L,
+  top_k_reg_elements_for_validation = NULL,
   strict_gene_filter = TRUE,
   verbose = FALSE
 ) {
@@ -2807,6 +3060,7 @@ create_validated_locus_context_plot <- function(
     label_top_lit_snps = label_top_lit_snps,
     pmid_query = pmid_query,
     pmid_page_size = pmid_page_size,
+    top_k_reg_elements_for_validation = top_k_reg_elements_for_validation,
     strict_gene_filter = strict_gene_filter,
     verbose = verbose
   )
@@ -2885,6 +3139,7 @@ save_validated_locus_context_plot <- function(
   label_top_lit_snps = 0L,
   pmid_query = NULL,
   pmid_page_size = 1000L,
+  top_k_reg_elements_for_validation = NULL,
   strict_gene_filter = TRUE,
   width = 14,
   height = 9,
@@ -2910,6 +3165,7 @@ save_validated_locus_context_plot <- function(
     label_top_lit_snps = label_top_lit_snps,
     pmid_query = pmid_query,
     pmid_page_size = pmid_page_size,
+    top_k_reg_elements_for_validation = top_k_reg_elements_for_validation,
     strict_gene_filter = strict_gene_filter,
     verbose = FALSE
   )
