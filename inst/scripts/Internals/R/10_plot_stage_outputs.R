@@ -2630,6 +2630,16 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
   validated_segment_mode <- identical(bundle$reg_render_mode %||% NULL, "stacked_segments")
   reg_input_dt <- features_dt[feature_type == "reg" & track_name != "Reg elements"]
   reg_combined_dt <- features_dt[feature_type == "reg" & track_name == "Reg elements"]
+  add_reg_strip_bounds <- function(dt, height = 0.075) {
+    dt <- data.table::copy(dt)
+    dt[, `:=`(
+      strip_ymin = y - height / 2,
+      strip_ymax = y + height / 2
+    )]
+    dt
+  }
+  reg_input_dt <- add_reg_strip_bounds(reg_input_dt)
+  reg_combined_dt <- add_reg_strip_bounds(reg_combined_dt)
   reg_input_scale <- switch(
     bundle$reg_score_palette_mode,
     positive = ggplot2::scale_colour_gradientn(
@@ -2687,67 +2697,39 @@ render_locus_plot_bundle <- function(bundle, title = NULL) {
 
   if (isTRUE(validated_segment_mode)) {
     p <- p +
-      ggplot2::geom_segment(
+      ggplot2::geom_rect(
         data = reg_input_dt,
         ggplot2::aes(
-          x = feature_start,
-          xend = feature_end,
-          y = y,
-          yend = y
+          xmin = feature_start,
+          xmax = feature_end,
+          ymin = strip_ymin,
+          ymax = strip_ymax,
+          fill = score
         ),
         colour = "#111827",
-        linewidth = 2.6,
-        alpha = 0.55,
-        lineend = "round",
-        inherit.aes = FALSE,
-        show.legend = FALSE
-      ) +
-      ggplot2::geom_segment(
-        data = reg_input_dt,
-        ggplot2::aes(
-          x = feature_start,
-          xend = feature_end,
-          y = y,
-          yend = y,
-          colour = score
-        ),
-        linewidth = 1.8,
-        lineend = "round",
+        linewidth = 0.22,
+        alpha = 0.98,
         inherit.aes = FALSE,
         show.legend = TRUE
       ) +
-      reg_input_scale +
-      ggnewscale::new_scale_colour() +
-      ggplot2::geom_segment(
+      reg_input_fill_scale +
+      ggnewscale::new_scale_fill() +
+      ggplot2::geom_rect(
         data = reg_combined_dt,
         ggplot2::aes(
-          x = feature_start,
-          xend = feature_end,
-          y = y,
-          yend = y
+          xmin = feature_start,
+          xmax = feature_end,
+          ymin = strip_ymin,
+          ymax = strip_ymax,
+          fill = score
         ),
         colour = "#111827",
-        linewidth = 2.6,
-        alpha = 0.55,
-        lineend = "round",
-        inherit.aes = FALSE,
-        show.legend = FALSE
-      ) +
-      ggplot2::geom_segment(
-        data = reg_combined_dt,
-        ggplot2::aes(
-          x = feature_start,
-          xend = feature_end,
-          y = y,
-          yend = y,
-          colour = score
-        ),
-        linewidth = 1.8,
-        lineend = "round",
+        linewidth = 0.22,
+        alpha = 0.98,
         inherit.aes = FALSE,
         show.legend = TRUE
       ) +
-      ggplot2::scale_colour_gradientn(
+      ggplot2::scale_fill_gradientn(
         colours = c("#fee2e2", "#ef4444", "#b91c1c", "#7f1d1d"),
         limits = bundle$reg_norm_limits,
         name = "Reg element\ncombined score",
